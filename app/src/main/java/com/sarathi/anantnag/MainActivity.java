@@ -49,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText interval;
     private boolean running = false;
     private long lastAlert = 0L;
+    private long lastPageLoad = 0L;
 
     private final Runnable monitorLoop = new Runnable() {
         @Override public void run() {
@@ -101,7 +102,7 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (running) runAutomationCycle();
+                if (running) { lastPageLoad = System.currentTimeMillis(); runAutomationCycle(); }
             }
         });
         CookieManager.getInstance().setAcceptCookie(true);
