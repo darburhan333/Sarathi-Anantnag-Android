@@ -54,6 +54,7 @@ public class MainActivity extends AppCompatActivity {
     private long lastAlert = 0L;
     private int serverRetryAttempt = 0;
     private boolean serverRetryScheduled = false;
+    private String lastSarathiPageUrl = SARATHI;
 
     private final Runnable monitorLoop = new Runnable() {
         @Override public void run() {
@@ -108,14 +109,19 @@ public class MainActivity extends AppCompatActivity {
             @Override public void onReceivedHttpError(WebView view, WebResourceRequest request,
                                                        android.webkit.WebResourceResponse errorResponse) {
                 super.onReceivedHttpError(view, request, errorResponse);
-                if (request.isForMainFrame() && errorResponse != null
-                        && errorResponse.getStatusCode() == 503) {
+                if (errorResponse != null && errorResponse.getStatusCode() == 503) {
+                    if (request.isForMainFrame() && request.getUrl() != null) {
+                        lastSarathiPageUrl = request.getUrl().toString();
+                    }
                     handleServerUnavailable();
                 }
             }
 
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                if (url != null && url.startsWith("https://sarathi.parivahan.gov.in/")) {
+                    lastSarathiPageUrl = url;
+                }
                 if (running) {
                     runAutomationCycle();
                 }
@@ -176,8 +182,12 @@ public class MainActivity extends AppCompatActivity {
         @Override public void run() {
             serverRetryScheduled = false;
             if (!running) return;
-            result.setText("Result: retrying Sarathi...");
-            web.reload();
+            result.setText("Result: retrying current Sarathi page...");
+            if (lastSarathiPageUrl != null && lastSarathiPageUrl.startsWith("https://sarathi.parivahan.gov.in/")) {
+                web.loadUrl(lastSarathiPageUrl);
+            } else {
+                web.reload();
+            }
         }
     };
 
@@ -201,7 +211,7 @@ public class MainActivity extends AppCompatActivity {
         + "function dates(){var a=[];var cells=[].slice.call(document.querySelectorAll('td'));for(var i=0;i<cells.length;i++){var t=n(cells[i].innerText||cells[i].textContent);if(/^\\d{1,2}$/.test(t)&&green(cells[i]))a.push(cells[i].querySelector('a,button,span')||cells[i]);}return a;}"
         + "function lmvOne(){var rs=[].slice.call(document.querySelectorAll('tr'));for(var i=0;i<rs.length;i++){var t=n(rs[i].innerText||rs[i].textContent);if(/\\blmv\\b/.test(t)&&/(^|\\s)1(\\s|$)/.test(t))return true;}return false;}"
         + "var txt=n(document.body&&document.body.innerText);"
-        + "if(/\\b503\\b/.test(txt)&&/service unavailable/.test(txt)||/service unavailable/.test(txt)){window.SarathiAndroid&&window.SarathiAndroid.serverUnavailable();return;}"
+        + "if((/\\b503\\b/.test(txt)&&/service unavailable/.test(txt))||/service unavailable/.test(txt)){window.SarathiAndroid&&window.SarathiAndroid.serverUnavailable();return;}"
         + "window.SarathiAndroid&&window.SarathiAndroid.serverAvailable();"
         + "if(txt.indexOf('select covs')>=0){var c=lmv(),p=proceed();if(c&&!c.checked){fire(c);try{c.dispatchEvent(new Event('change',{bubbles:true}))}catch(x){}}if(p)setTimeout(function(){fire(p)},300);return;}"
         + "if(txt.indexOf('calendar indicator')>=0&&txt.indexOf('available quota')>=0){var ds=dates();if(ds.length){var idx=window.__sarathiDateIndex||0;if(idx>=ds.length)idx=0;window.__sarathiDateIndex=idx+1;fire(ds[idx]);setTimeout(function(){if(lmvOne()){window.SarathiAndroid&&window.SarathiAndroid.slotFound('LMV quota is 1 on an available date.')}} ,1200);}}"
