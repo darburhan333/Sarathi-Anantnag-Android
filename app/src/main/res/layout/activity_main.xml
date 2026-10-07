@@ -12,81 +12,28 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🚗 Sarathi Anantnag Monitor"
+            android:text="🚗 Sarathi Anantnag"
             android:textSize="22sp"
             android:textStyle="bold"/>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Chrome handles the Sarathi session. This app only reads the rendered appointment page and alerts you when LMV availability appears."
+            android:layout_marginTop="10dp"
+            android:text="This version does not use AccessibilityService or read content from other apps. Use Chrome for the official Sarathi appointment flow."
             android:textSize="15sp"/>
-
-        <TextView
-            android:id="@+id/serviceState"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="🔴 Chrome monitor permission: NOT ENABLED"
-            android:textStyle="bold"/>
-
-        <Button
-            android:id="@+id/enable"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="1. ENABLE CHROME MONITOR"/>
 
         <Button
             android:id="@+id/openChrome"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="2. OPEN SARATHI IN CHROME"/>
+            android:layout_marginTop="20dp"
+            android:text="OPEN SARATHI IN CHROME"/>
 
         <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="In Chrome, use Sarathi normally: Jammu &amp; Kashmir → Appointments → DL service → RTO/Anantnag → date/calendar."/>
-
-        <TextView
-            android:id="@+id/monitorState"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:text="⚪ Monitoring is OFF"
-            android:textStyle="bold"/>
-
-        <Button
-            android:id="@+id/start"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="3. START MONITORING"/>
-
-        <Button
-            android:id="@+id/stop"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="STOP MONITORING"/>
-
-        <TextView
-            android:id="@+id/lastSeen"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Last Sarathi page seen: --"/>
-
-        <Button
-            android:id="@+id/telegram"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="OPTIONAL: TELEGRAM SETTINGS"/>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="The monitor never clicks, submits, books, or directly calls Sarathi slot endpoints."/>
-
+            android:text="In Chrome, use Sarathi normally: Jammu &amp; Kashmir → Appointments → DL service → RTO/Anantnag → date/calendar."/>
     </LinearLayout>
 </ScrollView>
