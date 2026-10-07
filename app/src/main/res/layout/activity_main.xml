@@ -26,7 +26,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="3dp"
-            android:text="🔴 STOPPED"
+            android:text="🟡 PORTAL READY"
             android:textStyle="bold"
             android:textSize="14sp"/>
 
@@ -40,7 +40,32 @@
             android:id="@+id/result"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Result: --"/>
+            android:text="Result: use Sarathi normally, then press START on the slot/calendar page."/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/portal"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="OPEN PORTAL"/>
+
+            <Button
+                android:id="@+id/start"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="START"/>
+
+            <Button
+                android:id="@+id/stop"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="STOP"/>
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -59,18 +84,6 @@
                 android:layout_height="wrap_content"
                 android:inputType="number"
                 android:text="5"/>
-
-            <Button
-                android:id="@+id/start"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="START"/>
-
-            <Button
-                android:id="@+id/stop"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="STOP"/>
         </LinearLayout>
 
         <TextView
