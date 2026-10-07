@@ -220,7 +220,7 @@ public class MainActivity extends AppCompatActivity {
                 c.setRequestProperty("Content-Type","application/json");
                 String text = "🚨 Sarathi Anantnag — LMV Slot Found!\n\n"
                     + detail + "\nTarget: J&K → Anantnag → Anantnag\nPlease check the app now.";
-                String json = "{"chat_id":"" + esc(chat) + "","text":"" + esc(text) + ""}";
+                String json = "{\"chat_id\":\"" + esc(chat) + "\",\"text\":\"" + esc(text) + "\"}";
                 try(OutputStream os=c.getOutputStream()){os.write(json.getBytes(StandardCharsets.UTF_8));}
                 c.getResponseCode();
                 c.disconnect();
