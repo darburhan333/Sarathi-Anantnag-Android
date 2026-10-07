@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sarathi Anantnag Monitor</string>
+    <string name="accessibility_description">Monitors the rendered Sarathi appointment page in Chrome for LMV slot availability. It does not click, submit forms, or make slot requests.</string>
+</resources>
