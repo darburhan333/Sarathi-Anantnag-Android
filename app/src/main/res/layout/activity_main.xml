@@ -1,108 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:fitsSystemWindows="true">
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp"
-        android:background="#F4F6F8">
+        android:padding="18dp">
 
         <TextView
-            android:id="@+id/title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="🚗 Sarathi Anantnag Monitor"
-            android:textStyle="bold"
-            android:textSize="19sp"
-            android:textColor="#17202A"/>
+            android:textSize="22sp"
+            android:textStyle="bold"/>
 
         <TextView
-            android:id="@+id/status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:text="🟡 PORTAL READY"
-            android:textStyle="bold"
-            android:textSize="14sp"/>
+            android:layout_marginTop="8dp"
+            android:text="Chrome handles the Sarathi session. This app only reads the rendered appointment page and alerts you when LMV availability appears."
+            android:textSize="15sp"/>
 
         <TextView
-            android:id="@+id/lastChecked"
+            android:id="@+id/serviceState"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Last checked: --"/>
-
-        <TextView
-            android:id="@+id/result"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Result: use Sarathi normally, then press START on the slot/calendar page."/>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <Button
-                android:id="@+id/portal"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="OPEN PORTAL"/>
-
-            <Button
-                android:id="@+id/start"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="START"/>
-
-            <Button
-                android:id="@+id/stop"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="STOP"/>
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Interval (sec): "/>
-
-            <EditText
-                android:id="@+id/interval"
-                android:layout_width="65dp"
-                android:layout_height="wrap_content"
-                android:inputType="number"
-                android:text="5"/>
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/telegramState"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Telegram: not configured"
-            android:layout_marginTop="3dp"/>
+            android:layout_marginTop="18dp"
+            android:text="🔴 Chrome monitor permission: NOT ENABLED"
+            android:textStyle="bold"/>
 
         <Button
-            android:id="@+id/settings"
-            android:layout_width="wrap_content"
+            android:id="@+id/enable"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Telegram Settings"/>
-    </LinearLayout>
+            android:text="1. ENABLE CHROME MONITOR"/>
 
-    <WebView
-        android:id="@+id/web"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"/>
-</LinearLayout>
+        <Button
+            android:id="@+id/openChrome"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="2. OPEN SARATHI IN CHROME"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="In Chrome, use Sarathi normally: Jammu &amp; Kashmir → Appointments → DL service → RTO/Anantnag → date/calendar."/>
+
+        <TextView
+            android:id="@+id/monitorState"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="⚪ Monitoring is OFF"
+            android:textStyle="bold"/>
+
+        <Button
+            android:id="@+id/start"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="3. START MONITORING"/>
+
+        <Button
+            android:id="@+id/stop"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="STOP MONITORING"/>
+
+        <TextView
+            android:id="@+id/lastSeen"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Last Sarathi page seen: --"/>
+
+        <Button
+            android:id="@+id/telegram"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="OPTIONAL: TELEGRAM SETTINGS"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="The monitor never clicks, submits, books, or directly calls Sarathi slot endpoints."/>
+
+    </LinearLayout>
+</ScrollView>
