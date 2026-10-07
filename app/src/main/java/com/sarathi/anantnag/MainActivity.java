@@ -32,7 +32,8 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends AppCompatActivity implements SlotMonitor.Listener {
-    private static final String SARATHI = "https://sarathi.parivahan.gov.in/sarathiservice/stateSelection.do";
+    private static final String SARATHI =
+        "https://sarathi.parivahan.gov.in/sarathiservice/stateSelection.do";
     private static final String PREFS = "sarathi_prefs";
     private static final String CHANNEL_ID = "sarathi_slots";
 
@@ -47,7 +48,9 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
     private final Runnable loop = new Runnable() {
         @Override public void run() {
             if (!running) return;
-            if (isSlotPage(web.getUrl())) monitor.check();
+            if (isMonitorablePage(web.getUrl())) {
+                monitor.check();
+            }
             handler.postDelayed(this, intervalMs());
         }
     };
@@ -55,7 +58,9 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
     @Override protected void onCreate(@Nullable Bundle state) {
         super.onCreate(state);
         getWindow().setStatusBarColor(0xFFF4F6F8);
-        getWindow().getDecorView().setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        getWindow().getDecorView().setSystemUiVisibility(
+            android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        );
         setContentView(R.layout.activity_main);
 
         status = findViewById(R.id.status);
@@ -65,6 +70,7 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
         interval = findViewById(R.id.interval);
         web = findViewById(R.id.web);
 
+        Button portal = findViewById(R.id.portal);
         Button start = findViewById(R.id.start);
         Button stop = findViewById(R.id.stop);
         Button settings = findViewById(R.id.settings);
@@ -72,14 +78,21 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
         createNotificationChannel();
         requestNotificationPermission();
         setupWebView();
+
         monitor = new SlotMonitor(web, this);
         refreshTelegramState();
 
+        portal.setOnClickListener(v -> web.loadUrl(SARATHI));
         start.setOnClickListener(v -> startMonitoring());
         stop.setOnClickListener(v -> stopMonitoring());
         settings.setOnClickListener(v -> showTelegramDialog());
 
-        web.loadUrl(SARATHI);
+        if (state == null) {
+            web.loadUrl(SARATHI);
+        } else {
+            status.setText("🟡 PORTAL READY");
+            result.setText("Result: continue the normal Sarathi portal flow.");
+        }
     }
 
     private void setupWebView() {
@@ -99,39 +112,42 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
         web.addJavascriptInterface(new AndroidBridge(), "SarathiAndroid");
 
         web.setWebViewClient(new WebViewClient() {
-            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            @Override public boolean shouldOverrideUrlLoading(
+                    WebView view, WebResourceRequest request) {
                 return false;
             }
 
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (running && isSlotPage(url)) {
-                    status.setText("🟢 SLOT PAGE MONITORING");
-                    result.setText("Result: checking the current Sarathi slot page.");
+
+                if (running && isMonitorablePage(url)) {
+                    status.setText("🟢 MONITORING CURRENT SARATHI PAGE");
+                    result.setText("Result: passive monitoring is active. The app will not click or navigate.");
                 } else if (running) {
                     status.setText("🟡 PORTAL SAFE MODE");
-                    result.setText("Result: browse Sarathi normally. Monitoring starts on the slot/calendar page.");
+                    result.setText("Result: navigate normally through Sarathi. Monitoring starts on the slot page.");
+                } else {
+                    status.setText("🟡 PORTAL READY");
+                    result.setText("Result: use Sarathi normally, then press START on the slot/calendar page.");
                 }
             }
 
-            @Override public void onReceivedHttpError(WebView view, WebResourceRequest request,
-                                                       android.webkit.WebResourceResponse errorResponse) {
+            @Override public void onReceivedHttpError(
+                    WebView view, WebResourceRequest request,
+                    android.webkit.WebResourceResponse errorResponse) {
                 super.onReceivedHttpError(view, request, errorResponse);
-                if (errorResponse == null || errorResponse.getStatusCode() != 503 || !request.isForMainFrame()) return;
+
+                if (errorResponse == null || !request.isForMainFrame()) return;
 
                 String url = request.getUrl() == null ? "" : request.getUrl().toString();
-                if (url.contains("/slots/")) {
-                    status.setText("🟠 SARATHI PORTAL FLOW REQUIRED");
-                    result.setText("Result: Sarathi returned SSL1001. Continue through the official portal; the app will not bypass that server check.");
-                } else {
-                    status.setText("🟡 SARATHI TEMPORARILY UNAVAILABLE");
-                    result.setText("Result: the portal returned HTTP 503.");
+                if (errorResponse.getStatusCode() == 503 && url.contains("/slots/")) {
+                    onPortalFlowRequired();
                 }
             }
         });
     }
 
-    private boolean isSlotPage(String url) {
+    private boolean isMonitorablePage(String url) {
         return url != null
             && url.startsWith("https://sarathi.parivahan.gov.in/")
             && url.contains("/slots/")
@@ -151,13 +167,15 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
         if (running) return;
         running = true;
         handler.removeCallbacks(loop);
-        if (isSlotPage(web.getUrl())) {
-            status.setText("🟢 SLOT PAGE MONITORING");
-            result.setText("Result: monitoring started.");
+
+        if (isMonitorablePage(web.getUrl())) {
+            status.setText("🟢 MONITORING CURRENT SARATHI PAGE");
+            result.setText("Result: passive monitoring started.");
         } else {
             status.setText("🟡 PORTAL SAFE MODE");
-            result.setText("Result: browse Sarathi normally; monitoring begins when the slot/calendar page is open.");
+            result.setText("Result: navigate manually to the slot/calendar page first. The app will not navigate for you.");
         }
+
         loop.run();
     }
 
@@ -168,8 +186,19 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
         result.setText("Result: monitoring stopped.");
     }
 
+    private void onPortalFlowRequired() {
+        status.setText("🟠 SARATHI PORTAL FLOW REQUIRED");
+        result.setText(
+            "Result: Sarathi returned SSL1001. Continue through the official portal. " +
+            "This app will not bypass or replay the protected slot request."
+        );
+    }
+
     @Override public void onCheck() {
-        lastChecked.setText("Last checked: " + new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date()));
+        lastChecked.setText(
+            "Last checked: " +
+            new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date())
+        );
     }
 
     @Override public void onServerUnavailable() {
@@ -178,7 +207,9 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
     }
 
     @Override public void onServerAvailable() {
-        if (running && isSlotPage(web.getUrl())) status.setText("🟢 SLOT PAGE MONITORING");
+        if (running && isMonitorablePage(web.getUrl())) {
+            status.setText("🟢 MONITORING CURRENT SARATHI PAGE");
+        }
     }
 
     @Override public void onSlotFound(String detail) {
@@ -194,9 +225,15 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
         @JavascriptInterface public void serverUnavailable() {
             runOnUiThread(() -> onServerUnavailable());
         }
+
         @JavascriptInterface public void serverAvailable() {
             runOnUiThread(() -> onServerAvailable());
         }
+
+        @JavascriptInterface public void portalFlowRequired() {
+            runOnUiThread(() -> onPortalFlowRequired());
+        }
+
         @JavascriptInterface public void slotFound(String detail) {
             runOnUiThread(() -> onSlotFound(detail));
         }
@@ -204,15 +241,18 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
 
     private void refreshTelegramState() {
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
-        boolean ok = !p.getString("token", "").isEmpty() && !p.getString("chat", "").isEmpty();
+        boolean ok = !p.getString("token", "").isEmpty()
+            && !p.getString("chat", "").isEmpty();
         telegramState.setText(ok ? "Telegram: connected" : "Telegram: not configured");
     }
 
     private void showTelegramDialog() {
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
+
         EditText token = new EditText(this);
         token.setHint("Telegram bot token");
         token.setText(p.getString("token", ""));
+
         EditText chat = new EditText(this);
         chat.setHint("Telegram chat ID");
         chat.setText(p.getString("chat", ""));
@@ -229,8 +269,10 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
             .setMessage("Enter your bot token and chat ID.")
             .setView(box)
             .setPositiveButton("SAVE", (d, w) -> {
-                p.edit().putString("token", token.getText().toString().trim())
-                    .putString("chat", chat.getText().toString().trim()).apply();
+                p.edit()
+                    .putString("token", token.getText().toString().trim())
+                    .putString("chat", chat.getText().toString().trim())
+                    .apply();
                 refreshTelegramState();
             })
             .setNegativeButton("CANCEL", null)
@@ -238,13 +280,16 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
     }
 
     private void notifyUser(String title, String body) {
-        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationManager nm =
+            (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true);
+
         nm.notify(1001, b.build());
     }
 
@@ -261,11 +306,14 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
                 c.setRequestMethod("POST");
                 c.setDoOutput(true);
                 c.setRequestProperty("Content-Type", "application/json");
+
                 String msg = "Sarathi Anantnag — LMV Slot Found!\\n\\n" + detail;
                 String json = "{\"chat_id\":\"" + esc(chat) + "\",\"text\":\"" + esc(msg) + "\"}";
+
                 try (OutputStream os = c.getOutputStream()) {
                     os.write(json.getBytes(StandardCharsets.UTF_8));
                 }
+
                 c.getResponseCode();
                 c.disconnect();
             } catch (Exception ignored) {}
@@ -273,23 +321,35 @@ public class MainActivity extends AppCompatActivity implements SlotMonitor.Liste
     }
 
     private String esc(String s) {
-        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+        return s.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r");
     }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel ch = new NotificationChannel(
-                CHANNEL_ID, "Sarathi slot alerts", NotificationManager.IMPORTANCE_HIGH);
-            getSystemService(NotificationManager.class).createNotificationChannel(ch);
+                CHANNEL_ID,
+                "Sarathi slot alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            getSystemService(NotificationManager.class)
+                .createNotificationChannel(ch);
         }
     }
 
     private void requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                new String[]{Manifest.permission.POST_NOTIFICATIONS}, 77);
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(
+                this,
+                new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                77
+            );
         }
     }
 
