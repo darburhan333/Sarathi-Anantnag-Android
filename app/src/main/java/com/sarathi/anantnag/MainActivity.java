@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.view.Window;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -59,6 +60,8 @@ public class MainActivity extends AppCompatActivity {
 
     @Override protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().setStatusBarColor(0xFFF4F6F8);
+        getWindow().getDecorView().setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         setContentView(R.layout.activity_main);
         status = findViewById(R.id.status);
         lastChecked = findViewById(R.id.lastChecked);
@@ -85,7 +88,11 @@ public class MainActivity extends AppCompatActivity {
         web.getSettings().setJavaScriptEnabled(true);
         web.getSettings().setDomStorageEnabled(true);
         web.getSettings().setDatabaseEnabled(true);
-        web.getSettings().setSupportZoom(true);
+        web.getSettings().setSupportZoom(false);
+        web.getSettings().setBuiltInZoomControls(false);
+        web.getSettings().setDisplayZoomControls(false);
+        web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);
+        web.getSettings().setMediaPlaybackRequiresUserGesture(true);
         web.setWebChromeClient(new WebChromeClient());
         web.addJavascriptInterface(new AndroidBridge(), "SarathiAndroid");
         web.setWebViewClient(new WebViewClient() {
@@ -127,7 +134,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void runAutomationCycle() {
         lastChecked.setText("Last checked: " + new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date()));
-        web.evaluateJavascript("javascript:(function(){window.__sarathiRun&&window.__sarathiRun();})()", null);
         web.evaluateJavascript(AUTOMATION_JS, null);
     }
 
