@@ -55,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private int serverRetryAttempt = 0;
     private boolean serverRetryScheduled = false;
     private String lastSarathiPageUrl = SARATHI;
+    private String lastPortalPageUrl = SARATHI;
 
     private final Runnable monitorLoop = new Runnable() {
         @Override public void run() {
@@ -99,6 +100,8 @@ public class MainActivity extends AppCompatActivity {
         web.getSettings().setDisplayZoomControls(false);
         web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);
         web.getSettings().setMediaPlaybackRequiresUserGesture(true);
+        web.getSettings().setUserAgentString(web.getSettings().getUserAgentString().replace(" wv", "").replace("; wv", "") + "");
+        CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
         web.setWebChromeClient(new WebChromeClient());
         web.addJavascriptInterface(new AndroidBridge(), "SarathiAndroid");
         web.setWebViewClient(new WebViewClient() {
@@ -111,9 +114,16 @@ public class MainActivity extends AppCompatActivity {
                 super.onReceivedHttpError(view, request, errorResponse);
                 if (errorResponse != null && errorResponse.getStatusCode() == 503) {
                     if (request.isForMainFrame() && request.getUrl() != null) {
-                        lastSarathiPageUrl = request.getUrl().toString();
+                        String failedUrl = request.getUrl().toString();
+                        lastSarathiPageUrl = failedUrl;
+                        if (failedUrl.contains("/slots/")) {
+                            handlePortalFlowRequired();
+                        } else {
+                            handleServerUnavailable();
+                        }
+                    } else {
+                        handleServerUnavailable();
                     }
-                    handleServerUnavailable();
                 }
             }
 
@@ -121,6 +131,9 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 if (url != null && url.startsWith("https://sarathi.parivahan.gov.in/")) {
                     lastSarathiPageUrl = url;
+                    if (!url.contains("/slots/") && !url.contains("/cas/")) {
+                        lastPortalPageUrl = url;
+                    }
                 }
                 if (running) {
                     runAutomationCycle();
@@ -161,6 +174,18 @@ public class MainActivity extends AppCompatActivity {
     private void runAutomationCycle() {
         lastChecked.setText("Last checked: " + new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date()));
         web.evaluateJavascript(AUTOMATION_JS, null);
+    }
+
+    private void handlePortalFlowRequired() {
+        serverRetryScheduled = false;
+        serverRetryAttempt = 0;
+        status.setText("🟠 SARATHI PORTAL FLOW REQUIRED");
+        result.setText("Result: Sarathi rejected direct slot entry — return to the portal page and tap Proceed to Book there.");
+        if (lastPortalPageUrl != null && lastPortalPageUrl.startsWith("https://sarathi.parivahan.gov.in/")) {
+            handler.postDelayed(() -> {
+                if (running) web.loadUrl(lastPortalPageUrl);
+            }, 800);
+        }
     }
 
     private void handleServerUnavailable() {
@@ -213,7 +238,7 @@ public class MainActivity extends AppCompatActivity {
         + "var txt=n(document.body&&document.body.innerText);"
         + "if((/\\b503\\b/.test(txt)&&/service unavailable/.test(txt))||/service unavailable/.test(txt)){window.SarathiAndroid&&window.SarathiAndroid.serverUnavailable();return;}"
         + "window.SarathiAndroid&&window.SarathiAndroid.serverAvailable();"
-        + "if(txt.indexOf('select covs')>=0){var c=lmv(),p=proceed();if(c&&!c.checked){fire(c);try{c.dispatchEvent(new Event('change',{bubbles:true}))}catch(x){}}if(p)setTimeout(function(){fire(p)},300);return;}"
+        + "if(txt.indexOf('select covs')>=0){var c=lmv();if(c&&!c.checked){fire(c);try{c.dispatchEvent(new Event('change',{bubbles:true}))}catch(x){}}return;}"
         + "if(txt.indexOf('calendar indicator')>=0&&txt.indexOf('available quota')>=0){var ds=dates();if(ds.length){var idx=window.__sarathiDateIndex||0;if(idx>=ds.length)idx=0;window.__sarathiDateIndex=idx+1;fire(ds[idx]);setTimeout(function(){if(lmvOne()){window.SarathiAndroid&&window.SarathiAndroid.slotFound('LMV quota is 1 on an available date.')}} ,1200);}}"
         + "})();";
 
@@ -254,6 +279,10 @@ public class MainActivity extends AppCompatActivity {
     public class AndroidBridge {
         @JavascriptInterface public void serverUnavailable() {
             runOnUiThread(() -> handleServerUnavailable());
+        }
+
+        @JavascriptInterface public void portalFlowRequired() {
+            runOnUiThread(() -> handlePortalFlowRequired());
         }
 
         @JavascriptInterface public void serverAvailable() {
