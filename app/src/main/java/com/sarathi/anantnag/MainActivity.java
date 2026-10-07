@@ -10,7 +10,6 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.view.Window;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -41,6 +40,10 @@ public class MainActivity extends AppCompatActivity {
     private static final String SARATHI = "https://sarathi.parivahan.gov.in/";
     private static final String PREFS = "sarathi_prefs";
     private static final String CHANNEL_ID = "sarathi_slots";
+    private static final long[] SERVER_RETRY_DELAYS_MS = {
+        10000L, 20000L, 40000L, 60000L
+    };
+
     private final Handler handler = new Handler();
     private final ExecutorService network = Executors.newSingleThreadExecutor();
 
@@ -49,7 +52,8 @@ public class MainActivity extends AppCompatActivity {
     private EditText interval;
     private boolean running = false;
     private long lastAlert = 0L;
-    private long lastPageLoad = 0L;
+    private int serverRetryAttempt = 0;
+    private boolean serverRetryScheduled = false;
 
     private final Runnable monitorLoop = new Runnable() {
         @Override public void run() {
@@ -100,9 +104,21 @@ public class MainActivity extends AppCompatActivity {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return false;
             }
+
+            @Override public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                                                       android.webkit.WebResourceResponse errorResponse) {
+                super.onReceivedHttpError(view, request, errorResponse);
+                if (request.isForMainFrame() && errorResponse != null
+                        && errorResponse.getStatusCode() == 503) {
+                    handleServerUnavailable();
+                }
+            }
+
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (running) { lastPageLoad = System.currentTimeMillis(); runAutomationCycle(); }
+                if (running) {
+                    runAutomationCycle();
+                }
             }
         });
         CookieManager.getInstance().setAcceptCookie(true);
@@ -129,6 +145,9 @@ public class MainActivity extends AppCompatActivity {
     private void stopMonitoring() {
         running = false;
         handler.removeCallbacks(monitorLoop);
+        handler.removeCallbacks(serverRetryRunnable);
+        serverRetryScheduled = false;
+        serverRetryAttempt = 0;
         status.setText("🔴 STOPPED");
         result.setText("Result: stopped");
     }
@@ -136,6 +155,38 @@ public class MainActivity extends AppCompatActivity {
     private void runAutomationCycle() {
         lastChecked.setText("Last checked: " + new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date()));
         web.evaluateJavascript(AUTOMATION_JS, null);
+    }
+
+    private void handleServerUnavailable() {
+        if (!running || serverRetryScheduled) return;
+
+        long delay = SERVER_RETRY_DELAYS_MS[
+            Math.min(serverRetryAttempt, SERVER_RETRY_DELAYS_MS.length - 1)
+        ];
+        serverRetryAttempt = Math.min(serverRetryAttempt + 1, SERVER_RETRY_DELAYS_MS.length - 1);
+        serverRetryScheduled = true;
+
+        status.setText("🟡 SERVER UNAVAILABLE");
+        result.setText("Result: Sarathi unavailable — retrying in " + (delay / 1000) + "s");
+
+        handler.postDelayed(serverRetryRunnable, delay);
+    }
+
+    private final Runnable serverRetryRunnable = new Runnable() {
+        @Override public void run() {
+            serverRetryScheduled = false;
+            if (!running) return;
+            result.setText("Result: retrying Sarathi...");
+            web.reload();
+        }
+    };
+
+    private void handleServerAvailable() {
+        serverRetryAttempt = 0;
+        serverRetryScheduled = false;
+        if (running) {
+            status.setText("🟢 MONITORING");
+        }
     }
 
     private final String AUTOMATION_JS =
@@ -150,6 +201,8 @@ public class MainActivity extends AppCompatActivity {
         + "function dates(){var a=[];var cells=[].slice.call(document.querySelectorAll('td'));for(var i=0;i<cells.length;i++){var t=n(cells[i].innerText||cells[i].textContent);if(/^\\d{1,2}$/.test(t)&&green(cells[i]))a.push(cells[i].querySelector('a,button,span')||cells[i]);}return a;}"
         + "function lmvOne(){var rs=[].slice.call(document.querySelectorAll('tr'));for(var i=0;i<rs.length;i++){var t=n(rs[i].innerText||rs[i].textContent);if(/\\blmv\\b/.test(t)&&/(^|\\s)1(\\s|$)/.test(t))return true;}return false;}"
         + "var txt=n(document.body&&document.body.innerText);"
+        + "if(/\\b503\\b/.test(txt)&&/service unavailable/.test(txt)||/service unavailable/.test(txt)){window.SarathiAndroid&&window.SarathiAndroid.serverUnavailable();return;}"
+        + "window.SarathiAndroid&&window.SarathiAndroid.serverAvailable();"
         + "if(txt.indexOf('select covs')>=0){var c=lmv(),p=proceed();if(c&&!c.checked){fire(c);try{c.dispatchEvent(new Event('change',{bubbles:true}))}catch(x){}}if(p)setTimeout(function(){fire(p)},300);return;}"
         + "if(txt.indexOf('calendar indicator')>=0&&txt.indexOf('available quota')>=0){var ds=dates();if(ds.length){var idx=window.__sarathiDateIndex||0;if(idx>=ds.length)idx=0;window.__sarathiDateIndex=idx+1;fire(ds[idx]);setTimeout(function(){if(lmvOne()){window.SarathiAndroid&&window.SarathiAndroid.slotFound('LMV quota is 1 on an available date.')}} ,1200);}}"
         + "})();";
@@ -189,6 +242,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public class AndroidBridge {
+        @JavascriptInterface public void serverUnavailable() {
+            runOnUiThread(() -> handleServerUnavailable());
+        }
+
+        @JavascriptInterface public void serverAvailable() {
+            runOnUiThread(() -> handleServerAvailable());
+        }
+
         @JavascriptInterface public void slotFound(String detail) {
             runOnUiThread(() -> {
                 result.setText("Result: 🚨 LMV SLOT FOUND");
@@ -238,6 +299,7 @@ public class MainActivity extends AppCompatActivity {
     private String esc(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
     }
+
     private void createNotificationChannel() {
         if(Build.VERSION.SDK_INT>=26){
             NotificationChannel ch = new NotificationChannel(CHANNEL_ID,"Sarathi slot alerts",NotificationManager.IMPORTANCE_HIGH);
@@ -252,6 +314,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override protected void onDestroy() {
         handler.removeCallbacks(monitorLoop);
+        handler.removeCallbacks(serverRetryRunnable);
         network.shutdownNow();
         super.onDestroy();
     }
