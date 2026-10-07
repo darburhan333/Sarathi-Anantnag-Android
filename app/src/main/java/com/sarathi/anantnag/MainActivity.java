@@ -229,10 +229,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String esc(String s) {
-        return s.replace("\","\\").replace(""","\"").replace("
-","\n").replace("","\r");
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
     }
-
     private void createNotificationChannel() {
         if(Build.VERSION.SDK_INT>=26){
             NotificationChannel ch = new NotificationChannel(CHANNEL_ID,"Sarathi slot alerts",NotificationManager.IMPORTANCE_HIGH);
