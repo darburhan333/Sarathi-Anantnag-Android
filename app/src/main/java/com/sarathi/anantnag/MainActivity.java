@@ -57,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
     private String lastSarathiPageUrl = SARATHI;
     private String lastPortalPageUrl = SARATHI;
 
-    private final Runnable monitorLoop = new Runnable() {
+    private boolean automationEnabled = false;\n\n    private final Runnable monitorLoop = new Runnable() {
         @Override public void run() {
             if (!running) return;
             runAutomationCycle();
