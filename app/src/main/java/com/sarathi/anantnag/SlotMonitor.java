@@ -23,20 +23,31 @@ public final class SlotMonitor {
         web.evaluateJavascript(JS, null);
     }
 
+    /*
+     * IMPORTANT:
+     * This monitor is deliberately PASSIVE. It never clicks buttons, changes
+     * dates, submits forms, or calls /slots/ endpoints itself. The user must
+     * navigate through Sarathi's normal portal flow. We only inspect the
+     * already-loaded page DOM for an LMV availability indication.
+     */
     private static final String JS =
         "(function(){"
         + "function n(x){return String(x||'').toLowerCase().replace(/\\s+/g,' ').trim();}"
-        + "function fire(e){try{e.scrollIntoView({block:'center'});e.click();return true}catch(x){}return false;}"
-        + "function row(e){var r=e&&e.closest&&e.closest('tr');return n(r?r.innerText:(e&&e.parentElement?e.parentElement.innerText:''));}"
-        + "function lmv(){var a=[].slice.call(document.querySelectorAll('input[type=checkbox]'));for(var i=0;i<a.length;i++){var t=row(a[i]);if(t.indexOf('light motor vehicle')>=0||/\\blmv\\b/.test(t))return a[i]}return null;}"
-        + "function green(e){var x=e;for(var i=0;i<3&&x;i++,x=x.parentElement){var s=getComputedStyle(x),c=s.backgroundColor+','+s.color;if(/green|available/.test(n(x.className)+' '+c))return true;}return false;}"
-        + "function dates(){var a=[];var cells=[].slice.call(document.querySelectorAll('td'));for(var i=0;i<cells.length;i++){var t=n(cells[i].innerText||cells[i].textContent);if(/^\\d{1,2}$/.test(t)&&green(cells[i]))a.push(cells[i].querySelector('a,button,span')||cells[i]);}return a;}"
-        + "function lmvOne(){var rs=[].slice.call(document.querySelectorAll('tr'));for(var i=0;i<rs.length;i++){var t=n(rs[i].innerText||rs[i].textContent);if(/\\blmv\\b/.test(t)&&/(^|\\s)1(\\s|$)/.test(t))return true;}return false;}"
         + "var txt=n(document.body&&document.body.innerText);"
-        + "if(/ssl1001/.test(txt)||(/slot booking is allowed/.test(txt)&&/sarathi portal/.test(txt))){return;}"
+        + "if(/ssl1001/.test(txt)||(/slot booking is allowed/.test(txt)&&/sarathi portal/.test(txt))){window.SarathiAndroid&&window.SarathiAndroid.portalFlowRequired();return;}"
         + "if(/\\b503\\b/.test(txt)&&/service unavailable/.test(txt)){window.SarathiAndroid&&window.SarathiAndroid.serverUnavailable();return;}"
         + "window.SarathiAndroid&&window.SarathiAndroid.serverAvailable();"
-        + "if(txt.indexOf('select covs')>=0){var c=lmv();if(c&&!c.checked){fire(c);try{c.dispatchEvent(new Event('change',{bubbles:true}))}catch(x){}}return;}"
-        + "if(txt.indexOf('calendar indicator')>=0&&txt.indexOf('available quota')>=0){var ds=dates();if(ds.length){var idx=window.__sarathiDateIndex||0;if(idx>=ds.length)idx=0;window.__sarathiDateIndex=idx+1;fire(ds[idx]);setTimeout(function(){if(lmvOne()){window.SarathiAndroid&&window.SarathiAndroid.slotFound('LMV quota is 1 on an available date.')}} ,1200);}}"
+        + "var rows=[].slice.call(document.querySelectorAll('tr'));"
+        + "for(var i=0;i<rows.length;i++){"
+        + " var t=n(rows[i].innerText||rows[i].textContent);"
+        + " if(/light motor vehicle|\\blmv\\b/.test(t)&&/(available|quota|slot)/.test(t)){"
+        + "   var nums=t.match(/(?:available\\s*quota|quota|available)[^0-9]{0,30}(\\d+)/);"
+        + "   if(nums&&parseInt(nums[1],10)>0){window.SarathiAndroid&&window.SarathiAndroid.slotFound('LMV availability detected: '+t.slice(0,240));return;}"
+        + " }"
+        + "}"
+        + "var bodyHasLMV=/light motor vehicle|\\blmv\\b/.test(txt);"
+        + "var bodyHasAvailable=/(available quota|slot available|available slots)/.test(txt);"
+        + "if(bodyHasLMV&&bodyHasAvailable){window.SarathiAndroid&&window.SarathiAndroid.slotFound('LMV availability text detected on the current Sarathi page.');}"
         + "})();";
+
 }
