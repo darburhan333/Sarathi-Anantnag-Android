@@ -37,7 +37,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String SARATHI = "https://sarathi.parivahan.gov.in/";
+    private static final String SARATHI = "https://sarathi.parivahan.gov.in/sarathiservice/stateSelection.do";
     private static final String PREFS = "sarathi_prefs";
     private static final String CHANNEL_ID = "sarathi_slots";
     private static final long[] SERVER_RETRY_DELAYS_MS = {
