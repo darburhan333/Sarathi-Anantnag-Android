@@ -100,8 +100,8 @@ public class MainActivity extends AppCompatActivity {
         web.getSettings().setDisplayZoomControls(false);
         web.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);
         web.getSettings().setMediaPlaybackRequiresUserGesture(true);
-        web.getSettings().setUserAgentString(web.getSettings().getUserAgentString().replace(" wv", "").replace("; wv", "") + "");
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
+        CookieManager.getInstance().flush();
         web.setWebChromeClient(new WebChromeClient());
         web.addJavascriptInterface(new AndroidBridge(), "SarathiAndroid");
         web.setWebViewClient(new WebViewClient() {
@@ -180,12 +180,17 @@ public class MainActivity extends AppCompatActivity {
         serverRetryScheduled = false;
         serverRetryAttempt = 0;
         status.setText("🟠 SARATHI PORTAL FLOW REQUIRED");
-        result.setText("Result: Sarathi rejected direct slot entry — return to the portal page and tap Proceed to Book there.");
-        if (lastPortalPageUrl != null && lastPortalPageUrl.startsWith("https://sarathi.parivahan.gov.in/")) {
-            handler.postDelayed(() -> {
-                if (running) web.loadUrl(lastPortalPageUrl);
-            }, 800);
-        }
+        result.setText("Result: Sarathi rejected the slot request. Returning through portal history — use the normal DL Slot Book / Proceed button again.");
+        handler.postDelayed(() -> {
+            if (!running) return;
+            if (web.canGoBack()) {
+                web.goBack();
+            } else if (lastPortalPageUrl != null
+                    && lastPortalPageUrl.startsWith("https://sarathi.parivahan.gov.in/")
+                    && !lastPortalPageUrl.contains("/slots/")) {
+                web.loadUrl(lastPortalPageUrl);
+            }
+        }, 500);
     }
 
     private void handleServerUnavailable() {
