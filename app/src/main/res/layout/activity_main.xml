@@ -1,39 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true">
+    android:orientation="vertical"
+    android:background="#F4F6F8">
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="18dp">
+        android:padding="12dp">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🚗 Sarathi Anantnag"
-            android:textSize="22sp"
+            android:text="Sarathi Anantnag LMV Monitor"
+            android:textSize="19sp"
             android:textStyle="bold"/>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="This version does not use AccessibilityService or read content from other apps. Use Chrome for the official Sarathi appointment flow."
-            android:textSize="15sp"/>
-
-        <Button
-            android:id="@+id/openChrome"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="OPEN SARATHI IN CHROME"/>
+            android:layout_marginTop="3dp"
+            android:text="J&amp;K → Anantnag → Anantnag → LMV"
+            android:textSize="13sp"/>
 
         <TextView
+            android:id="@+id/statusText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:text="In Chrome, use Sarathi normally: Jammu &amp; Kashmir → Appointments → DL service → RTO/Anantnag → date/calendar."/>
+            android:layout_marginTop="8dp"
+            android:text="Loading official Sarathi portal…"
+            android:textStyle="bold"/>
+
+        <TextView
+            android:id="@+id/checkedText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Last checked: —"
+            android:textSize="11sp"/>
+
+        <CheckBox
+            android:id="@+id/monitorBox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="Monitor page"/>
+
+        <CheckBox
+            android:id="@+id/refreshBox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Auto-refresh every 60 seconds"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/backButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="BACK"/>
+
+            <Button
+                android:id="@+id/homeButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="SARATHI HOME"/>
+        </LinearLayout>
     </LinearLayout>
-</ScrollView>
+
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+</LinearLayout>
