@@ -6,8 +6,6 @@ import android.app.NotificationManager;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -23,8 +21,6 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
-import java.util.Locale;
-
 public class MainActivity extends AppCompatActivity {
     private static final String SARATHI_URL = "https://sarathi.parivahan.gov.in/";
     private static final String CHANNEL_ID = "sarathi_slots";
@@ -37,7 +33,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView checkedText;
     private CheckBox monitorBox;
     private CheckBox refreshBox;
-    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
     private boolean lastAvailable = false;
     private boolean pageReady = false;
 
@@ -98,10 +94,6 @@ public class MainActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setSupportZoom(true);
-        settings.setBuiltInZoomControls(false);
-        settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString());
 
         webView.setWebChromeClient(new WebChromeClient());
         webView.addJavascriptInterface(new PageBridge(), "SarathiMonitor");
@@ -127,43 +119,44 @@ public class MainActivity extends AppCompatActivity {
 
     private void inspectRenderedPage() {
         String js =
-            "(function(){var t=(document.body&&document.body.innerText||'').replace(/\\s+/g,' ').trim();" +
+            "(function(){var t=(document.body&&document.body.innerText||'').replace(/\\\\s+/g,' ').trim();" +
             "var l=t.toLowerCase();" +
             "var ssl=/ssl1001|slot booking is allowed from sarathi portal only/i.test(t);" +
             "var neg=/service unavailable|temporarily unavailable|no slots? available|no appointment(?:s)? available/i.test(t);" +
-            "var lmv=/\\bLMV\\b/i.test(t)||/light motor vehicle/i.test(t);" +
-            "var pos=/slot(?:s)?\\s+(?:is|are)?\\s*(?:available|open)|appointment(?:s)?\\s+(?:is|are)?\\s*(?:available|open)|available\\s+slot|book(?:ing)?\\s+(?:is\\s+)?available|select\\s+slot|choose\\s+slot/i.test(t);" +
+            "var lmv=/\\\\bLMV\\\\b/i.test(t)||/light motor vehicle/i.test(t);" +
+            "var pos=/slot(?:s)?\\\\s+(?:is|are)?\\\\s*(?:available|open)|appointment(?:s)?\\\\s+(?:is|are)?\\\\s*(?:available|open)|available\\\\s+slot|book(?:ing)?\\\\s+(?:is\\\\s+)?available|select\\\\s+slot|choose\\\\s+slot/i.test(t);" +
             "var sar=/sarathi|parivahan/i.test(l);" +
-            "return JSON.stringify({sarathi:sar,lmv:lmv,ssl:ssl,negative:neg,positive:pos,available:!ssl&&!neg&&lmv&&pos,url:location.href});})()";
+            "return [sar,lmv,ssl,(!ssl&&!neg&&lmv&&pos)].join('|');})()";
         webView.evaluateJavascript(js, value -> {
             if (value == null) return;
-            String result = value;
-            if (result.startsWith(""") && result.endsWith(""")) {
-                result = result.substring(1, result.length() - 1)
-                        .replace("\\"", """).replace("\\\\", "\");
-            }
+            String result = value.replace("\"", "");
             handleResult(result);
         });
     }
 
-    private void handleResult(String json) {
-        boolean ssl = json.contains(""ssl":true");
-        boolean lmv = json.contains(""lmv":true");
-        boolean positive = json.contains(""available":true");
+    private void handleResult(String result) {
+        String[] p = result.split("\\\\|", -1);
+        if (p.length < 4) return;
+
+        boolean sarathi = "true".equals(p[0]);
+        boolean lmv = "true".equals(p[1]);
+        boolean ssl = "true".equals(p[2]);
+        boolean available = "true".equals(p[3]);
 
         if (ssl) {
             setStatus("Sarathi SSL1001 portal-flow page. No availability decision made.");
-        } else if (positive) {
+        } else if (available) {
             setStatus("⚠ LMV SLOT APPEARS AVAILABLE — verify it now.");
             if (!lastAvailable) notifySlot();
         } else if (lmv) {
             setStatus("LMV appointment page detected. No available slot found.");
-        } else if (json.contains(""sarathi":true")) {
+        } else if (sarathi) {
             setStatus("Sarathi page detected. Continue to the Anantnag LMV appointment page.");
         } else {
             setStatus("Waiting for the official Sarathi appointment page…");
         }
-        lastAvailable = positive;
+
+        lastAvailable = available;
         checkedText.setText("Last checked: " + android.text.format.DateFormat.format(
                 "dd MMM yyyy, hh:mm:ss a", System.currentTimeMillis()));
     }
