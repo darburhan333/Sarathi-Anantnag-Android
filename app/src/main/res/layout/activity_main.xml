@@ -2,56 +2,37 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#F4F6F8">
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="12dp"
+        android:background="#FFFFFF">
 
         <TextView
+            android:id="@+id/title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Sarathi Anantnag LMV Monitor"
+            android:text="Sarathi LMV Slot Monitor"
             android:textSize="19sp"
             android:textStyle="bold"/>
 
         <TextView
+            android:id="@+id/status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:text="J&amp;K → Anantnag → Anantnag → LMV"
+            android:layout_marginTop="4dp"
+            android:text="Opening official Sarathi…"
             android:textSize="13sp"/>
 
         <TextView
-            android:id="@+id/statusText"
+            android:id="@+id/checked"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Loading official Sarathi portal…"
-            android:textStyle="bold"/>
-
-        <TextView
-            android:id="@+id/checkedText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Last checked: —"
+            android:text="Not checked yet"
             android:textSize="11sp"/>
-
-        <CheckBox
-            android:id="@+id/monitorBox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:checked="true"
-            android:text="Monitor page"/>
-
-        <CheckBox
-            android:id="@+id/refreshBox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Auto-refresh every 60 seconds"/>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -59,23 +40,37 @@
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/backButton"
+                android:id="@+id/home"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="HOME"/>
+
+            <Button
+                android:id="@+id/back"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="BACK"/>
 
             <Button
-                android:id="@+id/homeButton"
+                android:id="@+id/monitor"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="SARATHI HOME"/>
+                android:text="MONITOR"/>
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/help"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Go through the normal Sarathi flow to the Anantnag LMV appointment/date page. MONITOR then checks the page automatically."
+            android:textSize="11sp"/>
     </LinearLayout>
 
     <WebView
-        android:id="@+id/webView"
+        android:id="@+id/web"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"/>
