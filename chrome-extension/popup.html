@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Sarathi LMV Monitor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>Sarathi LMV Monitor</h1>
+  <p class="location">Jammu & Kashmir → Anantnag → Anantnag → LMV</p>
+  <label><input id="enabled" type="checkbox"> Monitor this Sarathi tab</label>
+  <label><input id="notifications" type="checkbox"> Desktop notifications</label>
+  <div class="card"><b>Status</b><div id="status">Loading…</div></div>
+  <div class="card"><b>Last checked</b><div id="checked">—</div></div>
+  <button id="open">OPEN SARATHI</button>
+  <p class="note">Reads only the page rendered by Sarathi in Chrome. It does not call protected slot endpoints, click controls, submit forms, or book appointments.</p>
+  <script src="popup.js"></script>
+</body>
+</html>
