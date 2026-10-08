@@ -23,7 +23,6 @@ chrome.runtime.onMessage.addListener((message) => {
       if (!settings.notifications) return;
       chrome.notifications.create("sarathi-lmv-" + Date.now(), {
         type: "basic",
-        iconUrl: "icon128.png",
         title: "Sarathi LMV slot available",
         message: "An LMV appointment appears available on the Anantnag Sarathi page. Open Chrome and verify it now.",
         priority: 2
