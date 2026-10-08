@@ -1,25 +1,17 @@
-# Sarathi Anantnag LMV Slot Monitor
+# Sarathi Anantnag LMV Slot Monitor — background version
 
-Chrome Manifest V3 extension for passively monitoring the rendered official Sarathi Parivahan appointment page.
+This version has no popup, no desktop notifications, and no notification permission.
+
+It runs as a Manifest V3 background service worker plus a content script on Sarathi pages. You can leave the Sarathi appointment tab open and switch to other Chrome tabs.
 
 Target flow:
-Jammu & Kashmir → Appointments → DL service → Anantnag → Anantnag → LMV
+Jammu & Kashmir → Appointments → Anantnag → Anantnag → LMV
 
-The extension observes visible page text after the user completes the normal Sarathi flow. It detects LMV plus positive availability wording and sends a Chrome notification.
+The extension only reads text already rendered by the official Sarathi page. It does not call protected slot endpoints, bypass SSL1001, spoof headers, click controls, submit forms, book appointments, or use AccessibilityService.
 
-It does NOT:
-- call Sarathi slot endpoints directly
-- bypass SSL1001 or portal restrictions
-- spoof headers or browser identity
-- click buttons
-- submit forms
-- book appointments
-- use AccessibilityService
-- control other applications
-
-Important limitation: Chrome may throttle inactive tabs and Sarathi may change its page wording. This is a passive monitor, not a guaranteed real-time checker.
+Important: Chrome may suspend/throttle inactive tabs, and Sarathi may return SSL1001/503 when a protected endpoint is accessed outside the normal portal flow. This extension cannot bypass that server-side protection.
 
 Install:
-Chrome → Extensions → Manage Extensions → Developer mode → Load unpacked → select this chrome-extension folder.
+Chrome → Extensions → Manage Extensions → Developer mode → Load unpacked → select this folder.
 
-Keep the Sarathi appointment tab open while monitoring.
+After installation, open the official Sarathi site in one tab, complete the normal appointment flow to the Anantnag/LMV page, then switch to another tab.
