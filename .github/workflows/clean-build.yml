@@ -1,0 +1,65 @@
+name: Build signed Sarathi LMV Monitor
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [clean-webview-monitor]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build release APK
+        run: gradle --no-daemon clean assembleRelease
+
+      - name: Create temporary signing key
+        run: |
+          keytool -genkeypair -v \
+            -keystore release-key.jks \
+            -alias sarathi-monitor \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass changeit -keypass changeit \
+            -dname "CN=Sarathi LMV Monitor, OU=App, O=Local, C=IN"
+
+      - name: Zipalign
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 \
+            app/build/outputs/apk/release/app-release-unsigned.apk \
+            app-release-aligned.apk
+
+      - name: Sign APK
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+            --ks release-key.jks \
+            --ks-pass pass:changeit \
+            --key-pass pass:changeit \
+            --out Sarathi-LMV-Monitor.apk \
+            app-release-aligned.apk
+
+      - name: Verify APK
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Sarathi-LMV-Monitor.apk
+          unzip -l Sarathi-LMV-Monitor.apk | grep -E 'AndroidManifest.xml|classes.dex'
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sarathi-LMV-Monitor-signed
+          path: Sarathi-LMV-Monitor.apk
+          if-no-files-found: error
