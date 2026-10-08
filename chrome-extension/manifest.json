@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Sarathi Anantnag LMV Slot Monitor",
+  "version": "1.0.0",
+  "description": "Passively monitors the rendered official Sarathi appointment page for LMV availability in Anantnag.",
+  "permissions": ["notifications", "storage", "tabs"],
+  "host_permissions": ["https://sarathi.parivahan.gov.in/*"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_title": "Sarathi LMV Monitor", "default_popup": "popup.html"},
+  "content_scripts": [{
+    "matches": ["https://sarathi.parivahan.gov.in/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }]
+}
