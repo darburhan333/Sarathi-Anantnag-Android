@@ -24,7 +24,7 @@
   }
 
   function inspect() {
-    const text = pageText();
+    chrome.storage.local.get({enabled: true}, settings => {\n      if (!settings.enabled) return;\n      const text = pageText();
     if (!text) return;
 
     const lower = text.toLowerCase();
@@ -51,9 +51,7 @@
       status = "Sarathi page detected; waiting for LMV appointment information";
     }
 
-    chrome.runtime.sendMessage({type: "SLOT_RESULT", available, status});
-  }
-
+      chrome.runtime.sendMessage({type: "SLOT_RESULT", available, status});\n    });\n  }\n
   const observer = new MutationObserver(() => {
     clearTimeout(inspect.timer);
     inspect.timer = setTimeout(inspect, 700);
