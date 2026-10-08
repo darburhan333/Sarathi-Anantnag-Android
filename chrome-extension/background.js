@@ -8,23 +8,25 @@ const DEFAULTS = {
 chrome.runtime.onInstalled.addListener(async () => {
   const current = await chrome.storage.local.get(DEFAULTS);
   await chrome.storage.local.set(current);
-  chrome.alarms.create("sarathi-status", { periodInMinutes: 1 });
-});
-
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name !== "sarathi-status") return;
-  const tabs = await chrome.tabs.query({url: ["https://sarathi.parivahan.gov.in/*"]});
-  await chrome.storage.local.set({
-    openSarathiTabs: tabs.length,
-    backgroundMonitor: "Running"
-  });
+  chrome.action.setBadgeBackgroundColor({color: "#188038"});
+  chrome.action.setBadgeText({text: ""});
 });
 
 chrome.runtime.onMessage.addListener((message) => {
-  if (!message || message.type !== "SLOT_RESULT") return;
+  if (!message || message.type !== "AUTOMONITOR_STATE") return;
+
+  const slot = !!message.slot;
   chrome.storage.local.set({
-    lastStatus: message.status || "No LMV availability detected",
+    lastStatus: message.status || "Monitoring Sarathi appointment page",
     lastChecked: new Date().toISOString(),
-    lastAvailable: !!message.available
+    lastAvailable: slot,
+    lastUrl: message.url || ""
   });
+
+  chrome.action.setBadgeText({text: slot ? "SLOT" : ""});
+  if (slot) {
+    chrome.action.setTitle({title: "Sarathi LMV: SLOT AVAILABLE — switch to the Sarathi tab"});
+  } else {
+    chrome.action.setTitle({title: "Sarathi LMV Monitor running"});
+  }
 });
