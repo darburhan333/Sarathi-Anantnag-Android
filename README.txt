@@ -1,4 +1,4 @@
-SARATHI MONITOR — ANDROID, ALERT-ONLY (v1.0.0)
+SARATHI MONITOR — ANDROID, ALERT-ONLY (v1.0.1)
 Port of the monitoring half of MPARIVAHAN ANANTNAG V11.46. UNTESTED ON A PHONE.
 
 WHAT IT DOES
@@ -42,7 +42,9 @@ FIRST RUN CHECKLIST
 KNOWN LIMITS
 - Android can still stop the app on some phones; then the monitor silently stops. Check it.
 - Sessions can expire; the alert tells you. You must log in again by hand.
-- Desktop-site mode is used so the page matches the Chrome extension's selectors.
+- By default the app identifies itself like the phone's normal WebView (like Chrome on the phone).
+  The Desktop button switches to a desktop browser identity and reloads. If one mode gives an
+  error page (e.g. 503) or an unrecognised page, try the other. The status line shows the page path.
 - Only one Sarathi session per app (one cookie jar). Use a different browser/cloned app for more.
 - Nothing here was tested against the live Sarathi site or on a real device.
 

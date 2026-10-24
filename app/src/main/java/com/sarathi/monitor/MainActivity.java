@@ -28,6 +28,7 @@ public class MainActivity extends Activity {
     private FrameLayout container;
     private TextView statusView;
     private TextView logView;
+    private Button desktopBtn;
     private final Handler ui = new Handler(Looper.getMainLooper());
 
     private final Runnable refresh = new Runnable() {
@@ -139,6 +140,17 @@ public class MainActivity extends Activity {
                 openBatterySettings();
             }
         }));
+        desktopBtn = button(Core.desktopMode(this) ? "Desktop: on" : "Desktop: off", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                boolean now = !Core.desktopMode(MainActivity.this);
+                Core.prefs(MainActivity.this).edit().putBoolean("desktop", now).apply();
+                Core.applyUserAgent(MainActivity.this);
+                desktopBtn.setText(now ? "Desktop: on" : "Desktop: off");
+                if (Core.web != null) Core.web.reload();
+            }
+        });
+        row2.addView(desktopBtn);
         row2.addView(button("Home", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -189,8 +201,14 @@ public class MainActivity extends Activity {
 
     private void updateStatus() {
         String battery = ignoringBattery() ? "battery: unrestricted" : "battery: RESTRICTED (tap Battery)";
+        String u = Core.web == null ? null : Core.web.getUrl();
+        String page = "-";
+        if (u != null) {
+            String path = Uri.parse(u).getPath();
+            page = path == null || path.isEmpty() ? "/" : path;
+        }
         statusView.setText((Core.running ? "● RUNNING  " : "○ stopped  ") + Core.status
-                + "\nattempts " + Core.attempts + "  |  " + battery);
+                + "\nattempts " + Core.attempts + "  |  " + battery + "\npage: " + page);
         logView.setText(Core.logText(5));
     }
 

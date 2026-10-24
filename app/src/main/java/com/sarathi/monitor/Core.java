@@ -13,6 +13,7 @@ import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -29,8 +30,9 @@ import java.util.Locale;
 
 /** Process-wide state. The WebView lives here so it survives the Activity being closed. */
 final class Core {
-    static final String HOME = "https://sarathi.parivahan.gov.in/";
-    static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    static final String HOME = "https://sarathi.parivahan.gov.in/sarathiservice/stateSelection.do";
+    // Used only when the "Desktop" button is on. Otherwise the phone's normal WebView identity is sent.
+    static final String DESKTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
             + "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
     static WebView web;
@@ -94,7 +96,6 @@ final class Core {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setUserAgentString(UA);
         s.setUseWideViewPort(true);
         s.setLoadWithOverviewMode(true);
         s.setSupportZoom(true);
@@ -122,6 +123,11 @@ final class Core {
             @Override
             public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
                 if (r.isForMainFrame()) log("Page error " + e.getErrorCode());
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse e) {
+                if (r.isForMainFrame()) log("HTTP " + e.getStatusCode() + " " + r.getUrl().getPath());
             }
 
             @Override
@@ -153,7 +159,18 @@ final class Core {
             }
         });
 
+        applyUserAgent(appContext);
         giveOffscreenSize();
+    }
+
+    static boolean desktopMode(Context c) {
+        return prefs(c).getBoolean("desktop", false);
+    }
+
+    /** Default = the phone's normal WebView identity. Desktop mode sends a desktop Chrome identity. */
+    static void applyUserAgent(Context c) {
+        if (web == null) return;
+        web.getSettings().setUserAgentString(desktopMode(c) ? DESKTOP_UA : null);
     }
 
     private static void giveOffscreenSize() {

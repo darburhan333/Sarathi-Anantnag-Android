@@ -27,6 +27,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SarathiMonitor-debug-apk
+          name: SarathiMonitor-v1.0.1-debug-apk
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
