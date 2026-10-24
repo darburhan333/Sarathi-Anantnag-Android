@@ -1,4 +1,4 @@
-name: Build WebView diagnostic APK
+name: Build GeckoView access test
 on:
   push:
   workflow_dispatch:
@@ -13,13 +13,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v3
+      - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.5'
+          gradle-version: '8.13'
       - name: Build and lint
         run: gradle assembleDebug lintDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: Sarathi-WebView-Diagnostic-APK
+          name: Sarathi-Gecko-Access-Test-arm64
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
