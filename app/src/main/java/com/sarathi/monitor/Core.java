@@ -32,7 +32,7 @@ import java.util.Map;
 
 /** Process-wide state. The WebView lives here so it survives the Activity being closed. */
 final class Core {
-    static final String HOME = "https://sarathi.parivahan.gov.in/sarathiservice/stateSelection.do";
+    static final String HOME = "https://parivahan.gov.in/";
     // Used only when the "Desktop" button is on. Otherwise the phone's normal WebView identity is sent.
     static final String DESKTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
             + "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
