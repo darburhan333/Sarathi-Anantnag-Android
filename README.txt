@@ -1,4 +1,4 @@
-SARATHI MONITOR — ANDROID, ALERT-ONLY (v1.0.1)
+SARATHI MONITOR — ANDROID, ALERT-ONLY (v1.0.2)
 Port of the monitoring half of MPARIVAHAN ANANTNAG V11.46. UNTESTED ON A PHONE.
 
 WHAT IT DOES
@@ -47,5 +47,11 @@ KNOWN LIMITS
   error page (e.g. 503) or an unrecognised page, try the other. The status line shows the page path.
 - Only one Sarathi session per app (one cookie jar). Use a different browser/cloned app for more.
 - Nothing here was tested against the live Sarathi site or on a real device.
+
+DIAGNOSTICS (v1.0.2): the log under the buttons shows, for each page the app opens, the request method,
+whether a Referer was sent (ref=yes/NO), the cookie NAMES present (never values) and the page title /
+any error text. Press 'Copy log' and paste it into the chat to troubleshoot.
+Note: Sarathi refuses direct links to the slot booking page (SSL1001, 'allowed from Sarathi portal only'),
+so always reach it by clicking through the Sarathi menus.
 
 TESTS (PC): node tests/step_test.js   (mock-DOM test of the page script)

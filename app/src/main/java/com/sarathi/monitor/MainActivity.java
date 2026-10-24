@@ -3,6 +3,8 @@ package com.sarathi.monitor;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -159,9 +161,27 @@ public class MainActivity extends Activity {
         }));
         root.addView(row2);
 
+        LinearLayout row3 = new LinearLayout(this);
+        row3.setOrientation(LinearLayout.HORIZONTAL);
+        row3.addView(button("Copy log", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(ClipData.newPlainText("log", Core.logText(40)));
+                Toast.makeText(MainActivity.this, "Log copied — paste it in the chat", Toast.LENGTH_SHORT).show();
+            }
+        }));
+        row3.addView(button("Reload", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (Core.web != null) Core.web.reload();
+            }
+        }));
+        root.addView(row3);
+
         logView = new TextView(this);
-        logView.setTextSize(11);
-        logView.setMaxLines(5);
+        logView.setTextSize(10);
+        logView.setMaxLines(9);
         root.addView(logView);
 
         container = new FrameLayout(this);
@@ -209,7 +229,7 @@ public class MainActivity extends Activity {
         }
         statusView.setText((Core.running ? "● RUNNING  " : "○ stopped  ") + Core.status
                 + "\nattempts " + Core.attempts + "  |  " + battery + "\npage: " + page);
-        logView.setText(Core.logText(5));
+        logView.setText(Core.logText(9));
     }
 
     private void showSettings() {

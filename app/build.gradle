@@ -10,8 +10,8 @@ android {
         applicationId "com.sarathi.monitor"
         minSdk 26
         targetSdk 34
-        versionCode 2
-        versionName "1.0.1-alert-only"
+        versionCode 3
+        versionName "1.0.2-alert-only"
     }
 
     buildTypes {

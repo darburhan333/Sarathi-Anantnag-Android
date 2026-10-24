@@ -11,6 +11,7 @@ import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceResponse;
@@ -27,6 +28,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.Locale;
+import java.util.Map;
 
 /** Process-wide state. The WebView lives here so it survives the Activity being closed. */
 final class Core {
@@ -130,9 +132,30 @@ final class Core {
                 if (r.isForMainFrame()) log("HTTP " + e.getStatusCode() + " " + r.getUrl().getPath());
             }
 
+            // Diagnostics: what the app sends for each top-level page. Cookie NAMES only, never values.
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+                if (r.isForMainFrame()) {
+                    Map<String, String> h = r.getRequestHeaders();
+                    boolean ref = h != null && (h.containsKey("Referer") || h.containsKey("referer"));
+                    log("REQ " + r.getMethod() + " " + r.getUrl().getPath() + (ref ? " ref=yes" : " ref=NO")
+                            + " cookies=" + cookieNames(r.getUrl().toString()));
+                }
+                return null;
+            }
+
             @Override
             public void onPageFinished(WebView v, String url) {
                 CookieManager.getInstance().flush();
+                String js = "(function(){var t=((document.body&&document.body.innerText)||'').replace(/\\s+/g,' ');"
+                        + "var m=t.match(/(error message.{0,60}|SSL\\d+.{0,50}|service unavailable)/i);"
+                        + "return (document.title||'-')+' | '+(m?m[0]:'-');})()";
+                v.evaluateJavascript(js, new ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String value) {
+                        log("PAGE " + value);
+                    }
+                });
             }
         });
 
@@ -161,6 +184,23 @@ final class Core {
 
         applyUserAgent(appContext);
         giveOffscreenSize();
+    }
+
+    static String cookieNames(String url) {
+        try {
+            String ck = CookieManager.getInstance().getCookie(url);
+            if (ck == null || ck.isEmpty()) return "none";
+            StringBuilder sb = new StringBuilder();
+            for (String part : ck.split(";")) {
+                int i = part.indexOf('=');
+                String name = (i > 0 ? part.substring(0, i) : part).trim();
+                if (sb.length() > 0) sb.append(',');
+                sb.append(name);
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "?";
+        }
     }
 
     static boolean desktopMode(Context c) {
