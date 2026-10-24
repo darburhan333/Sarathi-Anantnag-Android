@@ -1,25 +1,14 @@
-plugins {
-    id 'com.android.application'
-}
-
+plugins { id 'com.android.application' }
 android {
-    namespace 'com.sarathi.monitor'
+    namespace 'com.sarathi.webviewdiagnostic'
     compileSdk 34
-
     defaultConfig {
-        applicationId "com.sarathi.monitor"
+        applicationId 'com.sarathi.webviewdiagnostic'
         minSdk 26
         targetSdk 34
-        versionCode 4
-        versionName "1.0.3-alert-only"
+        versionCode 1
+        versionName '1.0-diagnostic'
     }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-        }
-    }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
