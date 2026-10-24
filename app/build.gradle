@@ -1,7 +1,7 @@
 plugins { id 'com.android.application' }
 android {
  namespace 'com.sarathi.geckotest'
- compileSdk 36
+ compileSdk 37
  defaultConfig {
   applicationId 'com.sarathi.geckotest'
   minSdk 26
