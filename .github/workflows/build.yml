@@ -18,6 +18,10 @@ jobs:
           gradle-version: '9.3.1'
       - name: Baseline regression tests and Android adapter tests
         run: python3 scripts/verify.py
+      - name: Browser DOM integration (offline fixtures only)
+        run: |
+          python3 -m pip install playwright==1.58.0
+          CHROME_PATH="$(command -v google-chrome)" python3 scripts/browser-flow.py
       - name: Build compressed arm64 APK and lint
         run: gradle assembleRelease lintRelease --stacktrace
       - uses: actions/upload-artifact@v4

@@ -47,6 +47,8 @@ public class MainActivity extends Activity {
     private GeckoSession monitorSession;
     private String monitorUrl;
     private WebExtension.Port nativePort;
+    private WebExtension extension;
+    private boolean destroyed;
     private PhoneAlerts alerts;
     private TextView monitorStatus;
     private boolean foreground, showingMonitor, ready, monitoring;
@@ -99,7 +101,9 @@ public class MainActivity extends Activity {
       }
     }
     private void installExtension(){
-      runtime.getWebExtensionController().ensureBuiltIn("resource://android/assets/extension/","sarathi-android@burhan.local").accept(ext->{
+      runtime.getWebExtensionController().ensureBuiltIn("resource://android/assets/extension/","sarathi-android@burhan.local").accept(ext->runOnUiThread(()->{
+        if(destroyed)return;
+        extension=ext;
         ext.setTabDelegate(new WebExtension.TabDelegate(){
           @Override public GeckoResult<GeckoSession> onNewTab(WebExtension source,WebExtension.CreateTabDetails details){
             return GeckoResult.fromValue(newSession());
@@ -136,7 +140,7 @@ public class MainActivity extends Activity {
             return GeckoResult.fromValue((Object)result);
           }
         },"sarathi");
-      },e->{ready=false;log("Monitor installation failed: "+e.getClass().getSimpleName());});
+      }),e->runOnUiThread(()->{ready=false;log("Monitor installation failed: "+e.getClass().getSimpleName());}));
     }
 
     private String safeLocation(String url) {
@@ -253,7 +257,7 @@ public class MainActivity extends Activity {
             }
             @Override public GeckoResult<String> onLoadError(GeckoSession session, String uri, WebRequestError error) {
                 log("Navigation error at " + safeLocation(uri));
-                if(session!=monitorSession)command("FAILURE");
+                if(session==current)command("FAILURE");
                 return null;
             }
         });
@@ -321,7 +325,8 @@ public class MainActivity extends Activity {
         if(monitorSession!=null)monitorSession.setActive(true);
     }
     @Override protected void onDestroy() {
-        foreground=false;foregroundState();alerts.stop();
+        destroyed=true;foreground=false;foregroundState();alerts.stop();
+        if(extension!=null){extension.setMessageDelegate(null,"sarathi");extension.setTabDelegate(null);}
         if(nativePort!=null)nativePort.disconnect();
         view.releaseSession();monitorView.releaseSession();
         for(GeckoSession s:sessions)if(s.isOpen())s.close();
