@@ -11,3 +11,8 @@ var chrome = Object.assign({}, browser, {
     }
   }
 });
+
+async function nativeRequest(message){
+ const response=await browser.runtime.sendNativeMessage('sarathi',message);
+ return typeof response==='string'?JSON.parse(response):response;
+}

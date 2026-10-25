@@ -11,10 +11,10 @@ Android app based on the GeckoView access test confirmed working on the user's I
 
 The imported baseline uses 8-second COV waits, LMV/MCWG or whichever exists, no-slots popup Back, calendar detection, displayed-month green Wednesday/Thursday selection, and integer quota >=1. Assisted booking is OFF by default; enabled assistance retains the original one-click BOOK SLOT protection and stops at manual SMS/OTP. CAPTCHA and final confirmation remain manual. If a submission's result is uncertain, its lock remains across app restart.
 
-Telegram supports the existing primary recipient and optional second recipient, with the token entered locally. /status, /today and /help are read-only. Enable the receiver on only ONE device per bot; turn the PC receiver off before enabling this one. Replies need the app awake and online; no background/locked-screen promise. Existing desktop settings do not transfer automatically. History exports through Android's share sheet.
+Telegram supports a configurable primary recipient and optional second recipient, with the token entered locally. /status, /today and /help are read-only. Enable the receiver on only ONE device per bot; turn the PC receiver off before enabling this one. Replies need the app awake and online; no background/locked-screen promise. Existing desktop settings do not transfer automatically. History exports through Android's share sheet.
 
 ## Port details
-- Original ZIP retained under baseline-v11.47; hashes checked before testing.
+- Original ZIP hashes and all 15 original regression suites verified locally. The public project contains Android source and focused port tests; archived desktop files are not included. Telegram recipients have no personal preset.
 - Production content retains the original algorithm. Adds a per-document nonce because Firefox may omit Chrome's documentId.
 - MV2 persistent bundled Firefox extension, promise API adapter, sequential tabs.executeScript injection.
 - Native Android alarm/vibration replaces Chrome offscreen audio; Android notifications replace desktop notifications.
@@ -24,6 +24,6 @@ Telegram supports the existing primary recipient and optional second recipient, 
 - Release currently uses the build's debug signing certificate for personal testing. Updates from a different build key may require reinstall; this is not a Play Store release.
 
 ## Validation
-`python3 scripts/verify.py`: original hash verification, 15 original suites, 8 suites against ported code, adapter tests and syntax checks. GitHub Actions builds/lints release and runs a separate x86_64 Android emulator integration test using a loopback fixture. The fixture is debug-only; the release has no localhost host permission, cleartext traffic or smoke script.
+`python3 scripts/verify.py`: 8 suites against ported code, adapter tests, production permissions and syntax checks. All 15 original desktop suites also passed locally before and after porting. GitHub Actions builds/lints release and runs a separate x86_64 Android emulator integration test using a loopback fixture. The fixture is debug-only; the release has no localhost host permission, cleartext traffic or smoke script.
 
 Offline/emulator tests do not prove live Sarathi behavior, phone alarm audibility, Telegram delivery, or booking success. Final phone validation remains necessary.

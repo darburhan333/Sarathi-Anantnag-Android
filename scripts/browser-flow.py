@@ -2,7 +2,7 @@
 Never connects to Sarathi. This harness supplies the same DOM structure as the captured
 Sarathi diagnostic and simulates navigation in place (real HTTP navigation is blocked).
 """
-import asyncio, pathlib, os
+import asyncio, pathlib, os, json
 from playwright.async_api import async_playwright
 R=pathlib.Path(__file__).resolve().parents[1]/'app/src/main/assets/extension'
 source=(R/'content.js').read_text().replace('location.pathname','(window.__testPath || location.pathname)')
@@ -36,7 +36,7 @@ window.chrome.runtime={onMessage:{addListener:cb=>window.__listener=cb},sendMess
 
 async def run():
  async with async_playwright() as pw:
-  browser=await pw.chromium.launch(executable_path=os.environ.get('CHROME_PATH','/usr/bin/google-chrome'),headless=True,args=['--no-sandbox'])
+  browser=await pw.chromium.launch(headless=True,args=['--no-sandbox'])
   page=await browser.new_page()
   errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)))
@@ -66,7 +66,8 @@ async def run():
    print('DEBUG:',await page.evaluate('''() => ({stage:window.__data.bookingStage,status:window.__data.lastStatus,dates:window.__dateClicks,bookingClicks:window.__bookingClicks,scanChecked:window.__data.scanChecked,events:window.__events})'''))
    print('JS ERRORS:',errors)
    raise
-  result=await page.evaluate('''() => ({stage:window.__data.bookingStage,running:window.__data.running,dates:window.__dateClicks,scanChecked:window.__data.scanChecked,clicks:window.__bookingClicks,otp:document.getElementById('smsCode')?.value,events:window.__events})''')
+  result=json.loads(await page.evaluate('''() => JSON.stringify({stage:window.__data.bookingStage,running:window.__data.running,dates:window.__dateClicks,scanChecked:window.__data.scanChecked,clicks:window.__bookingClicks,otp:document.getElementById('smsCode')?.value,events:window.__events})'''))
+  print('FLOW RESULT:',result)
   assert result['dates']==['2026-12-09','2026-12-10'],result
   assert result['scanChecked']==['2026-12-09'],result  # rejected dates returned from; selected positive remains pending
   assert result['clicks']==1,result

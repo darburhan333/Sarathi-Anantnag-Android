@@ -2,7 +2,7 @@
 // One bounded long poll per minute works with Chrome 109's alarm minimum.
 (() => {
   const ALARM = 'sarathi-telegram-status';
-  const defaults = {telegramStatusEnabled:false,botToken:'',chatId:'7930718570',
+  const defaults = {telegramStatusEnabled:false,botToken:'',chatId:'',
     telegramStatusOffset:0,telegramStatusBot:'',telegramStatusSince:0};
   let busy=false, epoch=0, activeController=null;
   const config=()=>chrome.storage.local.get(defaults);
@@ -66,7 +66,7 @@
     try{
       let c=await config();
       if(!c.telegramStatusEnabled)return;
-      c.botToken=c.botToken.trim();c.chatId=String(c.chatId||'7930718570').trim();
+      c.botToken=c.botToken.trim();c.chatId=String(c.chatId||'').trim();
       if(!validToken(c.botToken)||!/^\d+$/.test(c.chatId))throw Error('Status needs a valid saved token and a private primary Chat ID.');
       const current=async()=>generation===epoch && same(c,await config());
       const bot=c.botToken.split(':')[0];

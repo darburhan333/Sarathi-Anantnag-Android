@@ -21,7 +21,8 @@ jobs:
       - name: Browser DOM integration (offline fixtures only)
         run: |
           python3 -m pip install playwright==1.58.0
-          CHROME_PATH="$(command -v google-chrome)" python3 scripts/browser-flow.py
+          python3 -m playwright install --with-deps chromium
+          python3 scripts/browser-flow.py
       - name: Build compressed arm64 APK and lint
         run: gradle assembleRelease lintRelease --stacktrace
       - uses: actions/upload-artifact@v4
@@ -52,7 +53,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: gradle -PtestAbi=x86_64 connectedDebugAndroidTest --stacktrace
+          script: bash scripts/emulator-test.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -60,3 +61,4 @@ jobs:
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
+            emulator-logcat.txt

@@ -140,7 +140,7 @@ public class MainActivity extends Activity {
               }
               result.put("ok",true);
             }catch(Exception e){try{result.put("ok",false);result.put("error",e.getMessage());}catch(Exception ignored){}}
-            return GeckoResult.fromValue((Object)result);
+            return GeckoResult.fromValue((Object)result.toString());
           }
         },"sarathi");
       }),e->runOnUiThread(()->{ready=false;log("Monitor installation failed: "+e.getClass().getSimpleName());}));

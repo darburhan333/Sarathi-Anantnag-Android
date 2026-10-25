@@ -1,10 +1,10 @@
 // Android delivery replaces Chrome desktop notifications and offscreen audio.
 async function showDesktopNotification(options, id) {
- const result=await browser.runtime.sendNativeMessage('sarathi',{type:'NOTIFY',title:options.title,message:options.message});
+ const result=await nativeRequest({type:'NOTIFY',title:options.title,message:options.message});
  if(!result?.ok)throw Error(result?.error||'Android notifications unavailable');
  return id||'android-alert';
 }
-const PRIMARY_CHAT_ID = '7930718570';
+const PRIMARY_CHAT_ID = '';
 // Serialize critical authorization and one-time booking reservations in the MV3 worker.
 let gateQueue=Promise.resolve();
 let alertQueue=Promise.resolve();
@@ -81,7 +81,7 @@ async function sendTelegram(message) {
 
 async function audioCommand(action){
  const settings=await chrome.storage.local.get({soundEnabled:true,volume:85});
- const result=await browser.runtime.sendNativeMessage('sarathi',{type:'AUDIO',action,settings});
+ const result=await nativeRequest({type:'AUDIO',action,settings});
  if(!result?.ok)throw Error(result?.error||'Android audio unavailable');
  return result;
 }
