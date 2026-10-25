@@ -1,0 +1,31 @@
+V11.46 release / focused audit
+Base: original V11.44 BACKGROUND_MONITOR_FIX ZIP, not V11.45 coordinator.
+
+Modified production files:
+background.js: navigation-event alerts, tab-close alerts, shared failure handler, health
+coverage, phase-change guards and alarm activation for manual-review/session warnings.
+ui.js: navigation session reset, failed-start cleanup, failure-delivery display, accurate
+alarm copy and versioned export filename.
+popup.html / monitor.html: version label and error-delivery row.
+manifest.json: 11.46.0 and webNavigation permission.
+content.js: console version label only. Booking/monitoring algorithms unchanged.
+Unchanged production files: booking-rules.js, audio.js, audio.html, icon.png.
+
+Failure handling never fetches the failed Sarathi URL, reloads the page, retries BOOK SLOT,
+reads OTP values, or includes the failed URL/query string in its alert/history body.
+Critical state updates use the existing serialized alert/action queues; external delivery
+happens afterward. This is not a transactional redesign of all extension storage writers.
+Existing UI/content code still shares chrome.storage.local and relies on session guards.
+
+Review and evidence:
+Reviewed V11.44 core monitoring, booking, UI, worker, audio, manifest, archived diagnostic
+summary and regression tests; compared changed files to the base. Scope is the navigation,
+health and warning failure paths plus directly related cleanup. This is not a claim that
+all possible defects or all live-site layouts were eliminated.
+Chrome documentation: https://developer.chrome.com/docs/extensions/reference/api/webNavigation
+
+Verification includes explicit HTTP2 failure, five other network errors, owner/main-frame
+filtering, navigation lifecycle events, cancelled navigation, stale sessions/events, newer
+navigation/completion, browser/extension clock skew, duplicate alerts, delivery preferences,
+Telegram failure independent of desktop, tab closure/disconnection, calendar/OTP health,
+late health checks after OTP transition, booking-lock preservation and no query leakage.

@@ -1,0 +1,87 @@
+{
+  "source": "sarathi-manual-diagnostic-v7-1-2026-10-17.json",
+  "sourceVersion": "7.1.0",
+  "eventCount": 34,
+  "uniquePagePaths": [
+    "/slots/bckdlappldet.do",
+    "/slots/dlsltprev.do",
+    "/slots/fetchdlslotdetinfo.do",
+    "/slots/fetchdltnextmnth.do",
+    "/slots/fetchdltprevmnth.do",
+    "/slots/proceeddlapmnt.do"
+  ],
+  "radioExamples": [
+    {
+      "path": "/slots/fetchdlslotdetinfo.do",
+      "id": "LMV, MCWG0",
+      "name": "LMV, MCWG",
+      "disabled": false
+    }
+  ],
+  "bookingButtonExamples": [
+    {
+      "path": "/slots/proceeddlapmnt.do",
+      "id": "slotbtn",
+      "disabled": true
+    },
+    {
+      "path": "/slots/proceeddlapmnt.do",
+      "id": "onlinedltestslotform_back",
+      "disabled": false
+    },
+    {
+      "path": "/slots/fetchdlslotdetinfo.do",
+      "id": "slotbtn",
+      "disabled": true
+    },
+    {
+      "path": "/slots/fetchdlslotdetinfo.do",
+      "id": "onlinedltestslotform_back",
+      "disabled": false
+    },
+    {
+      "path": "/slots/fetchdlslotdetinfo.do",
+      "id": "slotbtn",
+      "disabled": false
+    },
+    {
+      "path": "/slots/bckdlappldet.do",
+      "id": "slotbtn",
+      "disabled": true
+    },
+    {
+      "path": "/slots/bckdlappldet.do",
+      "id": "onlinedltestslotform_back",
+      "disabled": false
+    },
+    {
+      "path": "/slots/fetchdltnextmnth.do",
+      "id": "slotbtn",
+      "disabled": true
+    },
+    {
+      "path": "/slots/fetchdltnextmnth.do",
+      "id": "onlinedltestslotform_back",
+      "disabled": false
+    },
+    {
+      "path": "/slots/fetchdltprevmnth.do",
+      "id": "slotbtn",
+      "disabled": true
+    },
+    {
+      "path": "/slots/fetchdltprevmnth.do",
+      "id": "onlinedltestslotform_back",
+      "disabled": false
+    }
+  ],
+  "greenCellExamples": [
+    "{'class': 'cal_green dltestcalender-inline-style-109', 'style': 'rgba(0, 0, 0, 0)', 'text': '19'}",
+    "{'class': 'cal_green dltestcalender-inline-style-109', 'style': 'rgba(0, 0, 0, 0)', 'text': '19'}",
+    "{'class': 'cal_green dltestcalender-inline-style-109', 'style': 'rgba(0, 0, 0, 0)', 'text': '19'}",
+    "{'class': 'cal_green dltestcalender-inline-style-109', 'style': 'rgba(0, 0, 0, 0)', 'text': '19'}",
+    "{'class': 'cal_green dltestcalender-inline-style-109', 'style': 'rgba(0, 0, 0, 0)', 'text': '19'}"
+  ],
+  "verifiedQuotaCountFromCapturedRadio": null,
+  "note": "Radio IDs and names are captured; independent numeric quota cells are NOT reliably preserved alongside the radio in this archive. No live booking readiness claim."
+}

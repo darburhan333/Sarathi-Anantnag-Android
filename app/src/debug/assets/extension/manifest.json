@@ -1,0 +1,46 @@
+{
+  "manifest_version": 2,
+  "name": "Sarathi Anantnag Android Monitor",
+  "version": "2.0.0",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "sarathi-android@burhan.local"
+    }
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms",
+    "webNavigation",
+    "nativeMessaging",
+    "geckoViewAddons",
+    "https://sarathi.parivahan.gov.in/*",
+    "https://api.telegram.org/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "scripts": [
+      "compat.js",
+      "background.js",
+      "telegram-status.js",
+      "android-bridge.js",
+      "smoke.js"
+    ],
+    "persistent": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://sarathi.parivahan.gov.in/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "compat.js",
+        "booking-rules.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": "script-src 'self'; object-src 'self'"
+}

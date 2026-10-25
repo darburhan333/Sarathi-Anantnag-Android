@@ -1,6 +1,18 @@
 package com.sarathi.geckotest;
 
 import android.app.Activity;
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
+import org.json.JSONObject;
+import org.mozilla.geckoview.WebExtension;
+import org.mozilla.geckoview.AllowOrDeny;
 import android.app.AlertDialog;
 import org.mozilla.geckoview.GeckoSession.PromptDelegate;
 import org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt;
@@ -31,6 +43,101 @@ public class MainActivity extends Activity {
     private final ArrayList<GeckoSession> sessions = new ArrayList<>();
     private final ArrayList<String> logs = new ArrayList<>();
     private boolean canGoBack;
+    private GeckoView monitorView;
+    private GeckoSession monitorSession;
+    private String monitorUrl;
+    private WebExtension.Port nativePort;
+    private PhoneAlerts alerts;
+    private TextView monitorStatus;
+    private boolean foreground, showingMonitor, ready, monitoring;
+    private Runnable afterStop;
+    private String pendingId;
+    private final Handler handler=new Handler(Looper.getMainLooper());
+    private volatile String smokeResult="";
+    public String smokeResultForTest(){return smokeResult;}
+    public void runSmokeForTest(){command("SMOKE_RUN");}
+    public void openMonitorForTest(){toggleMonitor();}
+    public boolean extensionReadyForTest(){return ready;}
+    public String monitorStateForTest(){return monitorStatus.getText().toString();}
+    private JSONObject json(String type){JSONObject o=new JSONObject();try{o.put("type",type);}catch(Exception ignored){}return o;}
+    private void command(String type){if(nativePort!=null)nativePort.postMessage(json(type));}
+    private void foregroundState(){if(nativePort!=null){JSONObject o=json("FOREGROUND");try{o.put("active",foreground);}catch(Exception ignored){}nativePort.postMessage(o);}}
+    private void navigate(Runnable action){
+      if(nativePort==null){log("Monitor not connected — wait or restart app");return;}
+      pendingId=String.valueOf(System.nanoTime());afterStop=action;
+      JSONObject o=json("STOP");try{o.put("id",pendingId);}catch(Exception ignored){}nativePort.postMessage(o);
+    }
+    private void toggleMonitor(){
+      if(!ready||monitorUrl==null){log("Monitor is still starting");return;}
+      if(monitorSession==null){
+        monitorSession=newSession();monitorSession.open(runtime);
+        monitorView.setSession(monitorSession);monitorSession.loadUri(monitorUrl);
+      }
+      showingMonitor=!showingMonitor;
+      monitorView.setVisibility(showingMonitor?View.VISIBLE:View.GONE);
+      if(current!=null)current.setActive(foreground);
+      monitorSession.setActive(foreground);
+      runtime.getWebExtensionController().setTabActive(showingMonitor?monitorSession:current,true);
+    }
+    private void receive(Object message){
+      if(!(message instanceof JSONObject))return;
+      JSONObject o=(JSONObject)message;
+      switch(o.optString("type")){
+        case "READY":
+          monitorUrl=o.optString("monitorUrl");ready=true;foregroundState();
+          if(current==null){GeckoSession first=newSession();first.open(runtime);showSession(first);first.loadUri(HOME);}
+          log("Monitor ready — open Sarathi, then MONITOR to start");break;
+        case "STATE":
+          monitoring=o.optBoolean("running")||o.optBoolean("successWatch");
+          monitorStatus.setText((monitoring?"ACTIVE":"STOPPED")+" · Session clicks "+o.optInt("sessionAttempts")+" · "+o.optString("bookingStage")+"\n"+o.optString("lastStatus"));
+          if(foreground&&monitoring)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+          else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+          break;
+        case "ACK":
+          if(o.optString("id").equals(pendingId)&&afterStop!=null){Runnable r=afterStop;afterStop=null;r.run();}break;
+        case "ERROR":log(o.optString("message"));break;
+      }
+    }
+    private void installExtension(){
+      runtime.getWebExtensionController().ensureBuiltIn("resource://android/assets/extension/","sarathi-android@burhan.local").accept(ext->{
+        ext.setTabDelegate(new WebExtension.TabDelegate(){
+          @Override public GeckoResult<GeckoSession> onNewTab(WebExtension source,WebExtension.CreateTabDetails details){
+            return GeckoResult.fromValue(newSession());
+          }
+        });
+        ext.setMessageDelegate(new WebExtension.MessageDelegate(){
+          @Override public void onConnect(WebExtension.Port port){
+            nativePort=port;
+            port.setDelegate(new WebExtension.PortDelegate(){
+              @Override public void onPortMessage(Object message,WebExtension.Port p){receive(message);}
+              @Override public void onDisconnect(WebExtension.Port p){
+                if(nativePort==p){nativePort=null;ready=false;monitorStatus.setText("DISCONNECTED — monitoring stopped; restart the app");getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
+              }
+            });
+          }
+          @Override public GeckoResult<Object> onMessage(String app,Object message,WebExtension.MessageSender sender){
+            JSONObject result=new JSONObject();
+            try{
+              if(sender.session!=null)throw new IllegalArgumentException("Only background messages allowed");
+              JSONObject m=(JSONObject)message;
+              switch(m.optString("type")){
+                case "SMOKE_RESULT":smokeResult=m.optString("result");break;
+                case "AUDIO":
+                  JSONObject settings=m.optJSONObject("settings");
+                  alerts.audio(m.optString("action"),settings==null||settings.optBoolean("soundEnabled",true),settings==null?85:settings.optInt("volume",85));break;
+                case "NOTIFY":alerts.notify(m.optString("title"),m.optString("message"));break;
+                case "SHARE":
+                  Intent share=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,m.optString("text"));
+                  startActivity(Intent.createChooser(share,"Share monitoring history"));break;
+                default:throw new IllegalArgumentException("Unknown native action");
+              }
+              result.put("ok",true);
+            }catch(Exception e){try{result.put("ok",false);result.put("error",e.getMessage());}catch(Exception ignored){}}
+            return GeckoResult.fromValue((Object)result);
+          }
+        },"sarathi");
+      },e->{ready=false;log("Monitor installation failed: "+e.getClass().getSimpleName());});
+    }
 
     private String safeLocation(String url) {
         if (url == null) return "";
@@ -57,7 +164,8 @@ public class MainActivity extends Activity {
         current = s;
         canGoBack = false;
         view.setSession(s);
-        s.setActive(true);
+        s.setActive(foreground);
+        runtime.getWebExtensionController().setTabActive(s,true);
     }
     private void flattenChoices(ChoicePrompt.Choice[] input, ArrayList<ChoicePrompt.Choice> output) {
         for (ChoicePrompt.Choice c : input) {
@@ -69,6 +177,26 @@ public class MainActivity extends Activity {
         GeckoSession s = new GeckoSession();
         sessions.add(s);
         s.setPromptDelegate(new PromptDelegate() {
+            @Override public GeckoResult<PromptResponse> onAlertPrompt(GeckoSession session, AlertPrompt prompt){
+                GeckoResult<PromptResponse> result=new GeckoResult<>();
+                new AlertDialog.Builder(MainActivity.this).setTitle("Website message").setMessage(prompt.message)
+                 .setPositiveButton("OK",(d,w)->{if(!prompt.isComplete())result.complete(prompt.dismiss());})
+                 .setOnCancelListener(d->{if(!prompt.isComplete())result.complete(prompt.dismiss());}).show();return result;
+            }
+            @Override public GeckoResult<PromptResponse> onButtonPrompt(GeckoSession session, ButtonPrompt prompt){
+                GeckoResult<PromptResponse> result=new GeckoResult<>();
+                new AlertDialog.Builder(MainActivity.this).setTitle("Confirm").setMessage(prompt.message)
+                 .setPositiveButton("OK",(d,w)->{if(!prompt.isComplete())result.complete(prompt.confirm(ButtonPrompt.Type.POSITIVE));})
+                 .setNegativeButton("Cancel",(d,w)->{if(!prompt.isComplete())result.complete(prompt.confirm(ButtonPrompt.Type.NEGATIVE));})
+                 .setOnCancelListener(d->{if(!prompt.isComplete())result.complete(prompt.dismiss());}).show();return result;
+            }
+            @Override public GeckoResult<PromptResponse> onRepostConfirmPrompt(GeckoSession session, RepostConfirmPrompt prompt){
+                GeckoResult<PromptResponse> result=new GeckoResult<>();
+                new AlertDialog.Builder(MainActivity.this).setTitle("Resend form?").setMessage("This repeats the previous form submission. Continue only if you intend to resend it.")
+                 .setPositiveButton("Resend",(d,w)->{if(!prompt.isComplete())result.complete(prompt.confirm(AllowOrDeny.ALLOW));})
+                 .setNegativeButton("Cancel",(d,w)->{if(!prompt.isComplete())result.complete(prompt.confirm(AllowOrDeny.DENY));})
+                 .setOnCancelListener(d->{if(!prompt.isComplete())result.complete(prompt.dismiss());}).show();return result;
+            }
             @Override public GeckoResult<PromptResponse> onChoicePrompt(GeckoSession session, ChoicePrompt prompt) {
                 GeckoResult<PromptResponse> result = new GeckoResult<>();
                 ArrayList<ChoicePrompt.Choice> options = new ArrayList<>();
@@ -99,7 +227,8 @@ public class MainActivity extends Activity {
         });
         s.setProgressDelegate(new GeckoSession.ProgressDelegate() {
             @Override public void onPageStart(GeckoSession session, String url) {
-                showSession(session);
+                if(session==monitorSession)return;
+                if(session!=current)showSession(session);
                 log("Loading " + safeLocation(url));
             }
             @Override public void onPageStop(GeckoSession session, boolean success) {
@@ -107,6 +236,8 @@ public class MainActivity extends Activity {
             }
         });
         s.setContentDelegate(new GeckoSession.ContentDelegate() {
+            @Override public void onCrash(GeckoSession session){log("Browser page crashed — restart app");command("FAILURE");}
+            @Override public void onKill(GeckoSession session){log("Android closed the browser page — restart app");command("FAILURE");}
             @Override public void onTitleChange(GeckoSession session, String title) {
                 if (session == current) log("Title: " + (title == null ? "" : title.substring(0, Math.min(title.length(), 150))));
             }
@@ -122,6 +253,7 @@ public class MainActivity extends Activity {
             }
             @Override public GeckoResult<String> onLoadError(GeckoSession session, String uri, WebRequestError error) {
                 log("Navigation error at " + safeLocation(uri));
+                if(session!=monitorSession)command("FAILURE");
                 return null;
             }
         });
@@ -129,51 +261,70 @@ public class MainActivity extends Activity {
     }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        alerts=new PhoneAlerts(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         TextView heading = new TextView(this);
-        heading.setText("Sarathi Gecko Test — access test only\nMozilla engine; navigate manually to slot booking.");
+        heading.setText("SARATHI ANANTNAG · 2.0 / V11.47\nDEVELOPED BY BURHAN MOHIDIN");
+        heading.setTextColor(Color.rgb(0,130,70));heading.setTextSize(13);
         heading.setPadding(12, 8, 12, 8);
         root.addView(heading);
         status = new TextView(this);
         status.setTextSize(12);
         status.setMaxLines(3);
         root.addView(status);
+        monitorStatus=new TextView(this);monitorStatus.setTextSize(12);monitorStatus.setMaxLines(3);
+        monitorStatus.setText("Starting monitor…");root.addView(monitorStatus);
+        LinearLayout controls=new LinearLayout(this);
+        button(controls,"Monitor / Website",this::toggleMonitor);
+        button(controls,"STOP",()->command("STOP"));
+        button(controls,"Silence",()->{alerts.stop();command("SILENCE");});root.addView(controls);
         LinearLayout row = new LinearLayout(this);
-        button(row, "Back", () -> { if (current != null && canGoBack) current.goBack(); });
-        button(row, "Home", () -> current.loadUri(HOME));
-        button(row, "Reload", () -> current.reload());
+        button(row, "Back", () -> { if(showingMonitor)toggleMonitor();else if(current!=null&&canGoBack)navigate(()->current.goBack()); });
+        button(row, "Home", () -> {if(current!=null)navigate(()->current.loadUri(HOME));});
+        button(row, "Reload", () -> {if(current!=null)navigate(()->current.reload());});
         button(row, "Copy log", () -> {
-            String report = "App: Gecko access test 1.0\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
+            String report = "App: Sarathi Anantnag 2.0 / V11.47\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
                     + android.os.Build.VERSION.SDK_INT + "\n" + String.join("\n", logs);
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("Gecko access test", report));
+            cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics", report));
             Toast.makeText(this, "Log copied", Toast.LENGTH_SHORT).show();
         });
         root.addView(row);
         view = new GeckoView(this);
-        root.addView(view, new LinearLayout.LayoutParams(-1, 0, 1));
+        FrameLayout pages=new FrameLayout(this);
+        pages.addView(view,new FrameLayout.LayoutParams(-1,-1));
+        monitorView=new GeckoView(this);monitorView.setVisibility(View.GONE);
+        pages.addView(monitorView,new FrameLayout.LayoutParams(-1,-1));
+        root.addView(pages,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
         if (runtime == null) runtime = GeckoRuntime.create(getApplicationContext());
-        GeckoSession first = newSession();
-        first.open(runtime);
-        showSession(first);
-        first.loadUri(HOME);
+        installExtension();
+        if(android.os.Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+          requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},10);
     }
     @Override public void onBackPressed() {
-        if (current != null && canGoBack) current.goBack(); else super.onBackPressed();
+        if(showingMonitor)toggleMonitor();
+        else if(current!=null&&canGoBack)navigate(()->current.goBack());
+        else super.onBackPressed();
     }
     @Override protected void onPause() {
-        if (current != null) current.setActive(false);
+        foreground=false;foregroundState();
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if(current!=null)current.setActive(false);
+        if(monitorSession!=null)monitorSession.setActive(false);
         super.onPause();
     }
     @Override protected void onResume() {
-        super.onResume();
-        if (current != null) current.setActive(true);
+        super.onResume();foreground=true;foregroundState();
+        if(current!=null)current.setActive(true);
+        if(monitorSession!=null)monitorSession.setActive(true);
     }
     @Override protected void onDestroy() {
-        view.releaseSession();
-        for (GeckoSession s : sessions) if (s.isOpen()) s.close();
+        foreground=false;foregroundState();alerts.stop();
+        if(nativePort!=null)nativePort.disconnect();
+        view.releaseSession();monitorView.releaseSession();
+        for(GeckoSession s:sessions)if(s.isOpen())s.close();
         super.onDestroy();
     }
 }

@@ -1,0 +1,46 @@
+MPARIVAHAN ANANTNAG V11.39.0 — RELIABILITY AND STATUS FIX
+Base: supplied V11.38 FULL AUTOMATION TO SMS TEST. Original ZIP unchanged.
+
+CHANGES
+- STOP, ownership changes and session changes invalidate the old monitoring
+  generation AND release its active-loop flag. START can resume immediately.
+- Old waiting generations cannot clear a newer generation's countdown.
+- Selected-tab read-only receipt observation remains authorized when running
+  is false but successWatch is true (manual SMS handoff). Action gates still
+  require running=true. Manual STOP disables successWatch as before.
+- Repeated calendar inspections no longer replace booking/manual-review status
+  with CALENDAR DETECTED. Initial detection still locks COV retries.
+- GREEN_DATE alerts require a visible green numeric date cell; a calendar
+  without one generates CALENDAR instead. This does not imply positive quota.
+- Seven-stage tracker recognises GREEN WED/THU SELECTED and next-date stages.
+- Volume changes are sent to the offscreen player without restarting playback.
+- Desktop test feedback identifies desktop notifications correctly.
+- Popup, monitor, manifest, console prefix and history export version updated.
+- Synthetic longevity test starts at 10 AM local time to avoid crossing the
+  existing 9 PM counter cutoff in India time.
+
+PRESERVED
+8-second minimum pre-submission wait; LMV/MCWG selection (including one present);
+no-slots popup recovery; displayed-month-only green Wednesday/Thursday scan;
+positive quota >=1; existing V11.38 quota/date verification; one BOOK SLOT
+reservation; manual OTP/final confirmation; Telegram recipients/settings;
+desktop/audio alerts; monitor window; history and storage synchronization.
+booking-rules.js is byte-for-byte unchanged. Quota-selection and BOOK SLOT
+implementation retained. No new permissions or external dependencies.
+
+VALIDATED OFFLINE IN THIS BUILD
+- All production JavaScript syntax checks, JSON manifest and ZIP CRC.
+- tests/regression.js: existing action guards, stale session rejection,
+  single-submit lock, recovery, sound START/STOP race; added read-only ownership
+  after running stops, wrong-tab rejection and continued action denial.
+- tests/restart_139.js: actual content script stop/restart without health alarm.
+- tests/status_139.js: stage preservation and green-versus-calendar alerts.
+- tests/calendar_rules.js: calendar heading variants and ambiguity.
+- tests/synthetic_301.js: 301 attempts in Asia/Kolkata timezone.
+These tests use mocked browser APIs/DOM. They are not live-site validation.
+The inherited browser_full_flow.py is retained but NOT rerun for V11.39.
+Live Sarathi, real OTP receipt navigation, Telegram, desktop sound and Chrome
+109 real-device behaviour remain unverified. V11.38 simulator results are
+baseline evidence, not an end-to-end certification of this updated build.
+
+DEVELOPED BY BURHAN MOHIDIN

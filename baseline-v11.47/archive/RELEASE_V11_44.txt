@@ -1,0 +1,49 @@
+MPARIVAHAN ANANTNAG V11.44.0 — BACKGROUND MONITOR AND STOP FIX
+Base: V11.43.0. No rebuild from an older release.
+
+CHANGES
+1. content.js sleep() requests short, session-bound background-worker waits.
+   Hidden-page setTimeout is no longer the primary monitoring scheduler.
+   The worker replies after the requested delay, rechecks ownership/running,
+   and reports heartbeat/progress. Each wait is at most 8 seconds (normal
+   countdown slices are 1 second). No worker clicks, reloads or tab focusing.
+   Page-side fallback remains if messaging fails; health recovery remains.
+   Paused calendar loops also inspect the page after worker-driven waits.
+2. STOP is accepted while START is awaiting injection or a page response.
+   The cancelled START cannot subsequently send its start message or success
+   feedback. Existing click/session authorization checks remain in place.
+3. Health checks revalidate session, tab and running state after awaited work
+   and before updates. Recovery messages carry the expected session ID.
+4. Pending BOOK SLOT records a timestamp. If inspection cannot confirm a
+   response after 30 seconds, assistance pauses and sends a review warning.
+   The booking lock remains set. No automatic second click is issued.
+5. Overdue retry deadlines display elapsed overdue time, not a misleading 0s.
+6. Removed advice claiming an unimplemented repeating monitor audio fallback.
+7. Updated version labels and factual delayed-loop status wording.
+
+PRESERVED
+8-second minimum wait before COV Proceed; LMV/MCWG selection; displayed-month
+Wednesday/Thursday scan; quota >=1; final date/quota checks; one-time booking
+lock; manual OTP/final confirmation; Telegram recipients including the
+preconfigured primary ID; sound, monitor and seven-stage tracker.
+
+VALIDATION AND LIMITATIONS
+13 Node test suites pass. New deterministic tests cover stale health work,
+STOP during START, worker wait cancellation, pending-booking timeout and
+301 monitoring attempts with page timers unavailable. These simulate APIs
+and DOM: they do not emulate all Chromium scheduling/lifecycle behavior.
+Live Sarathi, Telegram delivery, Win7/Chrome109 and actual hidden-tab timing
+were not tested. Do not interpret these results as a guaranteed live fix.
+Browser/OS sleep, discarded/frozen pages and worker termination can still
+interrupt work. Message failure falls back to page timers and health recovery.
+No auto-rescan after all eligible quotas are zero; manual-review warnings
+still do not start a new repeating alarm. Existing alarm behavior remains.
+
+UPGRADE
+Follow README.txt. Reload the extension AND refresh Sarathi to replace the
+old content script. Do not run two versions concurrently. Test alerts and
+leave Sarathi in a background tab for at least 10 minutes to verify on-device.
+
+API REFERENCE
+https://developer.chrome.com/docs/extensions/develop/concepts/messaging
+Uses return true/sendResponse for Chrome109-compatible asynchronous replies.

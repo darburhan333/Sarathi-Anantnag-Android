@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "MPARIVAHAN SLOT BOOKING -ANANTNAG",
+  "version": "11.47.0",
+  "description": "Private Sarathi monitoring with Telegram alert settings, optional second recipient, masked credentials, manual OTP.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "notifications",
+    "offscreen",
+    "alarms",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "https://sarathi.parivahan.gov.in/*",
+    "https://api.telegram.org/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://sarathi.parivahan.gov.in/*"
+      ],
+      "js": [
+        "booking-rules.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "MPARIVAHAN SLOT BOOKING - ANANTNAG \u2014 V11.47",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "minimum_chrome_version": "109",
+  "version_name": "V11.47 TELEGRAM STATUS"
+}

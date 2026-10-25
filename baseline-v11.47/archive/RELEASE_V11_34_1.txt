@@ -1,0 +1,9 @@
+V11.34.1 MONITOR SYNC FIX
+Minimal fix relative to V11.34:
+- Immediate synchronized status painting from Chrome storage change events.
+- Avoid background async refresh races and repeated full storage reads per countdown tick.
+- Avoid rebuilding history and seven-stage tracker when values did not change.
+- Refresh on window focus, visibility return, and monitor-section tab selection.
+- All content.js, background.js, and booking-rules.js bytes UNCHANGED.
+- Telegram alerts, preconfigured hidden primary Chat ID, masked token, optional second recipient unchanged.
+- Live Sarathi and Telegram API have NOT been tested in this environment.

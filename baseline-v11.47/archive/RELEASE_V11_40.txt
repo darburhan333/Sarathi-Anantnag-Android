@@ -1,0 +1,61 @@
+MPARIVAHAN ANANTNAG V11.40 AUDIT RELIABILITY FIX
+Base: V11.39.0, continuing the V11.34.1 lineage. No older rebuild.
+
+FIXES
+1. One date click while navigation is pending. A 15-second timeout pauses for
+   manual review rather than repeating the click. Return-to-calendar clicks
+   receive the same protection. Pending date survives intermediate gate denial.
+2. Offscreen audio detection feature-checks hasDocument/getContexts and falls
+   back to exact-URL clients.matchAll for Chrome 109. Actual Chrome109 testing
+   is still needed; manifest retains the existing minimum version of 109.
+3. Booking-confirmation deduplication is scoped to the monitoring session;
+   identical slot details in separate sessions no longer collide.
+4. Alert state/history updates remain serialized; network delivery waits outside
+   that queue. Telegram timeout covers both response headers and response body.
+5. Content alerts carry the originating session; stale sessions and fully stopped
+   owners are rejected. Critical booking actions also retain their originating
+   session through asynchronous authorization.
+6. Raising volume from zero restarts an active silent alarm. Volume updates keep
+   a working timer. Background audio errors are visible in the monitor.
+7. Explicit separate Available Quota columns are supported alongside the original
+   radio-plus-count-span format. A shared count for multiple radios is rejected.
+8. Quotas accept nonnegative safe integers, including 1000; eligibility remains
+   >=1. Labels, date, mapping and vehicle-class checks are retained.
+9. Immediately before BOOK SLOT, recheck the selected radio, current positive
+   quota, time, optional displayed date, button visibility and authorization.
+   The one-submission lock remains set if a reserved submission becomes uncertain.
+10. Count dispatched Proceed clicks rather than incrementing before the final
+    gate. Disabled buttons or STOP before the click do not increment the counter.
+11. Popup/monitor settings synchronize; Telegram Save writes only edited fields.
+12. Quota load timing starts on actual quota view detection. SMS fallback requires
+    a visible explicitly labelled code field rather than generic page wording.
+13. STOP remains available during receipt observation. Tracker preserves its last
+    stage while paused/stopped in the current UI instance. Repeated START in the
+    same UI is guarded; failure to acknowledge START is reported.
+14. New sessions reset calendar/warning/SMS dedup state, preserving intra-session
+    duplicate protection.
+
+PRESERVED
+8-second minimum before Proceed (server response can lengthen total cycle).
+Displayed month only; green Wednesday/Thursday dates, earliest first.
+Both LMV+MCWG preferred on the same date; one available class allowed.
+Verified quota >=1, one BOOK SLOT submission, manual OTP/final confirmation.
+Two Telegram recipients, desktop alerts, alarm, separate monitor, seven stages.
+No CAPTCHA bypass and no personal applicant values added to alert messages.
+
+VALIDATION
+Run node tests/<filename> from any directory. Included tests:
+regression.js, restart_139.js, status_139.js, calendar_rules.js,
+synthetic_301.js, audit_140.js, quota_dom_140.js, proceed_140.js, ui_140.js.
+All nine Node test suites and JavaScript syntax checks passed for this build.
+The 301 test is a synthetic COV monitoring endurance test, not 301 bookings.
+New DOM tests use minimal fixtures; network/browser APIs are mocked.
+No live Sarathi submission, Telegram delivery, full browser end-to-end run or
+actual Windows7/Chrome109 audio test was performed for V11.40.
+Historical release notes and archived evidence are retained for provenance;
+they are not evidence of live V11.40 success.
+
+UPGRADE
+Follow README.txt. Replace files in the same existing unpacked extension folder
+if retaining its settings. Reload the extension AND refresh the Sarathi page.
+Do not run old and new copies simultaneously. Test alerts before monitoring.
