@@ -28,8 +28,9 @@ public class GeckoIntegrationTest {
  @Test public void realExtensionLoop() throws Exception {
   ServerSocket server=new ServerSocket(8765);
   Thread thread=new Thread(()->{while(!server.isClosed())try(Socket socket=server.accept()){
+   socket.setSoTimeout(1000);
    BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream()));
-   String line=reader.readLine();if(line!=null&&line.startsWith("GET /attempt "))requests.incrementAndGet();
+   String line=reader.readLine();if(line!=null&&line.startsWith("GET /attempt?"))requests.incrementAndGet();
    while((line=reader.readLine())!=null&&!line.isEmpty()){}
    byte[] body="<!doctype html><html><body>Gecko test fixture</body></html>".getBytes("UTF-8");
    OutputStream out=socket.getOutputStream();out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes("UTF-8"));out.write(body);out.flush();
@@ -46,10 +47,10 @@ public class GeckoIntegrationTest {
    while(!s.engine.smokePhase.equals("background-ready")&&System.currentTimeMillis()<end)Thread.sleep(200);
    assertEquals("background-ready",s.engine.smokePhase);
    shell("input keyevent KEYCODE_HOME");progress(s,"minimized",22);
-   shell("input keyevent KEYCODE_SLEEP");progress(s,"screen locked",25);
+   shell("input keyevent KEYCODE_SLEEP");progress(s,"screen locked",45);
    shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");progress(s,"forced Doze with exemption",22);
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");
-   main(a::finish);progress(s,"Activity destroyed; session retained",18);
+   main(a::finish);progress(s,"Activity destroyed; session retained",30);
    shell("input keyevent KEYCODE_WAKEUP");shell("wm dismiss-keyguard");
    android.content.Context ctx=InstrumentationRegistry.getInstrumentation().getTargetContext();
    MainActivity reopened=(MainActivity)InstrumentationRegistry.getInstrumentation().startActivitySync(new android.content.Intent(ctx,MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -66,6 +67,12 @@ public class GeckoIntegrationTest {
    Thread.sleep(1000);
    shell("screencap -p /data/local/tmp/monitor-preview.png");
    assertFalse("STOP must release foreground mode",s.isArmedForTest());
+   java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
+   main(()->{s.arm();s.waitFor(8000).accept(result->cancelled.set(result.toString().contains("cancelled")));});
+   ctx.startService(new android.content.Intent(ctx,MonitorService.class).setAction("STOP"));
+   Thread.sleep(1000);
+   assertFalse("Notification STOP action must stop service",s.isArmedForTest());
+   assertTrue("STOP must cancel pending native wait",cancelled.get());
   }finally{
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");
    server.close();

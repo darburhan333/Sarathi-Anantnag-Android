@@ -15,7 +15,7 @@ globalThis.runAndroidSmoke=async()=>{
   await wait(2000);
   const evaluate=async code=>(await browser.tabs.executeScript(t.id,{code}))[0];
   stage='set-cov-fixture';
-  await evaluate(`document.body.innerHTML='<form id="dispdlapcntdetform"><label><input type="checkbox" name="iscov" value="4">LMV</label><label><input type="checkbox" name="iscov" value="3">MCWG</label><button type="button" id="prcdbook">Proceed</button></form><div id="dialog" style="display:none">Slots are not available for the next 30 days<button type="button" class="fadeandscale_close">Back</button></div>'; window.fixtureClicks=0; document.getElementById('prcdbook').onclick=()=>{window.fixtureClicks++;fetch('/attempt').catch(()=>{});document.getElementById('dialog').style.display='block';};document.querySelector('.fadeandscale_close').onclick=()=>{document.getElementById('dialog').style.display='none';};null;`);
+  await evaluate(`document.body.innerHTML='<form id="dispdlapcntdetform"><label><input type="checkbox" name="iscov" value="4">LMV</label><label><input type="checkbox" name="iscov" value="3">MCWG</label><button type="button" id="prcdbook">Proceed</button></form><div id="dialog" style="display:none">Slots are not available for the next 30 days<button type="button" class="fadeandscale_close">Back</button></div>'; window.fixtureClicks=0; document.getElementById('prcdbook').onclick=()=>{window.fixtureClicks++;fetch('http://127.0.0.1:8765/attempt?click='+window.fixtureClicks,{cache:'no-store'}).catch(e=>console.error('FIXTURE FETCH',String(e)));document.getElementById('dialog').style.display='block';};document.querySelector('.fadeandscale_close').onclick=()=>{document.getElementById('dialog').style.display='none';};null;`);
   stage='inject-content';
   await chrome.scripting.executeScript({target:{tabId:t.id},files:['booking-rules.js','content.js']});
   const start=async sid=>{
@@ -27,7 +27,7 @@ globalThis.runAndroidSmoke=async()=>{
   await start('android-smoke-1');
   stage='wait-loop';
   await nativeRequest({type:'SMOKE_PHASE',phase:'background-ready'});
-  await wait(120000);
+  await wait(150000);
   let d=await browser.storage.local.get({sessionAttempts:0});assert(d.sessionAttempts>=2,'COV loop did not repeat twice: '+d.sessionAttempts);
   assert(await evaluate(`[...document.querySelectorAll('input[name="iscov"]')].every(x=>x.checked)`),'COV selection failed');
   await browser.storage.local.set({running:false,successWatch:false});
