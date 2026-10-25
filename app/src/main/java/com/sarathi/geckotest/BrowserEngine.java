@@ -107,7 +107,7 @@ final class BrowserEngine {
         monitorSession.loadUri(monitorUrl);
       }
       showingMonitor=!showingMonitor;
-      activate();render();
+      render();activate();
       runtime.getWebExtensionController().setTabActive(showingMonitor?monitorSession:current,true);
     }
     private void receive(Object message){
@@ -155,7 +155,7 @@ final class BrowserEngine {
               JSONObject m=(JSONObject)message;
               switch(m.optString("type")){
                 case "ARM":service.arm();break;
-                case "AUTHORIZE":if(!service.armed)throw new IllegalStateException("Monitoring stopped");break;
+                case "AUTHORIZE":if(!service.authorize())throw new IllegalStateException("Monitoring stopped");break;
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;
                 case "DISARM":service.disarm();break;
                 case "WAIT":return service.waitFor(m.optLong("ms"));

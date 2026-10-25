@@ -64,8 +64,17 @@ public class GeckoIntegrationTest {
    end=System.currentTimeMillis()+20000;
    while(!reopened.monitorReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(300);
    assertTrue("Monitor UI failed to initialize",reopened.monitorReadyForTest());
-   Thread.sleep(1000);
+   int colors=0;end=System.currentTimeMillis()+10000;
+   while(colors<30&&System.currentTimeMillis()<end){
+    Thread.sleep(500);
+    android.graphics.Bitmap bmp=InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
+    java.util.Set<Integer> pixels=new java.util.HashSet<>();
+    for(int y=bmp.getHeight()/2;y<bmp.getHeight()*4/5;y+=4)
+     for(int x=bmp.getWidth()/10;x<bmp.getWidth()*9/10;x+=4)pixels.add(bmp.getPixel(x,y));
+    colors=pixels.size();bmp.recycle();
+   }
    shell("screencap -p /data/local/tmp/monitor-preview.png");
+   assertTrue("Monitor viewport remained blank after re-attachment; colors="+colors,colors>=30);
    assertFalse("STOP must release foreground mode",s.isArmedForTest());
    java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
    main(()->{s.arm();s.waitFor(8000).accept(result->cancelled.set(result.toString().contains("cancelled")));});

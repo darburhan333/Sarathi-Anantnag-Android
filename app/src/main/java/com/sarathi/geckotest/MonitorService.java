@@ -59,6 +59,10 @@ public final class MonitorService extends Service {
    .setContentTitle("Sarathi monitoring active").setContentText(text).setContentIntent(open)
    .setOngoing(true).setOnlyAlertOnce(true).addAction(new Notification.Action.Builder(null,"STOP",stop).build()).build();
  }
+ boolean authorize(){
+  if(armed&&SystemClock.elapsedRealtime()-lastTick>30000)fail("Monitoring timing interrupted — reopen and press START");
+  return armed;
+ }
  void arm(){
   if(engine.activity==null||!engine.foreground)throw new IllegalStateException("Open the app before pressing START");
   if(!getSystemService(NotificationManager.class).areNotificationsEnabled())throw new IllegalStateException("Allow notifications before background monitoring");
