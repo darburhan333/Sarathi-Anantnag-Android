@@ -12,6 +12,17 @@ import static org.junit.Assert.*;
 public class GeckoIntegrationTest {
  @Rule public GrantPermissionRule permissions=GrantPermissionRule.grant(android.Manifest.permission.POST_NOTIFICATIONS);
  @Rule public ActivityTestRule<MainActivity> activity=new ActivityTestRule<>(MainActivity.class);
+ private void shell(String command)throws Exception{
+  try(android.os.ParcelFileDescriptor fd=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
+      InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){while(in.read()!=-1){}}
+ }
+ private void main(Runnable r){InstrumentationRegistry.getInstrumentation().runOnMainSync(r);}
+ private void progress(MonitorService s,String label,int seconds)throws Exception{
+  int before=s.attemptsForTest();Thread.sleep(seconds*1000L);
+  assertTrue(label+": foreground service stopped",s.isArmedForTest());
+  assertTrue(label+": no actual COV attempts: "+s.engine.lastState,s.attemptsForTest()>before);
+  System.out.println("PASS "+label+": "+before+" -> "+s.attemptsForTest());
+ }
  @Test public void realExtensionLoop() throws Exception {
   ServerSocket server=new ServerSocket(8765);
   Thread thread=new Thread(()->{while(!server.isClosed())try(Socket socket=server.accept()){
@@ -25,20 +36,36 @@ public class GeckoIntegrationTest {
    long end=System.currentTimeMillis()+60000;
    while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(300);
    assertTrue("Built-in extension did not connect",a.extensionReadyForTest());
-   InstrumentationRegistry.getInstrumentation().runOnMainSync(a::runSmokeForTest);
-   end=System.currentTimeMillis()+110000;
-   while(a.smokeResultForTest().isEmpty()&&System.currentTimeMillis()<end)Thread.sleep(500);
-   assertTrue(a.smokeResultForTest(),a.smokeResultForTest().startsWith("PASS:"));
-   InstrumentationRegistry.getInstrumentation().runOnMainSync(a::openMonitorForTest);
+   MonitorService s=a.serviceForTest();
+   shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
+   main(a::runSmokeForTest);
+   end=System.currentTimeMillis()+30000;
+   while(!s.engine.smokePhase.equals("background-ready")&&System.currentTimeMillis()<end)Thread.sleep(200);
+   assertEquals("background-ready",s.engine.smokePhase);
+   shell("input keyevent KEYCODE_HOME");progress(s,"minimized",22);
+   shell("input keyevent KEYCODE_SLEEP");progress(s,"screen locked",25);
+   shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");progress(s,"forced Doze with exemption",22);
+   shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");
+   main(a::finish);progress(s,"Activity destroyed; session retained",18);
+   shell("input keyevent KEYCODE_WAKEUP");shell("wm dismiss-keyguard");
+   android.content.Context ctx=InstrumentationRegistry.getInstrumentation().getTargetContext();
+   MainActivity reopened=(MainActivity)InstrumentationRegistry.getInstrumentation().startActivitySync(new android.content.Intent(ctx,MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+   end=System.currentTimeMillis()+10000;
+   while(reopened.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
+   assertSame("Must reuse same service and browser",s,reopened.serviceForTest());
+   end=System.currentTimeMillis()+100000;
+   while(s.engine.smokeResult.isEmpty()&&System.currentTimeMillis()<end)Thread.sleep(500);
+   assertTrue(s.engine.smokeResult,s.engine.smokeResult.startsWith("PASS:"));
+   main(reopened::openMonitorForTest);
    end=System.currentTimeMillis()+20000;
-   while(!a.monitorReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(300);
-   assertTrue("Monitor UI failed to initialize",a.monitorReadyForTest());
-   Thread.sleep(800);
-   android.graphics.Bitmap screenshot=InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
-   assertNotNull("Screenshot unavailable",screenshot);
-   try(FileOutputStream out=new FileOutputStream(new File(a.getExternalFilesDir(null),"monitor-preview.png"))){
-    screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);
-   }finally{screenshot.recycle();}
-  }finally{server.close();}
+   while(!reopened.monitorReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(300);
+   assertTrue("Monitor UI failed to initialize",reopened.monitorReadyForTest());
+   Thread.sleep(1000);
+   shell("screencap -p /data/local/tmp/monitor-preview.png");
+   assertFalse("STOP must release foreground mode",s.isArmedForTest());
+  }finally{
+   shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");
+   server.close();
+  }
  }
 }

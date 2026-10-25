@@ -27,7 +27,7 @@ jobs:
         run: gradle assembleRelease lintRelease --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: Sarathi-Anantnag-2.1-arm64
+          name: Sarathi-Anantnag-2.2-arm64
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
   gecko-integration:
@@ -63,3 +63,4 @@ jobs:
             app/build/outputs/androidTest-results/
             emulator-logcat.txt
             monitor-preview.png
+            service-state.txt

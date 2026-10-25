@@ -15,7 +15,7 @@ function inGateQueue(work){
  return run;
 }
 async function authorizeAction(msg,sender){
- const d=await chrome.storage.local.get({androidForeground:false,running:false,monitoredTabId:null,monitorSessionId:'',calendarLock:false,bookingClickIssued:false,autoBookingEnabled:false,lastProceedGateAt:0,bookingReservationId:'',bookingReservationDocument:'',bookingDispatchStarted:false,bookingSubmittedAt:0,bookingResponseWarned:false});
+ const d=await chrome.storage.local.get({androidServiceReady:false,running:false,monitoredTabId:null,monitorSessionId:'',calendarLock:false,bookingClickIssued:false,autoBookingEnabled:false,lastProceedGateAt:0,bookingReservationId:'',bookingReservationDocument:'',bookingDispatchStarted:false,bookingSubmittedAt:0,bookingResponseWarned:false});
  if(sender.tab?.id!==d.monitoredTabId || !d.monitorSessionId || msg.sessionId!==d.monitorSessionId)
    return {authorized:false,error:'Different monitored tab or session'};
  const action=String(msg.action||'');
@@ -26,7 +26,8 @@ async function authorizeAction(msg,sender){
    await chrome.storage.local.set({bookingClickIssued:false,bookingReservationId:'',bookingReservationDocument:'',bookingDispatchStarted:false,bookingSubmittedAt:0,bookingResponseWarned:false});
    return {authorized:true};
  }
- if(!d.androidForeground)return {authorized:false,error:'App must be open with the screen on'};
+ if(!d.androidServiceReady)return {authorized:false,error:'Background service is not ready'};
+ if(!(await nativeRequest({type:'AUTHORIZE'}))?.ok)return {authorized:false,error:'Native service stopped'};
  if(!d.running)return {authorized:false,error:'Different monitored tab or session'};
  const booking=['DATE_SELECT','QUOTA_SELECT','QUOTA_BACK','BOOK_SLOT','BOOK_SLOT_CONFIRM'].includes(action);
  if(booking && (!d.calendarLock||!d.autoBookingEnabled))return {authorized:false,error:'Assisted booking disabled or calendar not locked'};
@@ -106,7 +107,8 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
         return d.running && sender.tab?.id===d.monitoredTabId && !!msg.sessionId && msg.sessionId===d.monitorSessionId;
       };
       if(!Number.isFinite(msg.ms)||msg.ms<0||msg.ms>8000||!await valid())return {cancelled:true};
-      await new Promise(resolve=>setTimeout(resolve,msg.ms));
+      const nativeWait=await nativeRequest({type:"WAIT",ms:msg.ms});
+      if(!nativeWait?.ok)return {cancelled:true};
       if(!await valid())return {cancelled:true};
       await chrome.storage.local.set({heartbeatAt:Date.now(),...(Number.isFinite(msg.monitorProgressAt)?{monitorProgressAt:msg.monitorProgressAt,monitorLoopActive:msg.monitorLoopActive===true}:{})});
       return {ok:true};

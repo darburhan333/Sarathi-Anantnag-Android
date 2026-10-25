@@ -2,6 +2,7 @@
 set +e
 gradle -PtestAbi=x86_64 connectedDebugAndroidTest --stacktrace
 result=$?
-adb pull /sdcard/Android/data/com.sarathi.anantnag.gecko/files/monitor-preview.png monitor-preview.png
+adb pull /data/local/tmp/monitor-preview.png monitor-preview.png
+adb shell dumpsys activity services com.sarathi.anantnag.gecko > service-state.txt
 adb logcat -d > emulator-logcat.txt
 exit "$result"

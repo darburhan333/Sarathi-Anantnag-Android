@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Sarathi Anantnag Android Monitor",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "browser_specific_settings": {
     "gecko": {
       "id": "sarathi-android@burhan.local"
