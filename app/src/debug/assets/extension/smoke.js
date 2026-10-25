@@ -15,7 +15,7 @@ globalThis.runAndroidSmoke=async()=>{
   await wait(2000);
   const evaluate=async code=>(await browser.tabs.executeScript(t.id,{code}))[0];
   stage='set-cov-fixture';
-  await evaluate(`document.body.innerHTML='<form id="dispdlapcntdetform"><label><input type="checkbox" name="iscov" value="4">LMV</label><label><input type="checkbox" name="iscov" value="3">MCWG</label><button type="button" id="prcdbook">Proceed</button></form><div id="dialog" style="display:none">Slots are not available for the next 30 days<button type="button" class="fadeandscale_close">Back</button></div>'; window.fixtureClicks=0; document.getElementById('prcdbook').onclick=()=>{window.fixtureClicks++;document.getElementById('dialog').style.display='block';};document.querySelector('.fadeandscale_close').onclick=()=>{document.getElementById('dialog').style.display='none';};null;`);
+  await evaluate(`document.body.innerHTML='<form id="dispdlapcntdetform"><label><input type="checkbox" name="iscov" value="4">LMV</label><label><input type="checkbox" name="iscov" value="3">MCWG</label><button type="button" id="prcdbook">Proceed</button></form><div id="dialog" style="display:none">Slots are not available for the next 30 days<button type="button" class="fadeandscale_close">Back</button></div>'; window.fixtureClicks=0; document.getElementById('prcdbook').onclick=()=>{window.fixtureClicks++;fetch('/attempt').catch(()=>{});document.getElementById('dialog').style.display='block';};document.querySelector('.fadeandscale_close').onclick=()=>{document.getElementById('dialog').style.display='none';};null;`);
   stage='inject-content';
   await chrome.scripting.executeScript({target:{tabId:t.id},files:['booking-rules.js','content.js']});
   const start=async sid=>{

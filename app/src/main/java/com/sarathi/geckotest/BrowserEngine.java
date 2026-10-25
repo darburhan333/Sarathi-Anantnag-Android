@@ -184,7 +184,7 @@ final class BrowserEngine {
         Uri u = Uri.parse(url);
         return (u.getHost() == null ? "" : u.getHost()) + (u.getPath() == null ? "" : u.getPath());
     }
-    private void log(String message) {
+    void log(String message) {
         String time = new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
         logs.add(time + " " + message);
         if (logs.size() > 60) logs.remove(0);

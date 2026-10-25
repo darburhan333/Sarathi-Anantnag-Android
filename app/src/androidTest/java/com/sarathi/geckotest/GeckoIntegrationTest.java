@@ -12,22 +12,25 @@ import static org.junit.Assert.*;
 public class GeckoIntegrationTest {
  @Rule public GrantPermissionRule permissions=GrantPermissionRule.grant(android.Manifest.permission.POST_NOTIFICATIONS);
  @Rule public ActivityTestRule<MainActivity> activity=new ActivityTestRule<>(MainActivity.class);
+ private final java.util.concurrent.atomic.AtomicInteger requests=new java.util.concurrent.atomic.AtomicInteger();
  private void shell(String command)throws Exception{
   try(android.os.ParcelFileDescriptor fd=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
       InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){while(in.read()!=-1){}}
  }
  private void main(Runnable r){InstrumentationRegistry.getInstrumentation().runOnMainSync(r);}
  private void progress(MonitorService s,String label,int seconds)throws Exception{
-  int before=s.attemptsForTest();Thread.sleep(seconds*1000L);
+  int before=s.attemptsForTest(),beforeRequests=requests.get();Thread.sleep(seconds*1000L);
   assertTrue(label+": foreground service stopped",s.isArmedForTest());
   assertTrue(label+": no actual COV attempts: "+s.engine.lastState,s.attemptsForTest()>before);
+  assertTrue(label+": page did not make another HTTP request",requests.get()>beforeRequests);
   System.out.println("PASS "+label+": "+before+" -> "+s.attemptsForTest());
  }
  @Test public void realExtensionLoop() throws Exception {
   ServerSocket server=new ServerSocket(8765);
   Thread thread=new Thread(()->{while(!server.isClosed())try(Socket socket=server.accept()){
    BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream()));
-   String line;while((line=reader.readLine())!=null&&!line.isEmpty()){}
+   String line=reader.readLine();if(line!=null&&line.startsWith("GET /attempt "))requests.incrementAndGet();
+   while((line=reader.readLine())!=null&&!line.isEmpty()){}
    byte[] body="<!doctype html><html><body>Gecko test fixture</body></html>".getBytes("UTF-8");
    OutputStream out=socket.getOutputStream();out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes("UTF-8"));out.write(body);out.flush();
   }catch(IOException ignored){}});thread.setDaemon(true);thread.start();

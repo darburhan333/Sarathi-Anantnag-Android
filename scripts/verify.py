@@ -8,6 +8,7 @@ manifest=json.loads((ext/'manifest.json').read_text())
 assert not any('127.0.0.1' in x for x in manifest['permissions'])
 subprocess.run(['node',str(root/'scripts/adapter-tests.js')],check=True)
 subprocess.run(['node',str(root/'scripts/ui-native-stop.js')],check=True)
+subprocess.run(['node',str(root/'scripts/background-lifecycle.js')],check=True)
 with tempfile.TemporaryDirectory() as tmp:
  work=Path(tmp)/'extension';work.mkdir()
  for name in ['content.js','booking-rules.js','ui.js']:
