@@ -24,6 +24,7 @@ window.chrome.storage={local:{
  set:async updates=>{const changes={};for(const [k,v] of Object.entries(updates)){changes[k]={oldValue:window.__data[k],newValue:v};window.__data[k]=v;}for(const cb of callbacks)cb(changes,'local')}
  },onChanged:{addListener:cb=>callbacks.push(cb)}};
 window.chrome.runtime={onMessage:{addListener:cb=>window.__listener=cb},sendMessage:async msg=>{
+ if(msg.type==='SARATHI_WAIT'){await new Promise(resolve=>setTimeout(resolve,msg.ms));return {ok:true};}
  if(msg.type==='SARATHI_OWNERSHIP')return {authorized:true,sessionId:'test-1'};
  if(msg.type==='SARATHI_ACTION_GATE'){
    if(!window.__data.running)return {authorized:false};

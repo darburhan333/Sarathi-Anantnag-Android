@@ -133,7 +133,7 @@ function tickStatus(){
   paintView();
 }
 async function init(){const d=await chrome.storage.local.get({chatId:'',chatId2:'',botToken:'',telegramEnabled:true,desktopEnabled:true,soundEnabled:true,volume:85,autoBookingEnabled:false});$('autoBookingEnabled').checked=!!d.autoBookingEnabled;if($('chatId'))$('chatId').value=d.chatId||PRIMARY_CHAT_ID;if($('chatId2'))$('chatId2').value=d.chatId2||'';if($('botToken'))$('botToken').value=d.botToken||'';if($('tokenStatus'))$('tokenStatus').textContent='Bot token is stored locally in this app, not hard-coded.';if($('telegramEnabled'))$('telegramEnabled').checked=d.telegramEnabled;$('desktopEnabled').checked=d.desktopEnabled;$('soundEnabled').checked=d.soundEnabled;$('volume').value=d.volume;$('volumeValue').textContent=d.volume+'%';refresh();}
-chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local')applyViewChanges(changes);});
+chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'){if(changes.androidStopEpoch)runEpoch++;applyViewChanges(changes);}});
 // Chrome may pause timers in background windows: update immediately on return.
 window.addEventListener('focus',()=>{refresh().catch(()=>{});});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh().catch(()=>{});});

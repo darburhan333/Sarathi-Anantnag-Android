@@ -8,7 +8,7 @@
   port?.postMessage({type:'STATE',...d});
  }
  async function stop(reason){
-  await inGateQueue(()=>chrome.storage.local.set({running:false,successWatch:false,
+  await inGateQueue(()=>chrome.storage.local.set({androidStopEpoch:String(Date.now())+'-'+Math.random(),running:false,successWatch:false,
    autoBookingEnabled:false,nextRetryAt:0,monitorLoopActive:false,bookingStage:'STOPPED',lastStatus:reason}));
   const d=await chrome.storage.local.get({monitoredTabId:null});
   if(d.monitoredTabId!==null)await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_STOP'}).catch(()=>{});
