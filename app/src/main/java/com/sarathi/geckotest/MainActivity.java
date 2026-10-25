@@ -56,6 +56,8 @@ public class MainActivity extends Activity {
     private String pendingId;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private volatile String smokeResult="";
+    private volatile boolean monitorReady;
+    public boolean monitorReadyForTest(){return monitorReady;}
     public String smokeResultForTest(){return smokeResult;}
     public void runSmokeForTest(){command("SMOKE_RUN");}
     public void openMonitorForTest(){toggleMonitor();}
@@ -125,6 +127,7 @@ public class MainActivity extends Activity {
               if(sender.session!=null)throw new IllegalArgumentException("Only background messages allowed");
               JSONObject m=(JSONObject)message;
               switch(m.optString("type")){
+                case "UI_READY":monitorReady=true;break;
                 case "SMOKE_RESULT":smokeResult=m.optString("result");break;
                 case "AUDIO":
                   JSONObject settings=m.optJSONObject("settings");

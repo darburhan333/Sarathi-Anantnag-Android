@@ -139,7 +139,7 @@ window.addEventListener('focus',()=>{refresh().catch(()=>{});});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh().catch(()=>{});});
 // Tab buttons remain synchronous; refresh locally, with no network or storage wait.
 document.querySelectorAll('[data-panel]').forEach(btn=>btn.addEventListener('click',()=>tickStatus()));
-init();
+init().then(()=>{if(chrome.runtime?.sendMessage)return chrome.runtime.sendMessage({type:'ANDROID_UI_READY'});}).catch(e=>feedback('Monitor setup failed: '+e.message));
 setInterval(tickStatus,500);
 
 $('telegramStatusEnabled')?.addEventListener('change',async()=>{await chrome.storage.local.set({telegramStatusEnabled:$('telegramStatusEnabled').checked,telegramStatusSince:Date.now(),telegramStatusError:''});refresh();});

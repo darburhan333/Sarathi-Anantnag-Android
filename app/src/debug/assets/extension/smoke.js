@@ -3,10 +3,13 @@ globalThis.runAndroidSmoke=async()=>{
  const wait=ms=>new Promise(r=>setTimeout(r,ms));
  const assert=(ok,msg)=>{if(!ok)throw Error(msg);};
  try{
+  await browser.alarms.clear('sarathi-health');
+  const audio=await browser.runtime.sendNativeMessage('sarathi',{type:'AUDIO',action:'TEST',settings:{soundEnabled:true,volume:30}});assert(audio?.ok,'Native audio request failed');
+  const notification=await browser.runtime.sendNativeMessage('sarathi',{type:'NOTIFY',title:'Integration test',message:'Offline fixture only'});assert(notification?.ok,'Native notification request failed');
   const t=await browser.tabs.create({url:'http://127.0.0.1:8765/slots/test',active:true});
   await wait(2000);
   const evaluate=async code=>(await browser.tabs.executeScript(t.id,{code}))[0];
-  await evaluate(`document.body.innerHTML='<form id="dispdlapcntdetform"><label><input type="checkbox" name="iscov" value="4">LMV</label><label><input type="checkbox" name="iscov" value="3">MCWG</label><button type="button" id="prcdbook">Proceed</button></form><div id="dialog" style="display:none">Slots are not available for the next 30 days<button type="button" class="fadeandscale_close">Back</button></div>'; window.fixtureClicks=0; document.getElementById('prcdbook').onclick=()=>{window.fixtureClicks++;document.getElementById('dialog').style.display='block';};document.querySelector('.fadeandscale_close').onclick=()=>{document.getElementById('dialog').style.display='none';};`);
+  await evaluate(`document.body.innerHTML='<form id="dispdlapcntdetform"><label><input type="checkbox" name="iscov" value="4">LMV</label><label><input type="checkbox" name="iscov" value="3">MCWG</label><button type="button" id="prcdbook">Proceed</button></form><div id="dialog" style="display:none">Slots are not available for the next 30 days<button type="button" class="fadeandscale_close">Back</button></div>'; window.fixtureClicks=0; document.getElementById('prcdbook').onclick=()=>{window.fixtureClicks++;document.getElementById('dialog').style.display='block';};document.querySelector('.fadeandscale_close').onclick=()=>{document.getElementById('dialog').style.display='none';};null;`);
   await chrome.scripting.executeScript({target:{tabId:t.id},files:['booking-rules.js','content.js']});
   const start=async sid=>{
    await chrome.storage.local.set({monitoredTabId:t.id,monitorSessionId:sid,running:true,successWatch:true,androidForeground:true,calendarLock:false,sessionLock:false,autoBookingEnabled:false,bookingClickIssued:false,lastProceedGateAt:0,sessionAttempts:0,sessionCounterId:sid});

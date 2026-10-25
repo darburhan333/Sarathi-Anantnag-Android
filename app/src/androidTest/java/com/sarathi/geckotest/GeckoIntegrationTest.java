@@ -30,7 +30,9 @@ public class GeckoIntegrationTest {
    while(a.smokeResultForTest().isEmpty()&&System.currentTimeMillis()<end)Thread.sleep(500);
    assertTrue(a.smokeResultForTest(),a.smokeResultForTest().startsWith("PASS:"));
    InstrumentationRegistry.getInstrumentation().runOnMainSync(a::openMonitorForTest);
-   Thread.sleep(2000);
+   end=System.currentTimeMillis()+20000;
+   while(!a.monitorReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(300);
+   assertTrue("Monitor UI failed to initialize",a.monitorReadyForTest());
   }finally{server.close();}
  }
 }

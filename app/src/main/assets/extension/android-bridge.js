@@ -46,7 +46,9 @@
   if(area==='local' && Object.keys(defaults).some(k=>changes[k]))state().catch(()=>{});
  });
  chrome.runtime.onMessage.addListener((m,sender,reply)=>{
-  if(m?.type!=='ANDROID_EXPORT' || !sender.url?.startsWith(browser.runtime.getURL('')))return;
+  if(!sender.url?.startsWith(browser.runtime.getURL('')))return;
+  if(m?.type==='ANDROID_UI_READY'){browser.runtime.sendNativeMessage('sarathi',{type:'UI_READY'}).then(reply);return true;}
+  if(m?.type!=='ANDROID_EXPORT')return;
   browser.runtime.sendNativeMessage('sarathi',{type:'SHARE',text:String(m.text||'').slice(0,60000)})
    .then(reply).catch(()=>reply({ok:false}));
   return true;
