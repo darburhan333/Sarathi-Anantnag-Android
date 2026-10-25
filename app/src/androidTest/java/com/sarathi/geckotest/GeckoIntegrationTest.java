@@ -33,6 +33,12 @@ public class GeckoIntegrationTest {
    end=System.currentTimeMillis()+20000;
    while(!a.monitorReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(300);
    assertTrue("Monitor UI failed to initialize",a.monitorReadyForTest());
+   Thread.sleep(800);
+   android.graphics.Bitmap screenshot=InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
+   assertNotNull("Screenshot unavailable",screenshot);
+   try(FileOutputStream out=new FileOutputStream(new File(a.getExternalFilesDir(null),"monitor-preview.png"))){
+    screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);
+   }finally{screenshot.recycle();}
   }finally{server.close();}
  }
 }

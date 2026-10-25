@@ -6,8 +6,8 @@ android {
   applicationId 'com.sarathi.anantnag.gecko'
   minSdk 26
   targetSdk 34
-  versionCode 200
-  versionName '2.0-v11.47'
+  versionCode 201
+  versionName '2.1-v11.47'
   testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
   ndk { abiFilters(project.findProperty('testAbi') ?: 'arm64-v8a') }
  }

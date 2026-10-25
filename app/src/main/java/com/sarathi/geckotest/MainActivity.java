@@ -5,6 +5,12 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.content.res.ColorStateList;
+import android.view.Gravity;
+import android.os.SystemClock;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
@@ -49,6 +55,9 @@ public class MainActivity extends Activity {
     private WebExtension.Port nativePort;
     private WebExtension extension;
     private boolean destroyed;
+    private Button monitorButton;
+    private long startupAt;
+    private boolean firstPageRecorded;
     private PhoneAlerts alerts;
     private TextView monitorStatus;
     private boolean foreground, showingMonitor, ready, monitoring;
@@ -78,6 +87,7 @@ public class MainActivity extends Activity {
         monitorView.setSession(monitorSession);monitorSession.loadUri(monitorUrl);
       }
       showingMonitor=!showingMonitor;
+      monitorButton.setText(showingMonitor?"Website":"Monitor");
       monitorView.setVisibility(showingMonitor?View.VISIBLE:View.GONE);
       if(current!=null)current.setActive(foreground);
       monitorSession.setActive(foreground);
@@ -89,7 +99,7 @@ public class MainActivity extends Activity {
       switch(o.optString("type")){
         case "READY":
           monitorUrl=o.optString("monitorUrl");ready=true;foregroundState();
-          if(current==null){GeckoSession first=newSession();first.open(runtime);showSession(first);first.loadUri(HOME);}
+          log("Monitor connected in "+(SystemClock.elapsedRealtime()-startupAt)+" ms");
           log("Monitor ready — open Sarathi, then MONITOR to start");break;
         case "STATE":
           monitoring=o.optBoolean("running")||o.optBoolean("successWatch");
@@ -157,13 +167,24 @@ public class MainActivity extends Activity {
         if (logs.size() > 60) logs.remove(0);
         status.setText(message);
     }
-    private void button(LinearLayout row, String label, Runnable action) {
+    private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
+    private Button button(LinearLayout row, String label, int color, Runnable action) {
         Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setTextSize(12);
+        b.setText(label);b.setContentDescription(label);
+        b.setAllCaps(false);b.setTextSize(13);
+        b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        b.setTextColor(Color.WHITE);
+        b.setMinHeight(dp(48));b.setMinimumHeight(dp(48));
+        b.setMinWidth(0);b.setMinimumWidth(0);
+        b.setPadding(dp(4),dp(4),dp(4),dp(4));
+        GradientDrawable shape=new GradientDrawable();
+        shape.setColor(color);shape.setCornerRadius(dp(12));
+        b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF),shape,null));
         b.setOnClickListener(v -> action.run());
-        row.addView(b, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1);
+        params.setMargins(dp(3),dp(4),dp(3),dp(4));
+        row.addView(b,params);
+        return b;
     }
     private void showSession(GeckoSession s) {
         if (current == s) return;
@@ -239,7 +260,10 @@ public class MainActivity extends Activity {
                 log("Loading " + safeLocation(url));
             }
             @Override public void onPageStop(GeckoSession session, boolean success) {
-                if (session == current) log("Load completed: " + success + " (check the displayed page)");
+                if (session == current) {
+                    log(success?"Page ready":"Page could not load — try Reload");
+                    if(!firstPageRecorded){firstPageRecorded=true;logs.add("First page completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);}
+                }
             }
         });
         s.setContentDelegate(new GeckoSession.ContentDelegate() {
@@ -268,36 +292,47 @@ public class MainActivity extends Activity {
     }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        startupAt=SystemClock.elapsedRealtime();
         alerts=new PhoneAlerts(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.rgb(11,20,38));
+        getWindow().setStatusBarColor(Color.rgb(11,20,38));
+        getWindow().setNavigationBarColor(Color.rgb(11,20,38));
+        LinearLayout header=new LinearLayout(this);header.setOrientation(LinearLayout.VERTICAL);
+        header.setPadding(dp(9),dp(6),dp(9),dp(8));
+        root.addView(header);
         TextView heading = new TextView(this);
-        heading.setText("SARATHI ANANTNAG · 2.0 / V11.47\nDEVELOPED BY BURHAN MOHIDIN");
-        heading.setTextColor(Color.rgb(0,130,70));heading.setTextSize(13);
-        heading.setPadding(12, 8, 12, 8);
-        root.addView(heading);
+        heading.setText("SARATHI ANANTNAG · 2.1 / V11.47\nDEVELOPED BY BURHAN MOHIDIN");
+        heading.setTextColor(Color.rgb(89,225,167));heading.setTextSize(13);
+        heading.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        heading.setPadding(dp(4),dp(3),dp(4),dp(8));
+        header.addView(heading);
         status = new TextView(this);
         status.setTextSize(12);
-        status.setMaxLines(3);
-        root.addView(status);
+        status.setMaxLines(2);status.setTextColor(Color.rgb(157,177,201));
+        status.setPadding(dp(4),0,dp(4),dp(3));
+        status.setText("Opening Parivahan…");header.addView(status);
         monitorStatus=new TextView(this);monitorStatus.setTextSize(12);monitorStatus.setMaxLines(3);
-        monitorStatus.setText("Starting monitor…");root.addView(monitorStatus);
+        monitorStatus.setTextColor(Color.rgb(223,234,248));
+        monitorStatus.setPadding(dp(4),0,dp(4),dp(5));
+        monitorStatus.setText("Connecting monitor… website opens independently");header.addView(monitorStatus);
         LinearLayout controls=new LinearLayout(this);
-        button(controls,"Monitor / Website",this::toggleMonitor);
-        button(controls,"STOP",()->command("STOP"));
-        button(controls,"Silence",()->{alerts.stop();command("SILENCE");});root.addView(controls);
+        monitorButton=button(controls,"Monitor",Color.rgb(37,99,235),this::toggleMonitor);
+        button(controls,"STOP",Color.rgb(190,42,66),()->command("STOP"));
+        button(controls,"Silence",Color.rgb(141,76,15),()->{alerts.stop();command("SILENCE");});header.addView(controls);
         LinearLayout row = new LinearLayout(this);
-        button(row, "Back", () -> { if(showingMonitor)toggleMonitor();else if(current!=null&&canGoBack)navigate(()->current.goBack()); });
-        button(row, "Home", () -> {if(current!=null)navigate(()->current.loadUri(HOME));});
-        button(row, "Reload", () -> {if(current!=null)navigate(()->current.reload());});
-        button(row, "Copy log", () -> {
-            String report = "App: Sarathi Anantnag 2.0 / V11.47\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
+        button(row, "Back", Color.rgb(56,73,102), () -> { if(showingMonitor)toggleMonitor();else if(current!=null&&canGoBack)navigate(()->current.goBack()); });
+        button(row, "Home", Color.rgb(4,120,87), () -> {if(current!=null)navigate(()->current.loadUri(HOME));});
+        button(row, "Reload", Color.rgb(14,116,144), () -> {if(current!=null)navigate(()->current.reload());});
+        button(row, "Copy log", Color.rgb(104,65,165), () -> {
+            String report = "App: Sarathi Anantnag 2.1 / V11.47\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
                     + android.os.Build.VERSION.SDK_INT + "\n" + String.join("\n", logs);
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics", report));
             Toast.makeText(this, "Log copied", Toast.LENGTH_SHORT).show();
         });
-        root.addView(row);
+        header.addView(row);
         view = new GeckoView(this);
         FrameLayout pages=new FrameLayout(this);
         pages.addView(view,new FrameLayout.LayoutParams(-1,-1));
@@ -306,6 +341,8 @@ public class MainActivity extends Activity {
         root.addView(pages,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
         if (runtime == null) runtime = GeckoRuntime.create(getApplicationContext());
+        // Start the website immediately; extension connection may retry independently.
+        GeckoSession first=newSession();first.open(runtime);showSession(first);first.loadUri(HOME);
         installExtension();
         if(android.os.Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
           requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},10);
