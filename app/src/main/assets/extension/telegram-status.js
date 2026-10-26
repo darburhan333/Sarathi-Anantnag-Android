@@ -56,7 +56,7 @@
     const localDay=new Date(now);const key=localDay.getFullYear()+'-'+String(localDay.getMonth()+1).padStart(2,'0')+'-'+String(localDay.getDate()).padStart(2,'0');
     // Only controlled stage text; never send DOM text, cookies, URLs, applicant details or OTP.
     const stage=String(d.bookingStage||'STANDBY').replace(/[^A-Za-z0-9 _/-]/g,'').slice(0,80);
-    return ['MPARIVAHAN — ANANTNAG | V11.47','Monitor: '+status,
+    return ['MPARIVAHAN SLOT BOOKING -J&K | 3.0','Monitor: '+status,
       'Attempts today (9 AM–9 PM, phone local time): '+(d.attemptDay===key?Number(d.attempts)||0:0),
       'Attempts this session: '+(d.sessionCounterId===d.monitorSessionId && d.monitorSessionId?Number(d.sessionAttempts)||0:'Not recorded for this older session'),
       'Last recorded Proceed click: '+date(d.lastAttemptAt), 'Last status update: '+date(d.lastCheck),

@@ -146,4 +146,4 @@ setInterval(()=>{if(!document.hidden)tickStatus();},1000);
 $('telegramStatusEnabled')?.addEventListener('change',async()=>{await chrome.storage.local.set({telegramStatusEnabled:$('telegramStatusEnabled').checked,telegramStatusSince:Date.now(),telegramStatusError:''});refresh();});
 
 
-if(globalThis.PROFILE_MODE){document.title='Applicant '+globalThis.APPLICANT+' · MPARIVAHAN SLOT BOOKING -J&K';const heading=document.querySelector('h1,h2');if(heading)heading.textContent+=' · Applicant '+globalThis.APPLICANT;}
+if(globalThis.PROFILE_MODE){document.title='Applicant '+globalThis.APPLICANT+' · MPARIVAHAN SLOT BOOKING -J&K';const heading=document.querySelector('header b');if(heading)heading.textContent+=' · Applicant '+globalThis.APPLICANT;}

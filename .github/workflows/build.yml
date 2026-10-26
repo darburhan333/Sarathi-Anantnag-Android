@@ -73,5 +73,7 @@ jobs:
             app/build/outputs/androidTest-results/
             emulator-logcat.txt
             monitor-preview.png
+            release-preview.png
+            release-ui.xml
             service-state.txt
 

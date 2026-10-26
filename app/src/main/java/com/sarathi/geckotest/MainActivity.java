@@ -64,8 +64,8 @@ public class MainActivity extends Activity {
     private void toggleMonitor(){if(engine!=null)engine.toggleMonitor();}
     void render(){
       if(engine==null)return;
-      if(engine.current!=null&&view.getSession()!=engine.current){view.releaseSession();view.setSession(engine.current);}
-      if(engine.monitorSession!=null&&monitorView.getSession()!=engine.monitorSession){monitorView.releaseSession();monitorView.setSession(engine.monitorSession);}
+      if(engine.current!=null&&view.getSession()!=engine.current){view.releaseSession();view.setSession(engine.current);engine.activeStates.remove(engine.current);}
+      if(engine.monitorSession!=null&&monitorView.getSession()!=engine.monitorSession){monitorView.releaseSession();monitorView.setSession(engine.monitorSession);engine.activeStates.remove(engine.monitorSession);}
       monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);
       monitorButton.setText(engine.showingMonitor?"Website":"Monitor");
       for(int i=0;i<3;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];String label="Applicant "+(i+1)+(e!=null&&e.run.armed?" ●":"");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);applicantButtons[i].setAlpha(engine.profile==i+1?1f:0.65f);}
@@ -74,7 +74,7 @@ public class MainActivity extends Activity {
       if(visible&&engine.monitoring)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
       else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
-    void selectApplicant(int number){if(engine==null||engine.profile==number)return;MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
+    void selectApplicant(int number){if(engine==null||engine.profile==number)return;MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
     private void batterySettings(){
       android.os.PowerManager pm=getSystemService(android.os.PowerManager.class);
       if(pm.isIgnoringBatteryOptimizations(getPackageName())){Toast.makeText(this,"Battery optimization exemption is enabled",Toast.LENGTH_LONG).show();return;}
@@ -171,11 +171,11 @@ public class MainActivity extends Activity {
     @Override protected void onPause(){visible=false;if(engine!=null){engine.service.visible=false;engine.foreground=false;engine.foregroundState();}super.onPause();}
     @Override protected void onStop(){
       super.onStop();
-      if(engine!=null){BrowserEngine e=engine;e.service.handler.post(e::activate);}
+      if(engine!=null){BrowserEngine e=engine;e.service.handler.post(()->{e.activeStates.clear();e.activate();});}
     }
     @Override protected void onDestroy(){
       view.releaseSession();monitorView.releaseSession();
-      if(engine!=null){engine.detach(this);if(engine.service.activity==this)engine.service.activity=null;engine.activate();}
+      if(engine!=null){engine.activeStates.clear();engine.detach(this);if(engine.service.activity==this)engine.service.activity=null;engine.activate();}
       if(bound)unbindService(connection);
       super.onDestroy();
     }
