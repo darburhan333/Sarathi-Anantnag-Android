@@ -12,6 +12,7 @@ def wait_ready(number):
   if any(t.startswith('Applicant '+str(number)+' · STOPPED') for t in texts):return root
   time.sleep(1)
  raise AssertionError('Minified release bridge did not initialize for applicant '+str(number)+': '+str(texts))
+adb('shell','pm','grant',PACKAGE,'android.permission.POST_NOTIFICATIONS')
 adb('shell','am','force-stop',PACKAGE)
 adb('shell','am','start','-W','-n',PACKAGE+'/com.sarathi.geckotest.MainActivity')
 root=wait_ready(1)
@@ -23,3 +24,4 @@ adb('shell','screencap','-p','/data/local/tmp/release-preview.png')
 adb('pull','/data/local/tmp/release-preview.png','release-preview.png')
 adb('pull','/sdcard/release-ui.xml','release-ui.xml')
 print('PASS: minified release starts and all three applicant bridges connect')
+

@@ -66,7 +66,7 @@ final class MonitorRun {
    else if(!sawRunning&&now-armedAt>25000)fail("Monitoring did not start — return to Sarathi and press START");
    else if(sawRunning&&now-lastBeat>60000)fail("No website heartbeat for 60 seconds — open Sarathi");
    else if(engine.lastState.optBoolean("running")&&!engine.lastState.optBoolean("calendarLock")&&now-lastProgress>60000)fail("No monitoring progress for 60 seconds — open Sarathi");
-   if(armed){engine.command("PING");if(engine.foreground)engine.render();}
+   if(armed){engine.activate();engine.command("PING");if(engine.foreground)engine.render();}
   }
  }
  String diagnostics(){
@@ -74,3 +74,4 @@ final class MonitorRun {
   return "\n"+(engine.foreground?"Foreground service":"Background service")+" · gap max "+(longestGap/1000)+"s · last page update "+((SystemClock.elapsedRealtime()-lastBeat)/1000)+"s ago";
  }
 }
+

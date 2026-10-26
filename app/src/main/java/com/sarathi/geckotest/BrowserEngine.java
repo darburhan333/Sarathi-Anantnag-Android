@@ -81,8 +81,12 @@ final class BrowserEngine {
     }
     void activate(){
       for(GeckoSession s:sessions)if(s.isOpen()){
-        boolean active=(run.armed&&s==current)||(foreground&&(s==current||(s==monitorSession&&showingMonitor)));
-        if(!java.util.Objects.equals(activeStates.get(s),active)){s.setActive(active);s.setPriorityHint(active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT);activeStates.put(s,active);}
+        boolean active=(run.armed&&s!=monitorSession)||(foreground&&(s==current||(s==monitorSession&&showingMonitor)));
+        boolean changed=!java.util.Objects.equals(activeStates.get(s),active);
+        // GeckoView may deactivate a detached/hidden session independently of our cache.
+        // Reassert active browser sessions while monitoring, including an older selected tab.
+        if(changed||(run.armed&&s!=monitorSession))s.setActive(active);
+        if(changed){s.setPriorityHint(active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT);activeStates.put(s,active);}
       }
     }
     void shutdown(){
@@ -311,4 +315,5 @@ final class BrowserEngine {
         return s;
     }
 }
+
 

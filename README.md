@@ -10,7 +10,7 @@ Profile-bound native content delegates authorize only read-only ownership querie
 ## Use
 1. Install the arm64 APK. Allow notifications. The diagnostic Gecko Test can stay installed separately.
 2. Navigate from Parivahan to Sarathi and log in manually. Open the vehicle-class (COV) page.
-3. Tap **Battery settings** and allow battery optimization exemption. On Infinix also allow background activity in app battery settings. Tap **Monitor**, configure Telegram and test sound/notifications, then START.
+3. Tap **Background setup** and allow battery optimization exemption. On Infinix also allow background activity in app battery settings. START requires Android Doze exemption and Battery Saver off. Manufacturer restrictions can still apply. Tap **Monitor**, configure Telegram and test sound/notifications, then START.
 4. Check the ongoing **MPARIVAHAN SLOT BOOKING -J&K** notification. Monitoring can continue after Home/minimize or screen lock. Return to the same browser session by opening the notification.
 5. Stop this cancels only the selected applicant. Stop all cancels all three. A bounded 30-second grace period lets pending alerts finish; an active repeating alarm keeps the service alive until silenced. The wake lock is released when no runs, alarm or delivery grace remain. Silence stops the alarm. A network change, page/engine failure, missing heartbeat or progress stall stops monitoring with a notification; return and START explicitly. Force-stop, reboot and process death do not restart automation.
 
@@ -41,4 +41,5 @@ Run `gradle assembleRelease lintRelease`. `preBuild` generates Applicant 2/3 ext
 `python3 scripts/verify.py`: 8 suites against ported code, adapter tests, production permissions and syntax checks. All 15 original desktop suites also passed locally before and after porting. GitHub Actions builds/lints release and runs a separate x86_64 Android emulator integration test using a loopback fixture. The background fixture checks actual COV actions and loopback HTTP requests while minimized, locked, forced into Doze with exemption, and after Activity destruction/re-attachment. The three-applicant fixture also checks cookie, localStorage, IndexedDB and extension-state isolation, cross-profile message rejection, concurrent screen-off HTTP, independent Stop and Stop all. A separate smoke check installs the minified release and opens all three applicant bridges. These short emulator checks are not a 30-minute/2-hour real-device soak test. The fixture is debug-only; the release has no localhost host permission, cleartext traffic or smoke script.
 
 Offline/emulator tests do not prove live Sarathi behavior, phone alarm audibility, Telegram delivery, or booking success. Final phone validation remains necessary.
+
 

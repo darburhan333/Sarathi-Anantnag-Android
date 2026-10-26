@@ -45,7 +45,7 @@ public class MainActivity extends Activity {
     private boolean bound,visible;private final Button[] applicantButtons=new Button[3];
     private GeckoView view,monitorView;
     private TextView status,monitorStatus;
-    private Button monitorButton;
+    private Button monitorButton,batteryButton;
     private final android.content.ServiceConnection connection=new android.content.ServiceConnection(){
       public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
         engine=((MonitorService.LocalBinder)binder).getService().engine;
@@ -70,20 +70,23 @@ public class MainActivity extends Activity {
       monitorButton.setText(engine.showingMonitor?"Website":"Monitor");
       for(int i=0;i<3;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];String label="Applicant "+(i+1)+(e!=null&&e.run.armed?" ●":"");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);applicantButtons[i].setAlpha(engine.profile==i+1?1f:0.65f);}
       if(!status.getText().toString().equals(engine.status))status.setText(engine.status);
+      android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
+      boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
+      if(batteryButton!=null)batteryButton.setText(exempt?"Background setup ✓":"Background setup !");
       String text="Applicant "+engine.profile+" · "+engine.monitorStatus+engine.run.diagnostics();if(!monitorStatus.getText().toString().equals(text))monitorStatus.setText(text);
       if(visible&&engine.monitoring)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
       else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
     void selectApplicant(int number){if(engine==null||engine.profile==number)return;MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
     private void batterySettings(){
-      android.os.PowerManager pm=getSystemService(android.os.PowerManager.class);
-      if(pm.isIgnoringBatteryOptimizations(getPackageName())){Toast.makeText(this,"Battery optimization exemption is enabled",Toast.LENGTH_LONG).show();return;}
-      new AlertDialog.Builder(this).setTitle("Allow locked-screen monitoring")
-       .setMessage("Allow battery optimization exemption for monitoring with the screen off. This uses more battery. On Infinix, also allow background activity in the phone's app battery settings.")
-       .setPositiveButton("Open settings",(d,w)->{
-         try{startActivity(new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,Uri.parse("package:"+getPackageName())));}
+      android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
+      boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
+      String message="Android Doze exemption: "+(exempt?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+(power.isPowerSaveMode()?"ON — turn it off":"OFF")+"\n\nAllow background activity and autostart in your "+android.os.Build.MANUFACTURER+" phone settings. Manufacturer battery managers can still stop the app. Keep the ongoing monitoring notification visible. Force-stop or reboot ends monitoring; START again manually.";
+      new AlertDialog.Builder(this).setTitle("Locked-screen monitoring setup").setMessage(message)
+       .setPositiveButton(exempt?"App settings":"Allow exemption",(d,w)->{
+         try{startActivity(new Intent(exempt?android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS:android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,Uri.parse("package:"+getPackageName())));}
          catch(Exception ex){startActivity(new Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));}
-       }).setNegativeButton("Later",null).show();
+       }).setNegativeButton("Close",null).show();
     }
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     private Button button(LinearLayout row, String label, int color, Runnable action) {
@@ -142,14 +145,14 @@ public class MainActivity extends Activity {
         button(row, "Reload", Color.rgb(14,116,144), () -> {if(engine!=null&&engine.current!=null)engine.navigate(()->engine.current.reload());});
         button(row, "Copy log", Color.rgb(104,65,165), () -> {
             String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.0\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
-                    + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":String.join("\n",engine.logs)+engine.run.diagnostics());
+                    + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":String.join("\n",engine.logs)+engine.run.diagnostics()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics", report));
             Toast.makeText(this, "Log copied", Toast.LENGTH_SHORT).show();
         });
         header.addView(row);
         LinearLayout battery=new LinearLayout(this);
-        button(battery,"Battery settings",Color.rgb(35,53,76),this::batterySettings);button(battery,"Stop all",Color.rgb(139,38,56),()->{if(engine!=null)engine.service.stopAll();});
+        batteryButton=button(battery,"Background setup",Color.rgb(35,53,76),this::batterySettings);button(battery,"Stop all",Color.rgb(139,38,56),()->{if(engine!=null)engine.service.stopAll();});
         header.addView(battery);
         view = new GeckoView(this);
         FrameLayout pages=new FrameLayout(this);
@@ -180,4 +183,5 @@ public class MainActivity extends Activity {
       super.onDestroy();
     }
 }
+
 

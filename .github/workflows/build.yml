@@ -42,7 +42,7 @@ jobs:
           if-no-files-found: error
   gecko-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -76,4 +76,5 @@ jobs:
             release-preview.png
             release-ui.xml
             service-state.txt
+
 

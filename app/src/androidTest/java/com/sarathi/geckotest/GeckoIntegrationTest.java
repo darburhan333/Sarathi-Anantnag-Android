@@ -106,9 +106,15 @@ public class GeckoIntegrationTest {
    main(()->{for(BrowserEngine e:service.profiles){e.smokeResult="";e.command("MULTI_SMOKE");}});end=System.currentTimeMillis()+45000;
    while(System.currentTimeMillis()<end&&(service.profiles[0].smokeResult.isEmpty()||service.profiles[1].smokeResult.isEmpty()||service.profiles[2].smokeResult.isEmpty()))Thread.sleep(250);
    for(BrowserEngine e:service.profiles){assertTrue("Applicant "+e.profile+": "+e.smokeResult,e.smokeResult.startsWith("PASS:"));System.out.println("Applicant "+e.profile+" "+e.smokeResult);}
-   int[] before={counts.get(0),counts.get(1),counts.get(2)};shell("input keyevent KEYCODE_HOME");shell("input keyevent KEYCODE_SLEEP");Thread.sleep(30000);
-   for(int i=0;i<3;i++){assertTrue("Locked HTTP applicant "+i,counts.get(i)>before[i]);before[i]=counts.get(i);}
-   shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");Thread.sleep(22000);
+   int[] before={counts.get(0),counts.get(1),counts.get(2)};shell("input keyevent KEYCODE_HOME");shell("input keyevent KEYCODE_SLEEP");
+   // Reproduce GeckoView deactivation after detachment, without changing our cached state.
+   main(()->{for(BrowserEngine e:service.profiles)for(org.mozilla.geckoview.GeckoSession page:e.sessions)if(page!=e.monitorSession&&page.isOpen())page.setActive(false);});
+   for(int minute=1;minute<=5;minute++){
+    Thread.sleep(60000);
+    for(int i=0;i<3;i++){assertTrue("Locked HTTP applicant "+i+" minute "+minute,counts.get(i)>before[i]);assertTrue("Run alive applicant "+i,service.profiles[i].run.armed);before[i]=counts.get(i);}
+    System.out.println("PASS all three applicants locked, minute "+minute+": "+counts);
+   }
+   shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");Thread.sleep(120000);
    for(int i=0;i<3;i++)assertTrue("Doze HTTP applicant "+i,counts.get(i)>before[i]);
    main(()->service.profiles[1].run.stopByUser());Thread.sleep(1500);int stopped=counts.get(1),first=counts.get(0),third=counts.get(2);Thread.sleep(22000);
    assertEquals("Applicant 2 must stop",stopped,counts.get(1));assertTrue("Applicant 1 continues",counts.get(0)>first);assertTrue("Applicant 3 continues",counts.get(2)>third);
@@ -133,4 +139,5 @@ public class GeckoIntegrationTest {
  }
 
 }
+
 

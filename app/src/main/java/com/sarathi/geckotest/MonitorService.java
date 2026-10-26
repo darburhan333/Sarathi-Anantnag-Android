@@ -32,6 +32,9 @@ public final class MonitorService extends Service {
  void beginForeground(){
   if(activity==null||!visible)throw new IllegalStateException("Open app before START");
   if(!getSystemService(NotificationManager.class).areNotificationsEnabled())throw new IllegalStateException("Allow notifications before START");
+  PowerManager power=getSystemService(PowerManager.class);
+  if(!power.isIgnoringBatteryOptimizations(getPackageName()))throw new IllegalStateException("Open Background setup and allow battery optimization exemption before START");
+  if(power.isPowerSaveMode())throw new IllegalStateException("Turn off Battery Saver before background monitoring");
   activity.startForegroundService(new Intent(this,MonitorService.class).setAction("ARM"));
   if(Build.VERSION.SDK_INT>=34)startForeground(1002,notification(),ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);else startForeground(1002,notification());
   promoted=true;stopAfter=0;if(!wake.isHeld()){wake.acquire(600000L);renewAt=SystemClock.elapsedRealtime()+300000L;}
@@ -63,3 +66,4 @@ public final class MonitorService extends Service {
  void arm(){engine.run.arm();}org.mozilla.geckoview.GeckoResult<Object> waitFor(long ms){return engine.run.waitFor(ms);}
  @Override public void onDestroy(){destroying=true;handler.removeCallbacks(tick);connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();super.onDestroy();}
 }
+
