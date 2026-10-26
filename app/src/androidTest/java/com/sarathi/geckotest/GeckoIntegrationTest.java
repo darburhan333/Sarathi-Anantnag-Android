@@ -154,6 +154,18 @@ public class GeckoIntegrationTest {
   }finally{for(int n=1;n<=6;n++){if(original[n-1].isEmpty())ApplicantContacts.remove(c,n);else ApplicantContacts.save(c,n,original[n-1]);}}
  }
 
+ @Test public void stopCancelsEveryConcurrentWaitOnce()throws Exception{
+  MainActivity a=activity.getActivity();long deadline=System.currentTimeMillis()+60000;
+  while(!a.extensionReadyForTest()&&System.currentTimeMillis()<deadline)Thread.sleep(200);
+  assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();
+  shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
+  java.util.concurrent.atomic.AtomicInteger completions=new java.util.concurrent.atomic.AtomicInteger();
+  java.util.concurrent.atomic.AtomicInteger cancelled=new java.util.concurrent.atomic.AtomicInteger();
+  main(()->{service.arm();for(int i=0;i<20;i++)service.waitFor(200).accept(value->{completions.incrementAndGet();if(value.toString().contains("cancelled"))cancelled.incrementAndGet();});service.engine.run.disarm();service.engine.run.disarm();});
+  Thread.sleep(1000);
+  assertEquals("Each pending result completes once",20,completions.get());assertEquals("All waits cancelled",20,cancelled.get());
+ }
+
 }
 
 

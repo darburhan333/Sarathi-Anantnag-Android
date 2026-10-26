@@ -5,7 +5,7 @@ final class MonitorRun {
  final BrowserEngine engine;final Handler handler;boolean armed,sawRunning;
  private long armedAt,lastBeat,lastProgress,lastTick,longestGap,lastHeartbeatValue,lastProgressValue;
  private int generation;
- private final Map<GeckoResult<Object>,Runnable> waits=new HashMap<>();
+ private final Map<GeckoResult<Object>,Runnable> waits=new IdentityHashMap<>();
  MonitorRun(BrowserEngine e){engine=e;handler=e.service.handler;}
  boolean authorize(){
   if(armed&&SystemClock.elapsedRealtime()-lastTick>30000)fail("Monitoring timing interrupted — reopen and press START");
@@ -21,10 +21,12 @@ final class MonitorRun {
  void disarm(){
   boolean wasArmed=armed;armed=false;sawRunning=false;generation++;
   if(wasArmed&&engine!=null)engine.command("DISARMED");
-  for(Map.Entry<GeckoResult<Object>,Runnable> entry:new ArrayList<>(waits.entrySet())){
+  // GeckoResult has value-based, mutable hashCode/equals: waits must use identity.
+  Map<GeckoResult<Object>,Runnable> pending=new IdentityHashMap<>(waits);
+  waits.clear(); // Remove ownership before callbacks can enqueue or cancel another wait.
+  for(Map.Entry<GeckoResult<Object>,Runnable> entry:pending.entrySet()){
    handler.removeCallbacks(entry.getValue());entry.getKey().complete("{\"ok\":false,\"cancelled\":true}");
   }
-  waits.clear();
   engine.service.markRunning(engine.profile,false);
   engine.service.refreshForeground(true);
   if(engine!=null){engine.activate();engine.render();}
@@ -52,7 +54,8 @@ final class MonitorRun {
   if(!armed||ms<0||ms>8000){result.complete("{\"ok\":false,\"cancelled\":true}");return result;}
   final int epoch=generation;final long started=SystemClock.elapsedRealtime();
   Runnable completion=()->{
-   waits.remove(result);long gap=SystemClock.elapsedRealtime()-started;
+   if(waits.remove(result)==null)return;
+   long gap=SystemClock.elapsedRealtime()-started;
    boolean valid=armed&&epoch==generation&&gap<30000;
    result.complete(valid?"{\"ok\":true}":"{\"ok\":false,\"cancelled\":true}");
    if(!valid&&armed)fail("Monitoring timing interrupted — reopen and press START");
@@ -75,5 +78,6 @@ final class MonitorRun {
   return "\n"+(engine.foreground?"Foreground service":"Background service")+" · gap max "+(longestGap/1000)+"s · last page update "+((SystemClock.elapsedRealtime()-lastBeat)/1000)+"s ago";
  }
 }
+
 
 
