@@ -179,12 +179,12 @@ public class GeckoIntegrationTest {
   main(()->{service.stopAll();e.alerts.clearNotification();});
   org.mozilla.geckoview.GeckoSession old=e.current;
   main(()->{old.close();e.pageLost(old,"Injected idle content kill");e.pageLost(old,"Duplicate kill");e.ensureUsable();});
-  Thread.sleep(1500);assertNotSame("Dead browser must be replaced",old,e.current);assertTrue(e.current.isOpen());assertFalse(e.run.armed);
+  Thread.sleep(1500);assertNotSame("Dead browser must be replaced",old,e.current);main(()->assertTrue(e.current.isOpen()));assertFalse(e.run.armed);
   for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())assertNotEquals("Idle page loss must not notify",1100+e.profile,n.getId());
   java.util.concurrent.atomic.AtomicBoolean navigated=new java.util.concurrent.atomic.AtomicBoolean();
   main(()->{org.mozilla.geckoview.WebExtension.Port saved=e.nativePort;e.nativePort=null;e.navigate(()->navigated.set(true));e.nativePort=saved;});
   Thread.sleep(1600);assertTrue("Home action must not depend on extension ACK",navigated.get());
-  main(e::home);Thread.sleep(1800);assertTrue("Home must keep a usable session",e.current.isOpen());
+  main(e::home);Thread.sleep(1800);main(()->assertTrue("Home must keep a usable session",e.current.isOpen()));
  }
  @Test public void recoveryRequiresMatchingRunAndCannotResumeAfterStop()throws Exception{
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
