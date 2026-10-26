@@ -75,7 +75,8 @@
     if(ownsTab && cachedRunning && !localStop && expected){
       try {
         const r=await chrome.runtime.sendMessage({type:'SARATHI_WAIT',sessionId:expected,ms,monitorProgressAt:lastLoopProgress,monitorLoopActive:loopActive});
-        if(r?.ok || r?.cancelled)return;
+        if(r?.cancelled){localStop=true;return;}
+        if(r?.ok)return;
       } catch (_) {}
       // A stopped/reloaded worker may disconnect a message. Keep a bounded,
       // conservative fallback; existing health recovery can retry the loop.

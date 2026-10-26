@@ -46,6 +46,7 @@ public class GeckoIntegrationTest {
    end=System.currentTimeMillis()+30000;
    while(!s.engine.smokePhase.equals("background-ready")&&System.currentTimeMillis()<end)Thread.sleep(200);
    assertEquals("background-ready",s.engine.smokePhase);
+   Thread.sleep(750); // Let the new run snapshot cross the asynchronous native port before sampling counters.
    shell("input keyevent KEYCODE_HOME");progress(s,"minimized",22);
    shell("input keyevent KEYCODE_SLEEP");progress(s,"screen locked",45);
    shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");progress(s,"forced Doze with exemption",22);
@@ -115,6 +116,20 @@ public class GeckoIntegrationTest {
    main(()->{a.selectApplicant(3);a.selectApplicant(1);service.stopAll();});assertEquals("STOP ALL",0,service.activeCount());
    System.out.println("PASS three applicants: storage isolation, native ownership, locked and Doze HTTP, independent STOP, switching, STOP ALL");
   }finally{shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");server.close();}
+ }
+
+ @Test public void encryptedSettingsRoundTrip()throws Exception{
+  android.content.Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  org.json.JSONObject original=SecureSettings.read(c);
+  String marker="TEST_ONLY_NOT_A_TELEGRAM_TOKEN";
+  try{
+   SecureSettings.write(c,new org.json.JSONObject().put("botToken",marker).put("chatId","12345").put("chatId2","67890"));
+   assertEquals(marker,SecureSettings.read(c).getString("botToken"));
+   String persisted=c.getSharedPreferences("secure",0).getString("config","");
+   assertFalse("Token must not be persisted as plaintext",persisted.contains(marker));
+   assertFalse("Chat IDs must not be persisted as plaintext",persisted.contains("12345"));
+   System.out.println("PASS Android Keystore encrypted credential round-trip");
+  }finally{for(String k:new String[]{"botToken","chatId","chatId2"})if(!original.has(k))original.put(k,"");SecureSettings.write(c,original);}
  }
 
 }
