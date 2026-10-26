@@ -264,7 +264,7 @@ chrome.alarms.onAlarm.addListener(async alarm=>{
 function sarathiUrl(value){
  try{const u=new URL(value);return u.protocol==='https:' && u.hostname==='sarathi.parivahan.gov.in';}catch(_){return false;}
 }
-async function reportMonitorFailure(expected,code,reason,eventTime=0){
+async function reportMonitorFailure(expected,code,reason,eventTime=0,nativeAlreadyAlerted=false){
  const result=await inAlertQueue(()=>inGateQueue(async()=>{
   const d=await chrome.storage.local.get({running:false,successWatch:false,monitoredTabId:null,monitorSessionId:'',navigationSessionId:'',navigationLastAt:0,navigationCompletedAt:0,monitorFailureKey:'',bookingClickIssued:false,history:[],desktopEnabled:true,telegramEnabled:true});
   if(!d.monitorSessionId || d.monitorSessionId!==expected.monitorSessionId || d.monitoredTabId!==expected.monitoredTabId || (!d.running&&!d.successWatch))return null;
@@ -275,7 +275,7 @@ async function reportMonitorFailure(expected,code,reason,eventTime=0){
   if(d.monitorFailureKey===key)return null;
   const body='⚠️ MPARIVAHAN SLOT BOOKING -J&K — '+reason+(d.bookingClickIssued?' BOOK SLOT outcome may be uncertain; inspect manually. Submission lock retained.':'');
   await chrome.storage.local.set({running:false,successWatch:false,autoBookingEnabled:false,nextRetryAt:0,monitorLoopActive:false,healthMisses:0,monitorFailureKey:key,monitorFailureAt:Date.now(),bookingStage:'MANUAL REVIEW REQUIRED',lastStatus:body,alarmActive:true,alarmMessage:reason,history:[{time:Date.now(),kind:code,message:body},...d.history].slice(0,100)});
-  return {key,body,desktopEnabled:d.desktopEnabled,telegramEnabled:d.telegramEnabled};
+  return {key,body,desktopEnabled:d.desktopEnabled&&!nativeAlreadyAlerted,telegramEnabled:d.telegramEnabled};
  }));
  if(!result)return false;
  // Do not let a slow/failed Telegram request block another event or local alarm.
@@ -326,3 +326,4 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
  if(m?.type!=='SECURE_PROXY'||!sender.url?.startsWith(browser.runtime.getURL(''))||!['SECURE_GET','SECURE_SET'].includes(m.request?.type))return;
  nativeRequest(m.request).then(reply).catch(e=>reply({ok:false,error:String(e.message||e)}));return true;
 });
+

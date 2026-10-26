@@ -22,6 +22,7 @@ public final class MonitorService extends Service {
   getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("sarathi-monitor","Background monitoring",NotificationManager.IMPORTANCE_LOW));
   wake=getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"MParivahan:monitor");wake.setReferenceCounted(false);
   connectivity=getSystemService(ConnectivityManager.class);network=connectivity.getActiveNetwork();connectivity.registerDefaultNetworkCallback(networks);
+  for(int n=1;n<=PROFILE_COUNT;n++)getSystemService(NotificationManager.class).cancel(1100+n);
   engine=profile(1);record("Service created; process="+processId);
   if(Build.VERSION.SDK_INT>=30)for(ApplicationExitInfo i:getSystemService(ActivityManager.class).getHistoricalProcessExitReasons(getPackageName(),0,3))engine.log("Previous exit: reason="+i.getReason()+" pid="+i.getPid()+" process="+i.getProcessName()+" time="+i.getTimestamp()+" detail="+i.getDescription());
   clock.post(clockTick);

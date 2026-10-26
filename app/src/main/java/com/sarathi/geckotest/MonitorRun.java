@@ -21,9 +21,10 @@ final class MonitorRun {
   engine.alerts.clearNotification();engine.service.record("Applicant "+engine.profile+" START run="+generation);
   engine.service.markRunning(engine.profile,true);engine.activate();engine.service.refreshForeground(true);
  }
- void disarm(){
+ void disarm(){disarm(true);}
+ private void disarm(boolean notifyBridge){
   boolean wasArmed=armed;armed=false;sawRunning=false;recovering=false;generation++;
-  if(wasArmed)engine.command("DISARMED");
+  if(wasArmed&&notifyBridge)engine.command("DISARMED");
   Map<GeckoResult<Object>,Runnable> pending=new IdentityHashMap<>(waits);waits.clear();delayed.clear();
   for(Map.Entry<GeckoResult<Object>,Runnable> entry:pending.entrySet()){
    engine.service.clock.removeCallbacks(entry.getValue());handler.removeCallbacks(entry.getValue());entry.getKey().complete("{\"ok\":false,\"cancelled\":true}");
@@ -35,7 +36,7 @@ final class MonitorRun {
   if(!armed)return; // Idle and duplicate browser callbacks must not alarm.
   lastReason=message;engine.log(message);engine.service.record("Applicant "+engine.profile+" stopped: "+message);
   // Revoke first. FAILURE updates the dashboard; only native code delivers this failure alarm.
-  disarm();engine.command("FAILURE",message);
+  disarm(false);engine.command("FAILURE",message);
   try{engine.alerts.notify("Monitoring needs attention",message);engine.alerts.audio("TEST",true,85);}catch(Exception ignored){}
  }
  void onState(JSONObject state){

@@ -304,7 +304,7 @@ final class BrowserEngine {
         });
         s.setProgressDelegate(new GeckoSession.ProgressDelegate() {
             @Override public void onPageStart(GeckoSession session, String url) {
-                if(session==monitorSession)return;
+                if(!sessions.contains(session)||!session.isOpen()||session==monitorSession)return;
                 if(session!=current&&!run.armed)showSession(session);
                 log("Loading " + safeLocation(url));
             }

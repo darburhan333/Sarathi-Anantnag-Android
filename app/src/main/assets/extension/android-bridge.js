@@ -27,7 +27,8 @@
   else if(m.type==='SILENCE')await chrome.storage.local.set({alarmActive:false});
   else if(m.type==='FAILURE'){
    await chrome.storage.local.set({androidServiceReady:false});
-   await stop(m.reason||'Browser page failed — inspect and restart manually');
+   const d=await chrome.storage.local.get({monitorSessionId:'',monitoredTabId:null});
+   await reportMonitorFailure(d,'ANDROID_PAGE_ERROR',m.reason||'Browser page failed — inspect and restart manually',0,true);
   }
   await state();
   if(m.id)port?.postMessage({type:'ACK',id:m.id});
