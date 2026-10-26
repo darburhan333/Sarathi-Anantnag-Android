@@ -47,6 +47,11 @@ public class GeckoIntegrationTest {
    while(!s.engine.smokePhase.equals("background-ready")&&System.currentTimeMillis()<end)Thread.sleep(200);
    assertEquals("background-ready",s.engine.smokePhase);
    Thread.sleep(750); // Let the new run snapshot cross the asynchronous native port before sampling counters.
+   main(()->s.engine.run.recover("Injected delay on live COV fixture"));
+   end=System.currentTimeMillis()+10000;
+   while(s.engine.run.recovering&&System.currentTimeMillis()<end)Thread.sleep(100);
+   assertTrue("Verified COV recovery must preserve the run",s.engine.run.armed);
+   assertFalse("Verified COV recovery must finish",s.engine.run.recovering);
    shell("input keyevent KEYCODE_HOME");progress(s,"minimized",22);
    shell("input keyevent KEYCODE_SLEEP");progress(s,"screen locked",45);
    shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");progress(s,"forced Doze with exemption",22);

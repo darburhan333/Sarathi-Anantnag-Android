@@ -1,62 +1,33 @@
-# V3.1 six-applicant update
+# MPARIVAHAN SLOT BOOKING -J&K 3.2
 
-Additional changes: HMV / Heavy Motor Vehicle COV checkbox selection by its own label; long-press each applicant to save or dial its separate encrypted phone number. Phone numbers toolbar control edits/removes numbers. ACTION_DIAL only; no automatic call or call permission. HMV changes cover COV selection; existing assisted quota booking rules remain unchanged.
+Nine independent applicant containers, built from V3.1. The website engine and package identity are unchanged. Release versionCode is 320; use the existing private release certificate for in-place updates.
 
-- Six lazily opened, isolated applicant containers and extension state stores.
-- Detach GeckoView displays on Activity pause; retain service-owned sessions and attach them again on resume, without navigating HOME.
-- Allow a transient native-port reconnect for up to 15 seconds while the same native service owns the run. Extension startup preserves running flags only if native RESTORE confirms an armed run; a new process never resumes automation silently.
-- Persist bounded lifecycle/failure diagnostics across process restarts. Copy log includes every opened applicant, native service/wake state, and process identity.
-- Preload the local monitor as soon as its bridge is ready, independently of remote website completion.
-- Larger cyan app title, smaller green developer credit, two rows of applicant tabs, status card below controls, and no Back/Reload toolbar actions.
+## Controls
 
-The user's recording demonstrates blank/loading delays and reset startup state, but does not establish whether the phone killed the process or a bridge restarted. These changes address confirmed code weaknesses; real-device background reliability remains unverified. Emulator fixtures cannot reproduce Infinix battery management or live Sarathi.
+Rows 1 and 2 contain applicants 1–4 and 5–8. Row 3 contains applicant 9, Background setup, Phone numbers and Copy log. Row 4 contains the bold Monitor/Website toggle, Stop, Silence and Home. The toggle changes colour with the displayed view. Status stays below the controls. Long-press Stop for a Stop all confirmation; the ongoing notification also has STOP ALL. Long-press an applicant to save or open its encrypted phone number in the dialer. No automatic calling.
 
-## Prior V3.0 implementation record
+## Monitoring and recovery
 
-# MPARIVAHAN SLOT BOOKING -J&K 3.0
+- One user-started specialUse foreground service owns all runs, independently of Activity visibility. START requires notifications, Doze exemption and Battery Saver off.
+- An independent native HandlerThread schedules waits, renews the bounded CPU wake lock and posts coalesced UI-thread health checks. Gecko operations and ownership transitions remain on the main thread.
+- A scheduling interruption pauses action authorization and requests a fresh owned-page health check. Only a still-running COV loop in the same applicant/session, with no calendar lock, expiry or uncertain booking, can release held waits. Every action retains the original document/session gate. Recovery never reloads or resubmits a form. Failed recovery stops once with an alert. Repeated recovery without actual progress is rejected.
+- Killed/closed browser sessions are removed and replaced on return with a fresh Home page. Login/form recovery is manual. A dead idle dashboard or unused page does not stop another run.
+- Home revokes native authorization first, then waits at most 1.2 seconds for STOP acknowledgement. It works even with a disconnected extension.
+- Idle/duplicate browser callbacks do not alert. Old native ports cannot update state. Cold launch records interrupted previous runs in the dashboard without sounding a fresh stop alarm. No automation resumes after process death.
+- Copy log includes Android PID separately from service instance ID, exit reason/detail, independent clock and main-thread progress, screen state, current foreground-service/wake state and per-applicant longest tick gaps.
 
-Android app based on the GeckoView access test confirmed working on the user's Infinix phone. Uses GeckoView 158.0.20261021001945. User-started foreground service supports minimized and screen-off monitoring. Battery optimization exemption is required for reliable Doze operation; manufacturer restrictions still require device testing.
+## Performance and retained features
 
-## Three applicants
-Use Applicant 1, 2 and 3 to log into different applicants. Each slot has a persistent Gecko `contextId` and its own bundled extension identity, so website cookies/storage and monitor state/booking locks are separate. Only one page is visible at a time. One native foreground service owns all active runs. Stop this stops the selected applicant; Stop all and the notification action stop every applicant. Switching profiles does not stop active runs.
+Website containers open lazily; dashboards open only when requested. The runtime/engine is shared, and only the current website for each armed applicant is kept active at high priority. Nine active applicants still require more RAM and network traffic than one.
 
-Profile-bound native content delegates authorize only read-only ownership queries. A monitor can select only a page verified to belong to its applicant. New windows inherit the opener's applicant. Never infer ownership from the currently visible tab. The engine binary is shared; three applicants increase memory/network work, not three copies of the engine in the APK.
+The original 8-second COV wait, LMV/MCWG/HMV label selection, popup Back handling, displayed-month calendar rules, quota checks, one-click booking protections and manual OTP/CAPTCHA/final confirmation remain. HMV support concerns COV selection, not additional assisted quota rules. Assisted booking remains off by default. Telegram supports two chat IDs with one encrypted token; configure the status-command receiver only on Applicant 1 and only one device per bot. Network handoff/loss still requires inspection and manual restart. No direct Sarathi endpoint automation or browser identity spoofing is used.
 
-## Use
-1. Install the arm64 APK. Allow notifications. The diagnostic Gecko Test can stay installed separately.
-2. Navigate from Parivahan to Sarathi and log in manually. Open the vehicle-class (COV) page.
-3. Tap **Background setup** and allow battery optimization exemption. On Infinix also allow background activity in app battery settings. START requires Android Doze exemption and Battery Saver off. Manufacturer restrictions can still apply. Tap **Monitor**, configure Telegram and test sound/notifications, then START.
-4. Check the ongoing **MPARIVAHAN SLOT BOOKING -J&K** notification. Monitoring can continue after Home/minimize or screen lock. Return to the same browser session by opening the notification.
-5. Stop this cancels only the selected applicant. Stop all cancels all three. A bounded 30-second grace period lets pending alerts finish; an active repeating alarm keeps the service alive until silenced. The wake lock is released when no runs, alarm or delivery grace remain. Silence stops the alarm. A network change, page/engine failure, missing heartbeat or progress stall stops monitoring with a notification; return and START explicitly. Force-stop, reboot and process death do not restart automation.
+The arm64 release uses code/resource shrinking and compressed native libraries. GeckoView contributes most of the APK size. Signing keys and Telegram credentials must never enter this repository.
 
-The imported baseline uses 8-second COV waits, LMV/MCWG or whichever exists, no-slots popup Back, calendar detection, displayed-month green Wednesday/Thursday selection, and integer quota >=1. Assisted booking is OFF by default; enabled assistance retains the original one-click BOOK SLOT protection and stops at manual SMS/OTP. CAPTCHA and final confirmation remain manual. If a submission's result is uncertain, its lock remains across app restart.
+## Build and validation
 
-Telegram supports a configurable primary recipient and optional second recipient, with the token entered locally. /status, /today and /help are read-only. Enable the receiver on only ONE device per bot; turn the PC receiver off before enabling this one. Replies require the service/browser process and network to remain available. No immediate delivery is guaranteed during network loss. Existing desktop settings do not transfer automatically. History exports through Android's share sheet.
+`python3 scripts/verify.py` runs adapter, lifecycle and baseline content regression tests. `gradle assembleRelease lintRelease` builds the arm64 APK. Profile preparation generates applicants 2–9 from one extension source. `-PtestAbi=x86_64` selects emulator architecture. `-PsmokeRelease` signs a minified build with a debug key strictly for emulator testing, not distribution.
 
-## Port details
-- Original ZIP hashes and all 15 original regression suites verified locally. The public project contains Android source and focused port tests; archived desktop files are not included. Telegram recipients have no personal preset.
-- Production content retains the original algorithm. Adds a per-document nonce because Firefox may omit Chrome's documentId.
-- MV2 persistent bundled Firefox extension, promise API adapter, sequential tabs.executeScript injection.
-- Native Android alarm/vibration replaces Chrome offscreen audio; Android notifications replace desktop notifications.
-- Mobile monitor retains settings, counters, history, seven stages and green developer credit.
-- Bound-and-started foreground service owns Gecko runtime sessions, extension message channel and alerts. Activity destruction only detaches the views.
-- `specialUse` subtype documents continuous user-started browser-session monitoring; service starts from a visible screen only.
-- Partial CPU wake lock is bounded and renewed while the native watchdog runs. No Wi-Fi lock, exact-alarm workaround, browser spoofing, or direct Sarathi HTTP automation.
-- Existing COV waits use native Handler replies with elapsed-realtime interruption checks. The original page action/booking gates remain; native service authorization is additionally required.
-- UI updates are coalesced, critical Stop state is immediate, hidden dashboard painting pauses, and notification counters update at most every ten seconds. Wake-lock renewal occurs every five minutes rather than every tick. Native page pings track heartbeat separately from real loop progress; 60-second stalls stop and notify. Current status and longest scheduler gap appear in the header/log.
-- No silent automation resume after process loss. Prior process exit reasons are logged where available.
-- Telegram delivery remains in the persistent bundled extensions. Credentials are shared across applicants and encrypted at rest using an Android Keystore AES-GCM key; legacy plaintext credentials migrate on access. Applicant labels identify alerts. Configure the single status-command receiver under Applicant 1. A durable offline delivery queue is not included.
-- One arm64 release APK, R8 code/resource shrinking and compressed native libraries. The Mozilla engine still contributes most of the size.
-- CI produces an unsigned arm64 release. The delivered APK is signed separately with a fixed private release key, which is never committed. The old debug-signed app may need one uninstall before installing this release; save settings/history first. Future releases must reuse the private key backup. This is not a Play Store release.
+CI runs real Gecko extension fixtures, nine-container cookie/localStorage/IndexedDB isolation, locked-screen and forced-Doze HTTP progress, independent Stop, Activity recreation, idle browser loss without alerts, disconnected Home, stale recovery rejection, wait cancellation and encrypted settings/phone storage. Release UI startup is exercised across all nine applicants.
 
-## Build
-Run `gradle assembleRelease lintRelease`. `preBuild` generates Applicant 2/3 extension packages from the single maintained source. `-PtestAbi=x86_64` selects the emulator ABI. `-PsmokeRelease` signs a minified release with the CI debug certificate solely for emulator installation; do not distribute that test build.
-
-## Validation
-`python3 scripts/verify.py`: 8 suites against ported code, adapter tests, production permissions and syntax checks. All 15 original desktop suites also passed locally before and after porting. GitHub Actions builds/lints release and runs a separate x86_64 Android emulator integration test using a loopback fixture. The background fixture checks actual COV actions and loopback HTTP requests while minimized, locked, forced into Doze with exemption, and after Activity destruction/re-attachment. The three-applicant fixture also checks cookie, localStorage, IndexedDB and extension-state isolation, cross-profile message rejection, concurrent screen-off HTTP, independent Stop and Stop all. A separate smoke check installs the minified release and opens all three applicant bridges. These short emulator checks are not a 30-minute/2-hour real-device soak test. The fixture is debug-only; the release has no localhost host permission, cleartext traffic or smoke script.
-
-Offline/emulator tests do not prove live Sarathi behavior, phone alarm audibility, Telegram delivery, or booking success. Final phone validation remains necessary.
-
-
-
-
+These are emulator and offline-fixture tests. They do not prove uninterrupted monitoring under Infinix firmware, live Sarathi availability, Telegram delivery or booking success. Test minimized screen-on and locked-screen operation separately on the target phone, including 30-minute and two-hour runs, before relying on background monitoring. Force-stop/reboot always ends monitoring.

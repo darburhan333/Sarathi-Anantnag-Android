@@ -4,6 +4,7 @@ import android.os.*;import org.json.JSONObject;import org.mozilla.geckoview.Geck
 final class MonitorRun {
  final BrowserEngine engine;final Handler handler;boolean armed,sawRunning,recovering;
  private long armedAt,lastBeat,lastProgress,lastTick,longestGap,lastHeartbeatValue,lastProgressValue,recoveryAt;
+ private long recoveryProgressValue=-1;
  private int generation;private String recoveryId="",lastReason="Ready";
  private final Map<GeckoResult<Object>,Runnable> waits=new IdentityHashMap<>();
  private final Set<GeckoResult<Object>> delayed=Collections.newSetFromMap(new IdentityHashMap<>());
@@ -16,7 +17,7 @@ final class MonitorRun {
   if(!engine.service.visible||engine.service.activity==null)throw new IllegalStateException("Open app before START");
   if(armed)return;engine.service.beginForeground();
   armed=true;sawRunning=false;recovering=false;generation++;lastReason="Running";
-  armedAt=lastBeat=lastProgress=lastTick=SystemClock.elapsedRealtime();longestGap=0;lastHeartbeatValue=lastProgressValue=0;
+  armedAt=lastBeat=lastProgress=lastTick=SystemClock.elapsedRealtime();longestGap=0;recoveryProgressValue=-1;lastHeartbeatValue=lastProgressValue=0;
   engine.alerts.clearNotification();engine.service.record("Applicant "+engine.profile+" START run="+generation);
   engine.service.markRunning(engine.profile,true);engine.activate();engine.service.refreshForeground(true);
  }
@@ -59,7 +60,9 @@ final class MonitorRun {
  }
  private void finishWait(GeckoResult<Object> r,boolean ok){if(waits.remove(r)==null)return;delayed.remove(r);r.complete(ok?"{\"ok\":true}":"{\"ok\":false,\"cancelled\":true}");}
  void recover(String reason){
-  if(!armed||recovering)return;recovering=true;recoveryAt=SystemClock.elapsedRealtime();recoveryId=generation+":"+recoveryAt;
+  if(!armed||recovering)return;
+  if(recoveryProgressValue==lastProgressValue){fail("No page progress after recovery — inspect Sarathi and press START");return;}
+  recoveryProgressValue=lastProgressValue;recovering=true;recoveryAt=SystemClock.elapsedRealtime();recoveryId=generation+":"+recoveryAt;
   lastReason="Checking session after delay";engine.service.record("Applicant "+engine.profile+" recovery: "+reason+"; "+engine.service.clockDiagnostics());
   engine.activate();engine.command("RECOVER_CHECK",recoveryId);engine.render();
  }

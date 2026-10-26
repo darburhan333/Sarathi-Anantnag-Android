@@ -74,7 +74,7 @@ final class BrowserEngine {
     }
     void runOnUiThread(Runnable r){service.handler.post(r);}
     void render(){if(activity!=null)activity.render();}
-    void attach(MainActivity a){activity=a;render();}
+    void attach(MainActivity a){activity=a;ensureUsable();render();}
     void detach(MainActivity a){if(activity==a)activity=null;}
     void foregroundState(){
       if(nativePort!=null){JSONObject o=json("FOREGROUND");try{o.put("active",foreground);}catch(Exception ignored){}nativePort.postMessage(o);}
@@ -175,7 +175,7 @@ final class BrowserEngine {
           @Override public void onConnect(WebExtension.Port port){
             nativePort=port;bridgeLostAt=0;service.record("Applicant "+profile+" bridge connected");
             port.setDelegate(new WebExtension.PortDelegate(){
-              @Override public void onPortMessage(Object message,WebExtension.Port p){receive(message);}
+              @Override public void onPortMessage(Object message,WebExtension.Port p){if(nativePort==p&&!destroyed)receive(message);}
               @Override public void onDisconnect(WebExtension.Port p){
                 if(nativePort==p){nativePort=null;ready=false;if(!destroyed){bridgeLostAt=SystemClock.elapsedRealtime();service.record("Applicant "+profile+" bridge disconnected; waiting up to 15 seconds for reconnect");}}
               }

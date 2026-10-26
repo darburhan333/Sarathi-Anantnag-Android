@@ -699,7 +699,7 @@
       (async()=>{
         const owner=await confirmOwnership();
         return {ok:true,page:location.pathname,owner,loopActive,
-          safeToResume:owner&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
+          safeToResume:owner&&loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
           lastLoopProgress,loopStartedAt,covPresent:!!getCovForm(),calendar:realCalendar(),
           popup:noSlotsTextPresent(),sessionId};
       })().then(sendResponse).catch(()=>sendResponse({ok:false}));return true;
