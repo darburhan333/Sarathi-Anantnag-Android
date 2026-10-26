@@ -37,7 +37,7 @@ jobs:
           path: signing-tools/
       - uses: actions/upload-artifact@v4
         with:
-          name: MParivahan-JK-3.1-arm64-unsigned
+          name: MParivahan-JK-3.2-arm64-unsigned
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
   gecko-integration:
@@ -76,6 +76,7 @@ jobs:
             release-preview.png
             release-ui.xml
             service-state.txt
+
 
 
 

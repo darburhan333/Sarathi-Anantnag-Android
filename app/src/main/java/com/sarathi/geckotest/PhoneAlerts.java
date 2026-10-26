@@ -38,6 +38,7 @@ final class PhoneAlerts {
   }else if(action.equals("TEST")||action.equals("ARM"))beep();
  }
  void stop(){repeating=false;handler.removeCallbacks(pulse);if(tone!=null){tone.release();tone=null;}if(vibrator!=null)vibrator.cancel();}
+ void clearNotification(){activity.getSystemService(NotificationManager.class).cancel(1100+profile);}
  void notify(String title,String message){
   NotificationManager nm=activity.getSystemService(NotificationManager.class);
   if(!nm.areNotificationsEnabled())throw new IllegalStateException("Allow Sarathi notifications in Android Settings");
@@ -48,4 +49,5 @@ final class PhoneAlerts {
   nm.notify(1100+profile,n);
  }
 }
+
 

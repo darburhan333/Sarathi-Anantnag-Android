@@ -13,7 +13,7 @@
   await inGateQueue(()=>chrome.storage.local.set({androidStopEpoch:String(Date.now())+'-'+Math.random(),running:false,successWatch:false,
    autoBookingEnabled:false,nextRetryAt:0,monitorLoopActive:false,bookingStage:'STOPPED',lastStatus:reason}));
   const d=await chrome.storage.local.get({monitoredTabId:null});
-  if(d.monitoredTabId!==null)await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_STOP'}).catch(()=>{});
+  if(d.monitoredTabId!==null)chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_STOP'}).catch(()=>{});
  }
  async function command(m){
   if(m.type==='DISARMED'){await chrome.storage.local.set({androidServiceReady:false});const d=await chrome.storage.local.get({running:false,successWatch:false});if(d.running||d.successWatch)await stop('Background service stopped — press START to begin again');return;}
@@ -27,8 +27,7 @@
   else if(m.type==='SILENCE')await chrome.storage.local.set({alarmActive:false});
   else if(m.type==='FAILURE'){
    await chrome.storage.local.set({androidServiceReady:false});
-   const d=await chrome.storage.local.get({monitorSessionId:'',monitoredTabId:null});
-   await reportMonitorFailure(d,'ANDROID_PAGE_ERROR',m.reason||'Browser page failed — inspect and restart manually');
+   await stop(m.reason||'Browser page failed — inspect and restart manually');
   }
   await state();
   if(m.id)port?.postMessage({type:'ACK',id:m.id});
@@ -37,6 +36,19 @@
   port=browser.runtime.connectNative('sarathi');
   let pingBusy=false;
   port.onMessage.addListener(m=>{
+   if(m.type==='RECOVER_CHECK'){
+    // Out of the control queue: a stale tab message must not block recovery or STOP.
+    (async()=>{
+     const d=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,successWatch:false,calendarLock:false,bookingClickIssued:false});
+     let safe=false;
+     if(d.running&&!d.calendarLock&&!d.bookingClickIssued&&d.monitoredTabId!==null&&d.monitorSessionId){
+      const r=await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_HEALTH_PING',sessionId:d.monitorSessionId});
+      const now=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,calendarLock:false,bookingClickIssued:false});
+      safe=!!(r?.ok&&r.owner&&r.safeToResume&&r.sessionId===d.monitorSessionId&&now.running&&!now.calendarLock&&!now.bookingClickIssued&&now.monitoredTabId===d.monitoredTabId&&now.monitorSessionId===d.monitorSessionId);
+     }
+     port?.postMessage({type:'RECOVERED',id:m.reason,safe});
+    })().catch(()=>port?.postMessage({type:'RECOVERED',id:m.reason,safe:false}));return;
+   }
    if(m.type==='PING'){
     if(pingBusy)return;pingBusy=true;
     (async()=>{
@@ -77,5 +89,6 @@
   bookingStage:'STOPPED',lastStatus:'App opened — navigate to COV and press START'});})()
   .then(connect);
 })();
+
 
 

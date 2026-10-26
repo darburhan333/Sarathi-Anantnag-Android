@@ -82,11 +82,11 @@ final class BrowserEngine {
     }
     void activate(){
       for(GeckoSession s:sessions)if(s.isOpen()){
-        boolean active=(run.armed&&s!=monitorSession)||(foreground&&(s==current||(s==monitorSession&&showingMonitor)));
+        boolean active=(run.armed&&s==current)||(foreground&&(s==current||(s==monitorSession&&showingMonitor)));
         boolean changed=!java.util.Objects.equals(activeStates.get(s),active);
         // GeckoView may deactivate a detached/hidden session independently of our cache.
         // Reassert active browser sessions while monitoring, including an older selected tab.
-        if(changed||(run.armed&&s!=monitorSession))s.setActive(active);
+        if(changed||(run.armed&&s==current))s.setActive(active);
         if(changed){s.setPriorityHint(active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT);activeStates.put(s,active);}
       }
     }
@@ -105,11 +105,33 @@ final class BrowserEngine {
     void command(String type){command(type,null);}
     void command(String type,String reason){if(nativePort!=null){JSONObject o=json(type);if(reason!=null)try{o.put("reason",reason);}catch(Exception ignored){}nativePort.postMessage(o);}}
     void navigate(Runnable action){
-      if(nativePort==null){log("Monitor not connected — wait or restart app");return;}
-      pendingId=String.valueOf(System.nanoTime());afterStop=action;
-      JSONObject o=json("STOP");try{o.put("id",pendingId);}catch(Exception ignored){}nativePort.postMessage(o);
+      run.stopByUser(); // Revoke native action permissions before waiting for JavaScript.
+      final String id=String.valueOf(System.nanoTime());pendingId=id;afterStop=action;
+      if(nativePort!=null){JSONObject o=json("STOP");try{o.put("id",id);}catch(Exception ignored){}nativePort.postMessage(o);}
+      service.handler.postDelayed(()->finishNavigation(id),nativePort==null?0:1200);
     }
-    void prepareMonitor(){if(!ready||monitorUrl==null||monitorSession!=null||destroyed)return;monitorSession=newSession();monitorSession.open(runtime);monitorSession.loadUri(monitorUrl);render();activate();}
+    void finishNavigation(String id){if(!destroyed&&id.equals(pendingId)&&afterStop!=null){Runnable r=afterStop;afterStop=null;pendingId=null;r.run();}}
+    void home(){navigate(()->{ensureUsable();showingMonitor=false;current.loadUri(HOME);render();activate();});}
+    void ensureUsable(){
+      if(destroyed)return;
+      if(current==null||!current.isOpen()){
+        if(current!=null)pageLost(current,"Browser session unavailable");
+        if(current==null){GeckoSession fresh=newSession();fresh.open(runtime);showSession(fresh);fresh.loadUri(HOME);}
+      }
+      if(showingMonitor)prepareMonitor();
+    }
+    void pageLost(GeckoSession session,String reason){
+      if(destroyed||!sessions.remove(session))return;
+      boolean website=session==current,monitor=session==monitorSession;
+      activeStates.remove(session);
+      if(website){current=null;run.fail(reason+" — inspect Sarathi and press START");}
+      if(monitor){monitorSession=null;monitorReady=false;}
+      if(session.isOpen())session.close();
+      service.record("Applicant "+profile+" "+(website?"website":monitor?"dashboard":"unused page")+" closed; active="+run.armed);
+      // Recreate only a visible page. Never replay form submissions or resume a lost run.
+      if(foreground)service.handler.post(()->{ensureUsable();render();activate();});
+    }
+    void prepareMonitor(){if(!ready||monitorUrl==null||monitorSession!=null||destroyed||!showingMonitor)return;monitorSession=newSession();monitorSession.open(runtime);monitorSession.loadUri(monitorUrl);render();activate();}
     void toggleMonitor(){
       if(!ready||monitorUrl==null){log("Monitor is still starting");return;}
       if(monitorSession==null){
@@ -135,7 +157,8 @@ final class BrowserEngine {
           run.onState(o);render();
           break;
         case "ACK":
-          if(o.optString("id").equals(pendingId)&&afterStop!=null){Runnable r=afterStop;afterStop=null;r.run();}break;
+          finishNavigation(o.optString("id"));break;
+        case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"));break;
         case "ERROR":log(o.optString("message"));break;
       }
     }
@@ -282,20 +305,20 @@ final class BrowserEngine {
         s.setProgressDelegate(new GeckoSession.ProgressDelegate() {
             @Override public void onPageStart(GeckoSession session, String url) {
                 if(session==monitorSession)return;
-                if(session!=current)showSession(session);
+                if(session!=current&&!run.armed)showSession(session);
                 log("Loading " + safeLocation(url));
             }
             @Override public void onPageStop(GeckoSession session, boolean success) {
                 if (session == current) {
-                    log(success?"Page ready":"Page could not load — try Reload");
+                    log(success?"Page ready":"Page could not load — check connection or use Home");
                     if(!firstPageRecorded){firstPageRecorded=true;logs.add("First page completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);service.handler.post(BrowserEngine.this::prepareMonitor);}
                 }
             }
         });
         s.setContentDelegate(new GeckoSession.ContentDelegate() {
-            @Override public void onCloseRequest(GeckoSession session){if(run.armed)run.fail("Applicant page closed — inspect before START");sessions.remove(session);activeStates.remove(session);session.close();if(current==session){current=null;for(GeckoSession other:sessions)if(other!=monitorSession&&other.isOpen()){showSession(other);break;}}render();}
-            @Override public void onCrash(GeckoSession session){run.fail("Browser page crashed — reopen and press START");}
-            @Override public void onKill(GeckoSession session){run.fail("Android closed the browser page — reopen and press START");}
+            @Override public void onCloseRequest(GeckoSession session){pageLost(session,"Applicant page closed");}
+            @Override public void onCrash(GeckoSession session){pageLost(session,"Browser page crashed");}
+            @Override public void onKill(GeckoSession session){pageLost(session,"Android closed the browser page");}
             @Override public void onTitleChange(GeckoSession session, String title) {
                 if (session == current) log("Title: " + (title == null ? "" : title.substring(0, Math.min(title.length(), 150))));
             }
@@ -318,6 +341,7 @@ final class BrowserEngine {
         return s;
     }
 }
+
 
 
 

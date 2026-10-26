@@ -16,13 +16,14 @@ adb('shell','pm','grant',PACKAGE,'android.permission.POST_NOTIFICATIONS')
 adb('shell','am','force-stop',PACKAGE)
 adb('shell','am','start','-W','-n',PACKAGE+'/com.sarathi.geckotest.MainActivity')
 root=wait_ready(1)
-for number in [2,3,4,5,6,1]:
+for number in [2,3,4,5,6,7,8,9,1]:
  node=next(n for n in root.iter('node') if n.get('text')=='Applicant '+str(number))
  x1,y1,x2,y2=map(int,re.findall(r'\d+',node.get('bounds')))
  adb('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2));root=wait_ready(number)
 adb('shell','screencap','-p','/data/local/tmp/release-preview.png')
 adb('pull','/data/local/tmp/release-preview.png','release-preview.png')
 adb('pull','/sdcard/release-ui.xml','release-ui.xml')
-print('PASS: minified release starts and all six applicant bridges connect')
+print('PASS: minified release starts and all nine applicant bridges connect')
+
 
 
