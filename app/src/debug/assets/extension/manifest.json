@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
-  "name": "Sarathi Anantnag Android Monitor",
-  "version": "2.2.0",
+  "name": "MPARIVAHAN SLOT BOOKING -J&K",
+  "version": "3.0.0",
   "browser_specific_settings": {
     "gecko": {
       "id": "sarathi-android@burhan.local"
@@ -16,10 +16,12 @@
     "geckoViewAddons",
     "https://sarathi.parivahan.gov.in/*",
     "https://api.telegram.org/*",
-    "http://127.0.0.1/*"
+    "http://127.0.0.1/*",
+    "nativeMessagingFromContent"
   ],
   "background": {
     "scripts": [
+      "profile-config.js",
       "compat.js",
       "background.js",
       "telegram-status.js",
@@ -35,6 +37,7 @@
         "http://127.0.0.1/*"
       ],
       "js": [
+        "profile-guard.js",
         "compat.js",
         "booking-rules.js",
         "content.js"

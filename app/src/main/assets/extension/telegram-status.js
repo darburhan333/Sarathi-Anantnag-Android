@@ -1,6 +1,7 @@
 // Read-only Telegram receiver. One enabled receiver per bot, on one Chrome profile.
 // One bounded long poll per minute works with Chrome 109's alarm minimum.
 (() => {
+  if(globalThis.APPLICANT>1)return;
   const ALARM = 'sarathi-telegram-status';
   const defaults = {telegramStatusEnabled:false,botToken:'',chatId:'',
     telegramStatusOffset:0,telegramStatusBot:'',telegramStatusSince:0};
@@ -26,6 +27,7 @@
     bookingStage:'',calendarLock:false,bookingClickIssued:false,monitorFailureKey:'',
     attempts:0,attemptDay:'',sessionAttempts:0,sessionCounterId:'',lastAttemptAt:0,lastCheck:0,monitorStartedAt:0};
   async function report(){
+    if(globalThis.PROFILE_MODE){const r=await nativeRequest({type:"SUMMARY"});if(!r?.ok)throw Error("Status unavailable");return r.text+"\nCounts are dispatched clicks, not confirmed bookings.";}
     const before=await chrome.storage.local.get(stateDefaults);
     let ping=null,tabState='Not checked (monitor stopped)',timer;
     if(before.running || before.successWatch){
@@ -55,7 +57,7 @@
     // Only controlled stage text; never send DOM text, cookies, URLs, applicant details or OTP.
     const stage=String(d.bookingStage||'STANDBY').replace(/[^A-Za-z0-9 _/-]/g,'').slice(0,80);
     return ['MPARIVAHAN — ANANTNAG | V11.47','Monitor: '+status,
-      'Attempts today (9 AM–9 PM, PC local time): '+(d.attemptDay===key?Number(d.attempts)||0:0),
+      'Attempts today (9 AM–9 PM, phone local time): '+(d.attemptDay===key?Number(d.attempts)||0:0),
       'Attempts this session: '+(d.sessionCounterId===d.monitorSessionId && d.monitorSessionId?Number(d.sessionAttempts)||0:'Not recorded for this older session'),
       'Last recorded Proceed click: '+date(d.lastAttemptAt), 'Last status update: '+date(d.lastCheck),
       'Stage: '+stage,'Sarathi tab: '+tabState,'Report time: '+date(now),
@@ -112,3 +114,4 @@
   // Test hook only in Node VM; absent in Chrome's service worker.
   if(typeof module!=='undefined')module.exports={poll,report};
 })();
+

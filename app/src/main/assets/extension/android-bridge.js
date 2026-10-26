@@ -3,6 +3,8 @@
  let port=null, foreground=false, commandQueue=Promise.resolve();
  const defaults={running:false,successWatch:false,bookingStage:'STOPPED',lastStatus:'Ready',
   attempts:0,sessionAttempts:0,alarmActive:false,bookingClickIssued:false,androidForeground:false,androidServiceReady:false,heartbeatAt:0,monitorProgressAt:0,lastCheck:0,calendarLock:false};
+ let stateTimer=null;
+ function scheduleState(){if(stateTimer!==null)return;stateTimer=setTimeout(()=>{stateTimer=null;state().catch(()=>{});},250);}
  async function state(){
   const d=await chrome.storage.local.get(defaults);
   port?.postMessage({type:'STATE',...d});
@@ -15,6 +17,7 @@
  }
  async function command(m){
   if(m.type==='DISARMED'){await chrome.storage.local.set({androidServiceReady:false});await stop('Background service stopped — press START to begin again');return;}
+  if(m.type==='MULTI_SMOKE'&&typeof globalThis.runMultiSmoke==='function'){globalThis.runMultiSmoke();return;}
   if(m.type==='SMOKE_RUN' && typeof globalThis.runAndroidSmoke==='function'){globalThis.runAndroidSmoke();return;}
   if(m.type==='FOREGROUND'){
    foreground=m.active===true;
@@ -56,7 +59,7 @@
   await state();
  }
  chrome.storage.onChanged.addListener((changes,area)=>{
-  if(area==='local' && Object.keys(defaults).some(k=>changes[k]))state().catch(()=>{});
+  if(area==='local' && Object.keys(defaults).some(k=>changes[k]))scheduleState();
  });
  chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   if(!sender.url?.startsWith(browser.runtime.getURL('')))return;
@@ -73,3 +76,4 @@
   bookingStage:'STOPPED',lastStatus:'App opened — navigate to COV and press START'})
   .then(connect);
 })();
+

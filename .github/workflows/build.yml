@@ -25,9 +25,19 @@ jobs:
           python3 scripts/browser-flow.py
       - name: Build compressed arm64 APK and lint
         run: gradle assembleRelease lintRelease --stacktrace
+      - name: Export APK signing utilities
+        run: |
+          mkdir -p signing-tools
+          tools=$(find "$ANDROID_HOME/build-tools" -name apksigner.jar | sort -V | tail -1)
+          cp "$tools" signing-tools/
+          cp "$(dirname "$(dirname "$tools")")/zipalign" signing-tools/
       - uses: actions/upload-artifact@v4
         with:
-          name: Sarathi-Anantnag-2.2-arm64
+          name: Android-signing-utilities
+          path: signing-tools/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MParivahan-JK-3.0-arm64-unsigned
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
   gecko-integration:
@@ -64,3 +74,4 @@ jobs:
             emulator-logcat.txt
             monitor-preview.png
             service-state.txt
+

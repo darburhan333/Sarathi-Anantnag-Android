@@ -55,6 +55,7 @@ chrome.storage.local.get({chatId:''}).then(d=>{if(!d.chatId) return chrome.stora
 // Configure the bot token locally in the TELEGRAM tab. Never distribute a live token.
 
 async function sendTelegram(message) {
+  if(globalThis.PROFILE_MODE)message="Applicant "+globalThis.APPLICANT+" · "+message;
   const {chatId='',chatId2='',botToken=''} = await chrome.storage.local.get({chatId:'',chatId2:'',botToken:''});
   if (!/^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(botToken.trim())) throw Error('Configure Telegram bot token in the TELEGRAM tab.');
   const ids = [...new Set([(chatId.trim() || PRIMARY_CHAT_ID), chatId2.trim()].filter(Boolean))];
@@ -128,7 +129,7 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
   if (!['SARATHI_ALERT','TEST_TELEGRAM','TEST_DESKTOP','SARATHI_BOOKED','SARATHI_WARNING','SARATHI_SMS_READY'].includes(msg?.type)) return;
   const processAlert=async()=>{
     if(msg.type==='TEST_DESKTOP'){return {delivery:showDesktopNotification({type:'basic',iconUrl:'icon.png',title:'Sarathi TEST Desktop Alert',message:'Desktop notifications are working. This is a test, not a real slot.'},'sarathi-test-'+Date.now())};}
-    if(msg.type==='TEST_TELEGRAM'){return {delivery:sendTelegram('🔔 Sarathi Anantnag TEST ALERT — phone notifications are connected.')}}
+    if(msg.type==='TEST_TELEGRAM'){return {delivery:sendTelegram('🔔 MPARIVAHAN SLOT BOOKING -J&K TEST ALERT — phone notifications are connected.')}}
     if (!sender.url?.startsWith('https://sarathi.parivahan.gov.in/')) return;
     const owner=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,successWatch:false});
     if(!msg.sessionId || msg.sessionId!==owner.monitorSessionId || sender.tab?.id!==owner.monitoredTabId || (!owner.running&&!owner.successWatch))return;
@@ -137,7 +138,7 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
       if(sender.tab?.id!==d.monitoredTabId)return;
       const key=String(d.monitorSessionId)+':'+String(sender.tab.id)+':'+String(msg.url||'');
       if(d.smsAlertKey===key)return;
-      const body='🔐 SARATHI ANANTNAG: SMS VERIFICATION READY — enter the code and finish confirmation manually.';
+      const body='🔐 MPARIVAHAN SLOT BOOKING -J&K: SMS VERIFICATION READY — enter the code and finish confirmation manually.';
       await chrome.storage.local.set({smsAlertKey:key,alarmActive:true,alarmMessage:'SMS verification ready',history:[{time:Date.now(),kind:'SMS_READY',message:body},...d.history].slice(0,100)});
       return {delivery:Promise.allSettled([d.desktopEnabled?showDesktopNotification({type:'basic',iconUrl:'icon.png',title:'Sarathi SMS Verification Ready',message:body}):Promise.resolve(),d.telegramEnabled?sendTelegram(body).catch(e=>chrome.storage.local.set({telegramError:String(e.message||e)})):Promise.resolve()])};
     }
@@ -150,7 +151,7 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
       const recent=(Array.isArray(d.warningEvents)?d.warningEvents:[]).filter(e=>e&&Number.isFinite(e.time)&&now-e.time<10*60*1000);
       if(recent.some(e=>e.key===warningKey))return;
       const warningEvents=[...recent,{key:warningKey,time:now}].slice(-100);
-      const body='⚠️ SARATHI ANANTNAG — '+reason;
+      const body='⚠️ MPARIVAHAN SLOT BOOKING -J&K — '+reason;
       await chrome.storage.local.set({warningAt:now,warningKind:kind,warningEvents,lastStatus:body,...(['SESSION_EXPIRED','SESSION','BOOKING_REVIEW'].includes(kind)?{alarmActive:true,alarmMessage:reason}:{}),history:[{time:now,kind:'WARNING',message:body},...d.history].slice(0,100)});
       return {delivery:Promise.allSettled([
         d.desktopEnabled?showDesktopNotification({type:'basic',iconUrl:'icon.png',title:'Sarathi Monitoring Warning',message:body}):Promise.resolve(),
@@ -167,7 +168,7 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
       // Persist deduplication BEFORE network I/O to avoid duplicate alerts during navigation.
       await chrome.storage.local.set({bookingAlertKeys:[...previous.bookingAlertKeys,bookingKey].slice(-30),successWatch:false,running:false,alarmActive:true,alarmMessage:'Appointment booked successfully',lastStatus:'BOOKING CONFIRMED — manual appointment completed',bookingStage:'APPOINTMENT CONFIRMED'});
       const detail=[msg.cov&&('COV: '+msg.cov),msg.slotDate&&('Date: '+msg.slotDate),msg.slotTime&&('Time: '+msg.slotTime)].filter(Boolean).join('\n');
-      const body='✅ SARATHI ANANTNAG — SLOT BOOKED SUCCESSFULLY!\nConfirmed by Sarathi appointment receipt.\n'+detail;
+      const body='✅ MPARIVAHAN SLOT BOOKING -J&K — SLOT BOOKED SUCCESSFULLY!\nConfirmed by Sarathi appointment receipt.\n'+detail;
       const history=[{time:Date.now(),kind:'BOOKING_SUCCESS',message:body},...settings.history].slice(0,100);
       await chrome.storage.local.set({history,lastAlertTime:Date.now()});
       return {delivery:Promise.allSettled([
@@ -183,11 +184,11 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
     const now=Date.now();const stored=await chrome.storage.local.get(['alertKey','alertTime']);
     if(stored.alertKey===key && now-(stored.alertTime||0)<30*60*1000)return;
     await chrome.storage.local.set({alertKey:key,alertTime:now,alarmActive:true,alarmMessage:kind==='LMV_AVAILABLE'?'LMV slot detected':'Booking calendar detected'});
-    const body=kind==='BOTH_AVAILABLE'?'🚨 SARATHI ANANTNAG: LMV and MCWG quota detected! Check the app NOW.':kind==='MCWG_AVAILABLE'?'🚨 SARATHI ANANTNAG: MCWG quota detected! Check the app NOW.':kind==='LMV_AVAILABLE'?`🚨 SARATHI ANANTNAG: LMV quota ${msg.quota} detected! Check the app NOW.`:kind==='GREEN_DATE'?'🟢 SARATHI ANANTNAG: Green date detected. Check the app NOW; LMV quota not yet confirmed.':'📅 SARATHI ANANTNAG: Booking calendar detected. Check the app NOW; slot not yet confirmed.';
+    const body=kind==='BOTH_AVAILABLE'?'🚨 MPARIVAHAN SLOT BOOKING -J&K: LMV and MCWG quota detected! Check the app NOW.':kind==='MCWG_AVAILABLE'?'🚨 MPARIVAHAN SLOT BOOKING -J&K: MCWG quota detected! Check the app NOW.':kind==='LMV_AVAILABLE'?`🚨 MPARIVAHAN SLOT BOOKING -J&K: LMV quota ${msg.quota} detected! Check the app NOW.`:kind==='GREEN_DATE'?'🟢 MPARIVAHAN SLOT BOOKING -J&K: Green date detected. Check the app NOW; LMV quota not yet confirmed.':'📅 MPARIVAHAN SLOT BOOKING -J&K: Booking calendar detected. Check the app NOW; slot not yet confirmed.';
     const hist=(await chrome.storage.local.get({history:[]})).history;hist.unshift({time:now,kind,message:body});await chrome.storage.local.set({history:hist.slice(0,100),lastAlertTime:now});
     const settings=await chrome.storage.local.get({desktopEnabled:true,telegramEnabled:true});
     return {delivery:Promise.allSettled([
-      settings.desktopEnabled?showDesktopNotification({type:'basic',iconUrl:'icon.png',title:'Sarathi Anantnag Alert',message:body}):Promise.resolve(),
+      settings.desktopEnabled?showDesktopNotification({type:'basic',iconUrl:'icon.png',title:'MPARIVAHAN SLOT BOOKING -J&K Alert',message:body}):Promise.resolve(),
       settings.telegramEnabled?sendTelegram(body+'\n'+'https://sarathi.parivahan.gov.in/').then(()=>chrome.storage.local.set({telegramError:''})).catch(e=>chrome.storage.local.set({telegramError:String(e.message||e)})):Promise.resolve()
     ])}; 
   };
@@ -243,7 +244,7 @@ chrome.alarms.onAlarm.addListener(async alarm=>{
  if(!response?.ok && tab.status==='complete' && d.running && !d.calendarLock && !d.bookingClickIssued){
    try{
      // Host permission is required. This cannot bypass Chrome's user site-access controls.
-     await chrome.scripting.executeScript({target:{tabId:tab.id},files:['booking-rules.js','content.js']});
+     await chrome.scripting.executeScript({target:{tabId:tab.id},files:globalThis.PROFILE_MODE?['profile-guard.js','booking-rules.js','content.js']:['booking-rules.js','content.js']});
      if(!await current())return;
      const restored=await chrome.tabs.sendMessage(tab.id,{type:'SARATHI_RECOVER',sessionId:d.monitorSessionId});
      if(restored?.ok){await update({healthMisses:0,lastStatus:'Content script reattached; verifying monitoring progress'});return;}
@@ -272,7 +273,7 @@ async function reportMonitorFailure(expected,code,reason,eventTime=0){
   if(eventTime && (d.navigationSessionId!==d.monitorSessionId || eventTime<d.navigationLastAt || eventTime<=d.navigationCompletedAt))return null;
   const key=d.monitorSessionId+':'+code;
   if(d.monitorFailureKey===key)return null;
-  const body='⚠️ SARATHI ANANTNAG — '+reason+(d.bookingClickIssued?' BOOK SLOT outcome may be uncertain; inspect manually. Submission lock retained.':'');
+  const body='⚠️ MPARIVAHAN SLOT BOOKING -J&K — '+reason+(d.bookingClickIssued?' BOOK SLOT outcome may be uncertain; inspect manually. Submission lock retained.':'');
   await chrome.storage.local.set({running:false,successWatch:false,autoBookingEnabled:false,nextRetryAt:0,monitorLoopActive:false,healthMisses:0,monitorFailureKey:key,monitorFailureAt:Date.now(),bookingStage:'MANUAL REVIEW REQUIRED',lastStatus:body,alarmActive:true,alarmMessage:reason,history:[{time:Date.now(),kind:code,message:body},...d.history].slice(0,100)});
   return {key,body,desktopEnabled:d.desktopEnabled,telegramEnabled:d.telegramEnabled};
  }));
@@ -319,3 +320,9 @@ chrome.tabs?.onRemoved?.addListener(tabId=>{
 
 // Optional guard permits historical standalone VM tests; Chrome always supplies importScripts.
 // telegram-status.js is loaded by the persistent Firefox background manifest.
+
+
+chrome.runtime.onMessage.addListener((m,sender,reply)=>{
+ if(m?.type!=='SECURE_PROXY'||!sender.url?.startsWith(browser.runtime.getURL(''))||!['SECURE_GET','SECURE_SET'].includes(m.request?.type))return;
+ nativeRequest(m.request).then(reply).catch(e=>reply({ok:false,error:String(e.message||e)}));return true;
+});

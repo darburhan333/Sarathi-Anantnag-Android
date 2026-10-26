@@ -6,13 +6,13 @@ android {
   applicationId 'com.sarathi.anantnag.gecko'
   minSdk 26
   targetSdk 34
-  versionCode 202
-  versionName '2.2-v11.47'
+  versionCode 300
+  versionName '3.0-v11.47'
   testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
   ndk { abiFilters(project.findProperty('testAbi') ?: 'arm64-v8a') }
  }
  packaging { jniLibs { useLegacyPackaging = true } }
- buildTypes { release { minifyEnabled false; signingConfig signingConfigs.debug } }
+ buildTypes { release { minifyEnabled true; shrinkResources true; proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro' } }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
 dependencies {
@@ -21,3 +21,7 @@ dependencies {
  androidTestImplementation 'androidx.test:rules:1.6.1'
  androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 }
+
+
+tasks.register('prepareProfiles', Exec) { commandLine 'python3', rootProject.file('scripts/prepare-profiles.py') }
+tasks.named('preBuild').configure { dependsOn 'prepareProfiles' }

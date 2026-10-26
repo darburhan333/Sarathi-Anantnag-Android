@@ -1,4 +1,5 @@
-(() => {
+(async () => {
+  if(globalThis.profileAllowed && !await globalThis.profileAllowed)return;
   // Retain the legacy sentinel only to prevent duplicate injection over an old page.
   if (window.__sarathiAnantnagLoaded || window.__sarathiAnantnagV33ProLoaded) return;
   window.__sarathiAnantnagLoaded = true;
@@ -110,7 +111,7 @@
     if(ms>=WAIT_MS) try { await chrome.storage.local.set({nextRetryAt:end}); }catch(_){}
     while (Date.now() < end) {
       if (!(await isRunning(generation))) return false;
-      await sleep(Math.min(1000, end-Date.now()));
+      await sleep(Math.min(8000, end-Date.now()));
     }
     if(ms>=WAIT_MS && (generation===null||generation===loopGeneration))try{await chrome.storage.local.set({nextRetryAt:0});}catch(_){}
     return await isRunning(generation);
@@ -681,6 +682,7 @@
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if(message?.type==='SARATHI_PROFILE_QUERY'){sendResponse({ok:true});return false;}
     if (message?.type === 'SARATHI_HEALTH_PING') {
       (async()=>{
         const owner=await confirmOwnership();
@@ -763,3 +765,4 @@
     if(await confirmOwnership() && cachedRunning && !calendarLocked && !sessionLocked){localStop=false;processLoop();}
   }).catch(() => {});
 })();
+

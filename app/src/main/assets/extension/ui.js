@@ -4,7 +4,7 @@ const time=t=>t?new Date(t).toLocaleTimeString():'—';
 document.querySelectorAll('[data-panel]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-panel]').forEach(b=>b.classList.toggle('active',b===btn));['monitor','standby','telegram','alerts','history'].forEach(id=>{const el=$(id);if(el)el.classList.toggle('hidden',id!==btn.dataset.panel);});}));
 async function openWindow(){return;}
 on('openWindow',()=>openWindow().catch(e=>feedback(e.message)));
-async function target(){const d=await chrome.storage.local.get('monitoredTabId');const tabs=await chrome.tabs.query({url:'https://sarathi.parivahan.gov.in/*'});return tabs.find(t=>t.id===d.monitoredTabId)||tabs.find(t=>t.active)||tabs[0];}
+async function target(){const d=await chrome.storage.local.get('monitoredTabId');let tabs=await chrome.tabs.query({url:'https://sarathi.parivahan.gov.in/*'});if(globalThis.PROFILE_MODE){const matches=await Promise.all(tabs.map(async t=>{try{return (await chrome.tabs.sendMessage(t.id,{type:'SARATHI_PROFILE_QUERY'}))?.ok?t:null;}catch(_){return null;}}));tabs=matches.filter(Boolean);}return tabs.find(t=>t.id===d.monitoredTabId)||tabs.find(t=>t.active)||tabs[0];}
 let runBusy=false,runEpoch=0;
 async function run(start){
  if(start && runBusy)return;
@@ -29,7 +29,7 @@ async function runAction(start,epoch){
  const session=crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(36).slice(2);
  try{
    const armed=await chrome.runtime.sendMessage({type:'ANDROID_ARM'});if(!armed?.ok)throw Error(armed?.error||'Background service could not start');if(!valid())return;
-   await chrome.scripting.executeScript({target:{tabId:t.id},files:['booking-rules.js','content.js']});if(!valid())return;
+   await chrome.scripting.executeScript({target:{tabId:t.id},files:globalThis.PROFILE_MODE?['profile-guard.js','booking-rules.js','content.js']:['booking-rules.js','content.js']});if(!valid())return;
    await chrome.storage.local.set({monitoredTabId:t.id,monitorSessionId:session,monitorStartedAt:Date.now(),sessionAttempts:0,sessionCounterId:session,navigationSessionId:'',navigationLastAt:0,navigationCompletedAt:0,monitorFailureKey:'',monitorFailureAt:0,failureDesktopError:'',failureTelegramError:'',successWatch:true,calendarLock:false,sessionLock:false,bookingStage:'MONITORING',bookingClickIssued:false,bookingReservationId:'',bookingReservationDocument:'',bookingDispatchStarted:false,bookingSubmittedAt:0,bookingResponseWarned:false,quotaAlertKey:'',scanMonth:'',scanChecked:[],scanFallback:null,scanPending:'',scanPendingAt:0,scanReturning:false,warningKind:'',warningAt:0,warningEvents:[],calendarAlertKey:'',calendarAlertAt:0,running:true,lastStatus:'Connecting to Sarathi…',heartbeatAt:0,smsAlertKey:'',healthMisses:0,healthWarningAt:0,lastProceedGateAt:0,monitorProgressAt:0,monitorLoopActive:false,nextRetryAt:0});
    if(!valid()){await chrome.storage.local.set({running:false,successWatch:false,nextRetryAt:0});return;}
    const response=await chrome.tabs.sendMessage(t.id,{type:'SARATHI_START',sessionId:session});if(!valid())return;
@@ -87,7 +87,7 @@ function applyViewChanges(changes){
     else delete viewState[key];
   }
   viewEpoch++;
-  paintView();
+  if(!document.hidden)paintView();
 }
 function paintView(){
   if(!viewState)return;
@@ -127,13 +127,13 @@ async function refresh(){
   } else if(epoch===viewEpoch){
     Object.assign(viewState,data);
   }
-  paintView();
+  if(!document.hidden)paintView();
 }
 function tickStatus(){
   // No storage read: Chrome throttles background timers; focus handlers restore immediately.
-  paintView();
+  if(!document.hidden)paintView();
 }
-async function init(){const d=await chrome.storage.local.get({chatId:'',chatId2:'',botToken:'',telegramEnabled:true,desktopEnabled:true,soundEnabled:true,volume:85,autoBookingEnabled:false});$('autoBookingEnabled').checked=!!d.autoBookingEnabled;if($('chatId'))$('chatId').value=d.chatId||PRIMARY_CHAT_ID;if($('chatId2'))$('chatId2').value=d.chatId2||'';if($('botToken'))$('botToken').value=d.botToken||'';if($('tokenStatus'))$('tokenStatus').textContent='Bot token is stored locally in this app, not hard-coded.';if($('telegramEnabled'))$('telegramEnabled').checked=d.telegramEnabled;$('desktopEnabled').checked=d.desktopEnabled;$('soundEnabled').checked=d.soundEnabled;$('volume').value=d.volume;$('volumeValue').textContent=d.volume+'%';refresh();}
+async function init(){if(globalThis.APPLICANT>1){const x=$('telegramStatusEnabled');if(x){x.disabled=true;x.title='Configure status commands under Applicant 1';}}const d=await chrome.storage.local.get({chatId:'',chatId2:'',botToken:'',telegramEnabled:true,desktopEnabled:true,soundEnabled:true,volume:85,autoBookingEnabled:false});$('autoBookingEnabled').checked=!!d.autoBookingEnabled;if($('chatId'))$('chatId').value=d.chatId||PRIMARY_CHAT_ID;if($('chatId2'))$('chatId2').value=d.chatId2||'';if($('botToken'))$('botToken').value=d.botToken||'';if($('tokenStatus'))$('tokenStatus').textContent='Credentials use Android Keystore encryption and are shared by all applicants.';if($('telegramEnabled'))$('telegramEnabled').checked=d.telegramEnabled;$('desktopEnabled').checked=d.desktopEnabled;$('soundEnabled').checked=d.soundEnabled;$('volume').value=d.volume;$('volumeValue').textContent=d.volume+'%';refresh();}
 chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'){if(changes.androidStopEpoch)runEpoch++;applyViewChanges(changes);}});
 // Chrome may pause timers in background windows: update immediately on return.
 window.addEventListener('focus',()=>{refresh().catch(()=>{});});
@@ -141,6 +141,9 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh().
 // Tab buttons remain synchronous; refresh locally, with no network or storage wait.
 document.querySelectorAll('[data-panel]').forEach(btn=>btn.addEventListener('click',()=>tickStatus()));
 init().then(()=>{if(chrome.runtime?.sendMessage)return chrome.runtime.sendMessage({type:'ANDROID_UI_READY'});}).catch(e=>feedback('Monitor setup failed: '+e.message));
-setInterval(tickStatus,500);
+setInterval(()=>{if(!document.hidden)tickStatus();},1000);
 
 $('telegramStatusEnabled')?.addEventListener('change',async()=>{await chrome.storage.local.set({telegramStatusEnabled:$('telegramStatusEnabled').checked,telegramStatusSince:Date.now(),telegramStatusError:''});refresh();});
+
+
+if(globalThis.PROFILE_MODE){document.title='Applicant '+globalThis.APPLICANT+' · MPARIVAHAN SLOT BOOKING -J&K';const heading=document.querySelector('h1,h2');if(heading)heading.textContent+=' · Applicant '+globalThis.APPLICANT;}

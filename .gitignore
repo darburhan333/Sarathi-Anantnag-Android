@@ -1,0 +1,11 @@
+.gradle/
+**/build/
+**/__pycache__/
+app/src/main/assets/extension2/
+app/src/main/assets/extension3/
+app/src/debug/assets/extension2/
+app/src/debug/assets/extension3/
+*.jks
+*.keystore
+*.p12
+local.properties

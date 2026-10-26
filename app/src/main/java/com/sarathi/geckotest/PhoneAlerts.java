@@ -6,7 +6,7 @@ import android.media.*;
 import android.os.*;
 
 final class PhoneAlerts {
- private final Context activity;
+ private final Context activity;private final int profile;boolean isRepeating(){return repeating;}
  private final Handler handler=new Handler(Looper.getMainLooper());
  private ToneGenerator tone;
  private final Vibrator vibrator;
@@ -16,7 +16,7 @@ final class PhoneAlerts {
   if(!repeating)return;
   beep();handler.postDelayed(this,1800);
  }};
- PhoneAlerts(Context a){
+ PhoneAlerts(Context a,int number){profile=number;
   activity=a;vibrator=(Vibrator)a.getSystemService(Context.VIBRATOR_SERVICE);
   NotificationChannel channel=new NotificationChannel("sarathi-alerts","Slot alerts",NotificationManager.IMPORTANCE_HIGH);
   channel.setDescription("Calendar, booking and monitoring alerts");
@@ -42,9 +42,10 @@ final class PhoneAlerts {
   NotificationManager nm=activity.getSystemService(NotificationManager.class);
   if(!nm.areNotificationsEnabled())throw new IllegalStateException("Allow Sarathi notifications in Android Settings");
   PendingIntent open=PendingIntent.getActivity(activity,0,new Intent(activity,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-  Notification n=new Notification.Builder(activity,"sarathi-alerts").setSmallIcon(android.R.drawable.ic_dialog_info)
-   .setContentTitle(title).setContentText(message).setStyle(new Notification.BigTextStyle().bigText(message))
+  Notification n=new Notification.Builder(activity,"sarathi-alerts").setSmallIcon(R.drawable.ic_notification)
+   .setContentTitle("Applicant "+profile+" · "+title).setContentText(message).setStyle(new Notification.BigTextStyle().bigText(message))
    .setCategory(Notification.CATEGORY_ALARM).setContentIntent(open).setAutoCancel(true).build();
-  nm.notify(1001,n);
+  nm.notify(1100+profile,n);
  }
 }
+

@@ -45,6 +45,8 @@ final class BrowserEngine {
     private static GeckoRuntime sharedRuntime;
     final GeckoRuntime runtime;
     final MonitorService service;
+    final MonitorRun run;final int profile;final String extensionId,assetPath;
+    final java.util.Map<GeckoSession,Boolean> activeStates=new java.util.HashMap<>();
     MainActivity activity;
     GeckoSession current, monitorSession;
     final ArrayList<GeckoSession> sessions=new ArrayList<>();
@@ -61,8 +63,9 @@ final class BrowserEngine {
     volatile String smokeResult="",smokePhase="";
     volatile boolean monitorReady;
     JSONObject lastState=new JSONObject();
-    BrowserEngine(MonitorService owner){
-      service=owner;alerts=new PhoneAlerts(owner);
+    BrowserEngine(MonitorService owner,int number){
+      service=owner;profile=number;run=new MonitorRun(this);alerts=new PhoneAlerts(owner,number);
+      extensionId=number==1?"sarathi-android@burhan.local":"sarathi-applicant"+number+"@burhan.local";assetPath=number==1?"extension/":"extension"+number+"/";
       if(sharedRuntime==null)sharedRuntime=GeckoRuntime.create(owner.getApplicationContext());
       runtime=sharedRuntime;
       GeckoSession first=newSession();first.open(runtime);showSession(first);first.loadUri(HOME);
@@ -78,8 +81,8 @@ final class BrowserEngine {
     }
     void activate(){
       for(GeckoSession s:sessions)if(s.isOpen()){
-        boolean active=service.armed || (foreground&&(s==current||s==monitorSession));
-        s.setActive(active);s.setPriorityHint(active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT);
+        boolean active=(run.armed&&s==current)||(foreground&&(s==current||(s==monitorSession&&showingMonitor)));
+        if(!java.util.Objects.equals(activeStates.get(s),active)){s.setActive(active);s.setPriorityHint(active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT);activeStates.put(s,active);}
       }
     }
     void shutdown(){
@@ -91,7 +94,7 @@ final class BrowserEngine {
     }
     boolean promptAvailable(){
       if(activity!=null&&foreground&&!activity.isFinishing())return true;
-      service.fail("Website needs your input — unlock and reopen the app");return false;
+      run.fail("Website needs your input — unlock and reopen the app");return false;
     }
     private JSONObject json(String type){JSONObject o=new JSONObject();try{o.put("type",type);}catch(Exception ignored){}return o;}
     void command(String type){if(nativePort!=null)nativePort.postMessage(json(type));}
@@ -100,6 +103,7 @@ final class BrowserEngine {
       pendingId=String.valueOf(System.nanoTime());afterStop=action;
       JSONObject o=json("STOP");try{o.put("id",pendingId);}catch(Exception ignored){}nativePort.postMessage(o);
     }
+    void prepareMonitor(){if(!ready||monitorUrl==null||monitorSession!=null||destroyed)return;monitorSession=newSession();monitorSession.open(runtime);monitorSession.loadUri(monitorUrl);render();activate();}
     void toggleMonitor(){
       if(!ready||monitorUrl==null){log("Monitor is still starting");return;}
       if(monitorSession==null){
@@ -117,12 +121,12 @@ final class BrowserEngine {
         case "READY":
           monitorUrl=o.optString("monitorUrl");ready=true;foregroundState();
           log("Monitor connected in "+(SystemClock.elapsedRealtime()-startupAt)+" ms");
-          log("Monitor ready — open Sarathi, then MONITOR to start");break;
+          log("Monitor ready — open Sarathi, then MONITOR to start");if(firstPageRecorded)prepareMonitor();break;
         case "STATE":
           monitoring=o.optBoolean("running")||o.optBoolean("successWatch");
           lastState=o;
           monitorStatus=(monitoring?(foreground?"RUNNING · FOREGROUND":"RUNNING · BACKGROUND"):"STOPPED")+" · Session clicks "+o.optInt("sessionAttempts")+"\n"+o.optString("lastStatus");
-          service.onState(o);render();
+          run.onState(o);render();
           break;
         case "ACK":
           if(o.optString("id").equals(pendingId)&&afterStop!=null){Runnable r=afterStop;afterStop=null;r.run();}break;
@@ -130,9 +134,9 @@ final class BrowserEngine {
       }
     }
     private void installExtension(){
-      runtime.getWebExtensionController().ensureBuiltIn("resource://android/assets/extension/","sarathi-android@burhan.local").accept(ext->runOnUiThread(()->{
+      runtime.getWebExtensionController().ensureBuiltIn("resource://android/assets/"+assetPath,extensionId).accept(ext->runOnUiThread(()->{
         if(destroyed)return;
-        extension=ext;
+        extension=ext;for(GeckoSession session:sessions)bindProfileGuard(session);
         ext.setTabDelegate(new WebExtension.TabDelegate(){
           @Override public GeckoResult<GeckoSession> onNewTab(WebExtension source,WebExtension.CreateTabDetails details){
             return GeckoResult.fromValue(newSession());
@@ -144,7 +148,7 @@ final class BrowserEngine {
             port.setDelegate(new WebExtension.PortDelegate(){
               @Override public void onPortMessage(Object message,WebExtension.Port p){receive(message);}
               @Override public void onDisconnect(WebExtension.Port p){
-                if(nativePort==p){nativePort=null;ready=false;service.fail("Monitor connection lost — reopen and press START");}
+                if(nativePort==p){nativePort=null;ready=false;run.fail("Monitor connection lost — reopen and press START");}
               }
             });
           }
@@ -154,11 +158,14 @@ final class BrowserEngine {
               if(sender.session!=null)throw new IllegalArgumentException("Only background messages allowed");
               JSONObject m=(JSONObject)message;
               switch(m.optString("type")){
-                case "ARM":service.arm();break;
-                case "AUTHORIZE":if(!service.authorize())throw new IllegalStateException("Monitoring stopped");break;
+                case "ARM":run.arm();break;
+                case "SECURE_GET":result.put("values",SecureSettings.read(service));break;
+                case "SECURE_SET":SecureSettings.write(service,m.getJSONObject("values"));break;
+                case "SUMMARY":result.put("text",service.summary());break;
+                case "AUTHORIZE":if(!run.authorize())throw new IllegalStateException("Monitoring stopped");break;
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;
-                case "DISARM":service.disarm();break;
-                case "WAIT":return service.waitFor(m.optLong("ms"));
+                case "DISARM":run.disarm();break;
+                case "WAIT":return run.waitFor(m.optLong("ms"));
                 case "UI_READY":monitorReady=true;break;
                 case "SMOKE_RESULT":smokeResult=m.optString("result");break;
                 case "AUDIO":
@@ -201,9 +208,17 @@ final class BrowserEngine {
             if (c.items != null) flattenChoices(c.items, output); else output.add(c);
         }
     }
+    private void bindProfileGuard(GeckoSession session){
+      session.getWebExtensionController().setMessageDelegate(extension,new WebExtension.MessageDelegate(){
+        @Override public GeckoResult<Object> onMessage(String app,Object message,WebExtension.MessageSender sender){
+          boolean allowed=sender.session==session&&sessions.contains(session)&&message instanceof JSONObject&&"PROFILE".equals(((JSONObject)message).optString("type"));
+          return GeckoResult.fromValue((Object)(allowed?"{\"ok\":true}":"{\"ok\":false}"));
+        }
+      },"profile");
+    }
     private GeckoSession newSession() {
-        GeckoSession s = new GeckoSession();
-        sessions.add(s);
+        GeckoSession s = new GeckoSession(new org.mozilla.geckoview.GeckoSessionSettings.Builder().contextId("applicant-"+profile).build());
+        sessions.add(s);if(extension!=null)bindProfileGuard(s);
         s.setPromptDelegate(new PromptDelegate() {
             @Override public GeckoResult<PromptResponse> onAlertPrompt(GeckoSession session, AlertPrompt prompt){
                 if(!promptAvailable())return GeckoResult.fromValue(prompt.dismiss());
@@ -266,13 +281,14 @@ final class BrowserEngine {
             @Override public void onPageStop(GeckoSession session, boolean success) {
                 if (session == current) {
                     log(success?"Page ready":"Page could not load — try Reload");
-                    if(!firstPageRecorded){firstPageRecorded=true;logs.add("First page completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);}
+                    if(!firstPageRecorded){firstPageRecorded=true;logs.add("First page completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);service.handler.post(BrowserEngine.this::prepareMonitor);}
                 }
             }
         });
         s.setContentDelegate(new GeckoSession.ContentDelegate() {
-            @Override public void onCrash(GeckoSession session){service.fail("Browser page crashed — reopen and press START");}
-            @Override public void onKill(GeckoSession session){service.fail("Android closed the browser page — reopen and press START");}
+            @Override public void onCloseRequest(GeckoSession session){if(run.armed)run.fail("Applicant page closed — inspect before START");sessions.remove(session);activeStates.remove(session);session.close();if(current==session){current=null;for(GeckoSession other:sessions)if(other!=monitorSession&&other.isOpen()){showSession(other);break;}}render();}
+            @Override public void onCrash(GeckoSession session){run.fail("Browser page crashed — reopen and press START");}
+            @Override public void onKill(GeckoSession session){run.fail("Android closed the browser page — reopen and press START");}
             @Override public void onTitleChange(GeckoSession session, String title) {
                 if (session == current) log("Title: " + (title == null ? "" : title.substring(0, Math.min(title.length(), 150))));
             }
@@ -288,10 +304,11 @@ final class BrowserEngine {
             }
             @Override public GeckoResult<String> onLoadError(GeckoSession session, String uri, WebRequestError error) {
                 log("Navigation error at " + safeLocation(uri));
-                if(session==current)service.fail("Website navigation failed — check the connection");
+                if(session==current)run.fail("Website navigation failed — check the connection");
                 return null;
             }
         });
         return s;
     }
 }
+

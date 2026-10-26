@@ -42,14 +42,14 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private BrowserEngine engine;
-    private boolean bound,visible;
+    private boolean bound,visible;private final Button[] applicantButtons=new Button[3];
     private GeckoView view,monitorView;
     private TextView status,monitorStatus;
     private Button monitorButton;
     private final android.content.ServiceConnection connection=new android.content.ServiceConnection(){
       public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
         engine=((MonitorService.LocalBinder)binder).getService().engine;
-        engine.attach(MainActivity.this);engine.foreground=visible;engine.foregroundState();
+        engine.service.activity=MainActivity.this;engine.service.visible=visible;engine.attach(MainActivity.this);engine.foreground=visible;engine.foregroundState();
       }
       public void onServiceDisconnected(android.content.ComponentName name){engine=null;status.setText("Service disconnected — reopen the app");}
     };
@@ -68,11 +68,13 @@ public class MainActivity extends Activity {
       if(engine.monitorSession!=null&&monitorView.getSession()!=engine.monitorSession){monitorView.releaseSession();monitorView.setSession(engine.monitorSession);}
       monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);
       monitorButton.setText(engine.showingMonitor?"Website":"Monitor");
-      status.setText(engine.status);
-      monitorStatus.setText(engine.monitorStatus+engine.service.diagnostics());
+      for(int i=0;i<3;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];String label="Applicant "+(i+1)+(e!=null&&e.run.armed?" ●":"");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);applicantButtons[i].setAlpha(engine.profile==i+1?1f:0.65f);}
+      if(!status.getText().toString().equals(engine.status))status.setText(engine.status);
+      String text="Applicant "+engine.profile+" · "+engine.monitorStatus+engine.run.diagnostics();if(!monitorStatus.getText().toString().equals(text))monitorStatus.setText(text);
       if(visible&&engine.monitoring)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
       else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
+    void selectApplicant(int number){if(engine==null||engine.profile==number)return;MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
     private void batterySettings(){
       android.os.PowerManager pm=getSystemService(android.os.PowerManager.class);
       if(pm.isIgnoringBatteryOptimizations(getPackageName())){Toast.makeText(this,"Battery optimization exemption is enabled",Toast.LENGTH_LONG).show();return;}
@@ -114,11 +116,13 @@ public class MainActivity extends Activity {
         header.setPadding(dp(9),dp(6),dp(9),dp(8));
         root.addView(header);
         TextView heading = new TextView(this);
-        heading.setText("SARATHI ANANTNAG · 2.2 / V11.47\nDEVELOPED BY BURHAN MOHIDIN");
+        heading.setText("MPARIVAHAN SLOT BOOKING -J&K · 3.0\nDEVELOPED BY BURHAN MOHIDIN");
         heading.setTextColor(Color.rgb(89,225,167));heading.setTextSize(13);
         heading.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         heading.setPadding(dp(4),dp(3),dp(4),dp(8));
-        header.addView(heading);
+        android.widget.ImageView logo=new android.widget.ImageView(this);logo.setImageResource(R.drawable.ic_launcher_foreground);logo.setContentDescription("Driving test logo");
+        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));brand.addView(heading,new LinearLayout.LayoutParams(0,-2,1));header.addView(brand);
+        LinearLayout applicants=new LinearLayout(this);for(int i=0;i<3;i++){final int n=i+1;applicantButtons[i]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->selectApplicant(n));}header.addView(applicants);
         status = new TextView(this);
         status.setTextSize(12);
         status.setMaxLines(2);status.setTextColor(Color.rgb(157,177,201));
@@ -130,22 +134,22 @@ public class MainActivity extends Activity {
         monitorStatus.setText("Connecting monitor… website opens independently");header.addView(monitorStatus);
         LinearLayout controls=new LinearLayout(this);
         monitorButton=button(controls,"Monitor",Color.rgb(37,99,235),this::toggleMonitor);
-        button(controls,"STOP",Color.rgb(190,42,66),()->{if(engine!=null)engine.service.stopByUser();});
+        button(controls,"Stop this",Color.rgb(190,42,66),()->{if(engine!=null)engine.run.stopByUser();});
         button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});header.addView(controls);
         LinearLayout row = new LinearLayout(this);
         button(row, "Back", Color.rgb(56,73,102), () -> { if(engine!=null){if(engine.showingMonitor)toggleMonitor();else if(engine.current!=null&&engine.canGoBack)engine.navigate(()->engine.current.goBack());} });
         button(row, "Home", Color.rgb(4,120,87), () -> {if(engine!=null&&engine.current!=null)engine.navigate(()->engine.current.loadUri(BrowserEngine.HOME));});
         button(row, "Reload", Color.rgb(14,116,144), () -> {if(engine!=null&&engine.current!=null)engine.navigate(()->engine.current.reload());});
         button(row, "Copy log", Color.rgb(104,65,165), () -> {
-            String report = "App: Sarathi Anantnag 2.2 / V11.47\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
-                    + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":String.join("\n",engine.logs)+engine.service.diagnostics());
+            String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.0\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
+                    + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":String.join("\n",engine.logs)+engine.run.diagnostics());
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics", report));
             Toast.makeText(this, "Log copied", Toast.LENGTH_SHORT).show();
         });
         header.addView(row);
         LinearLayout battery=new LinearLayout(this);
-        button(battery,"Background / battery settings",Color.rgb(35,53,76),this::batterySettings);
+        button(battery,"Battery settings",Color.rgb(35,53,76),this::batterySettings);button(battery,"Stop all",Color.rgb(139,38,56),()->{if(engine!=null)engine.service.stopAll();});
         header.addView(battery);
         view = new GeckoView(this);
         FrameLayout pages=new FrameLayout(this);
@@ -163,16 +167,17 @@ public class MainActivity extends Activity {
       else if(engine!=null&&engine.current!=null&&engine.canGoBack)engine.navigate(()->engine.current.goBack());
       else super.onBackPressed();
     }
-    @Override protected void onResume(){super.onResume();visible=true;if(engine!=null){engine.foreground=true;engine.foregroundState();}}
-    @Override protected void onPause(){visible=false;if(engine!=null){engine.foreground=false;engine.foregroundState();}super.onPause();}
+    @Override protected void onResume(){super.onResume();visible=true;if(engine!=null){engine.service.activity=this;engine.service.visible=true;engine.foreground=true;engine.foregroundState();}}
+    @Override protected void onPause(){visible=false;if(engine!=null){engine.service.visible=false;engine.foreground=false;engine.foregroundState();}super.onPause();}
     @Override protected void onStop(){
       super.onStop();
       if(engine!=null){BrowserEngine e=engine;e.service.handler.post(e::activate);}
     }
     @Override protected void onDestroy(){
       view.releaseSession();monitorView.releaseSession();
-      if(engine!=null){engine.detach(this);engine.activate();}
+      if(engine!=null){engine.detach(this);if(engine.service.activity==this)engine.service.activity=null;engine.activate();}
       if(bound)unbindService(connection);
       super.onDestroy();
     }
 }
+
