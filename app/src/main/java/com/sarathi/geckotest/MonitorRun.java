@@ -7,11 +7,19 @@ final class MonitorRun {
  private long recoveryProgressValue=-1;
  private int generation;private String recoveryId="",lastReason="Ready";
  private final Map<GeckoResult<Object>,Runnable> waits=new IdentityHashMap<>();
+ private final Set<GeckoResult<Object>> authorizations=Collections.newSetFromMap(new IdentityHashMap<>());
  private final Set<GeckoResult<Object>> delayed=Collections.newSetFromMap(new IdentityHashMap<>());
  MonitorRun(BrowserEngine e){engine=e;handler=e.service.handler;}
  boolean authorize(){
   if(armed&&SystemClock.elapsedRealtime()-lastTick>30000)recover("Native action scheduler delayed");
   return armed&&!recovering;
+ }
+ GeckoResult<Object> authorization(){
+  GeckoResult<Object> result=new GeckoResult<>();
+  if(authorize())result.complete("{\"ok\":true}");
+  else if(armed&&recovering)authorizations.add(result);
+  else result.complete("{\"ok\":false}");
+  return result;
  }
  void arm(){
   if(!engine.service.visible||engine.service.activity==null)throw new IllegalStateException("Open app before START");
@@ -26,6 +34,7 @@ final class MonitorRun {
   boolean wasArmed=armed;armed=false;sawRunning=false;recovering=false;generation++;
   if(wasArmed&&notifyBridge)engine.command("DISARMED");
   Map<GeckoResult<Object>,Runnable> pending=new IdentityHashMap<>(waits);waits.clear();delayed.clear();
+  ArrayList<GeckoResult<Object>> actions=new ArrayList<>(authorizations);authorizations.clear();for(GeckoResult<Object> r:actions)r.complete("{\"ok\":false}");
   for(Map.Entry<GeckoResult<Object>,Runnable> entry:pending.entrySet()){
    engine.service.clock.removeCallbacks(entry.getValue());handler.removeCallbacks(entry.getValue());entry.getKey().complete("{\"ok\":false,\"cancelled\":true}");
   }
@@ -74,6 +83,7 @@ final class MonitorRun {
   engine.service.record("Applicant "+engine.profile+" recovery verified; no navigation or booking replay");
   // Only already-pending waits continue. Page gates re-check ownership/document before actions.
   for(GeckoResult<Object> r:new ArrayList<>(delayed))finishWait(r,true);
+  ArrayList<GeckoResult<Object>> actions=new ArrayList<>(authorizations);authorizations.clear();for(GeckoResult<Object> r:actions)r.complete("{\"ok\":true}");
  }
  void tick(){
   if(!armed)return;long now=SystemClock.elapsedRealtime(),gap=now-lastTick;lastTick=now;longestGap=Math.max(longestGap,gap);

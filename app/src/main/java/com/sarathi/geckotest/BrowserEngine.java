@@ -192,7 +192,7 @@ final class BrowserEngine {
                 case "SECURE_SET":SecureSettings.write(service,m.getJSONObject("values"));break;
                 case "SUMMARY":result.put("text",service.summary());break;
                 case "RESTORE":result.put("armed",run.armed);break;
-                case "AUTHORIZE":if(!run.authorize())throw new IllegalStateException("Monitoring stopped");break;
+                case "AUTHORIZE":return run.authorization();
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;
                 case "DISARM":run.disarm();break;
                 case "WAIT":return run.waitFor(m.optLong("ms"));

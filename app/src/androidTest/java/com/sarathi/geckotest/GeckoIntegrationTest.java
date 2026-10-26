@@ -194,6 +194,9 @@ public class GeckoIntegrationTest {
   main(()->{
    service.arm();MonitorRun run=service.engine.run;run.recover("Injected scheduling stall");
    assertFalse("Recovery must revoke action permission",run.authorize());
+   java.util.concurrent.atomic.AtomicBoolean resolved=new java.util.concurrent.atomic.AtomicBoolean();
+   run.authorization().accept(value->{assertTrue(value.toString().contains("false"));resolved.set(true);});
+   assertFalse("Action must await recovery",resolved.get());
    run.recovered("stale-other-run",true);assertTrue("Stale reply must not resume",run.recovering);
    run.stopByUser();run.recovered("stale-other-run",true);assertFalse("STOP must win over recovery",run.armed);
   });
