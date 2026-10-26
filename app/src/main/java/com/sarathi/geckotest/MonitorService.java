@@ -3,8 +3,10 @@ import android.app.*;import android.content.*;import android.content.pm.ServiceI
 /** Shared process owner. Each applicant has independent MonitorRun and browser storage. */
 public final class MonitorService extends Service {
  final Handler handler=new Handler(Looper.getMainLooper());
- final BrowserEngine[] profiles=new BrowserEngine[3];BrowserEngine engine;MainActivity activity;boolean visible;
- private boolean promoted,destroying;private long renewAt,stopAfter,lastNotification;
+ static final int PROFILE_COUNT=6;
+ final BrowserEngine[] profiles=new BrowserEngine[PROFILE_COUNT];BrowserEngine engine;MainActivity activity;boolean visible;
+ private boolean promoted,destroying;
+ final String processId=java.util.UUID.randomUUID().toString().substring(0,8);private long renewAt,stopAfter,lastNotification;
  private PowerManager.WakeLock wake;private ConnectivityManager connectivity;private Network network;
  private final IBinder binder=new LocalBinder();
  final class LocalBinder extends Binder{MonitorService getService(){return MonitorService.this;}}
@@ -17,11 +19,11 @@ public final class MonitorService extends Service {
   getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("sarathi-monitor","Background monitoring",NotificationManager.IMPORTANCE_LOW));
   wake=getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"MParivahan:monitor");wake.setReferenceCounted(false);
   connectivity=getSystemService(ConnectivityManager.class);network=connectivity.getActiveNetwork();connectivity.registerDefaultNetworkCallback(networks);
-  engine=profile(1);
+  engine=profile(1);record("Service created; process="+processId);
   if(Build.VERSION.SDK_INT>=30)for(ApplicationExitInfo i:getSystemService(ActivityManager.class).getHistoricalProcessExitReasons(getPackageName(),0,3))engine.log("Previous process exit reason="+i.getReason());
   handler.post(tick);
  }
- BrowserEngine profile(int number){int i=number-1;if(i<0||i>2)throw new IllegalArgumentException("Invalid applicant");
+ BrowserEngine profile(int number){int i=number-1;if(i<0||i>=PROFILE_COUNT)throw new IllegalArgumentException("Invalid applicant");
   if(profiles[i]==null){profiles[i]=new BrowserEngine(this,number);if(getSharedPreferences("monitor",0).getBoolean("wasRunning"+number,false)){
    profiles[i].log("Previous run interrupted — inspect before START");try{profiles[i].alerts.notify("Run interrupted","Inspect Sarathi and START manually");}catch(Exception ignored){}markRunning(number,false);
   }}return profiles[i];
@@ -61,9 +63,13 @@ public final class MonitorService extends Service {
   if(promoted){refreshForeground(false);if(stopAfter>0&&now>=stopAfter&&!alerting()&&activeCount()==0){promoted=false;if(wake.isHeld())wake.release();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}}
   handler.postDelayed(this,2000);
  }};
- String summary(){StringBuilder out=new StringBuilder("MPARIVAHAN SLOT BOOKING -J&K\n");for(int i=0;i<3;i++){BrowserEngine e=profiles[i];out.append("Applicant ").append(i+1).append(": ");if(e==null)out.append("Not opened");else out.append(e.run.armed?"Monitoring":"Stopped").append(" · checks ").append(e.lastState.optInt("sessionAttempts")).append(" · ").append(e.lastState.optString("bookingStage","Ready")).append(e.run.diagnostics());out.append('\n');}return out.toString();}
+ String summary(){StringBuilder out=new StringBuilder("MPARIVAHAN SLOT BOOKING -J&K\n");for(int i=0;i<PROFILE_COUNT;i++){BrowserEngine e=profiles[i];out.append("Applicant ").append(i+1).append(": ");if(e==null)out.append("Not opened");else out.append(e.run.armed?"Monitoring":"Stopped").append(" · checks ").append(e.lastState.optInt("sessionAttempts")).append(" · ").append(e.lastState.optString("bookingStage","Ready")).append(e.run.diagnostics());out.append('\n');}return out.toString();}
  public boolean isArmedForTest(){return engine.run.armed;}public int attemptsForTest(){return engine.lastState.optInt("sessionAttempts");}
  void arm(){engine.run.arm();}org.mozilla.geckoview.GeckoResult<Object> waitFor(long ms){return engine.run.waitFor(ms);}
- @Override public void onDestroy(){destroying=true;handler.removeCallbacks(tick);connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();super.onDestroy();}
+ String diagnosticReport(){StringBuilder out=new StringBuilder("Process: "+processId+" · service promoted: "+promoted+" · wake lock: "+wake.isHeld()+"\n");out.append(getSharedPreferences("diagnostics",0).getString("events",""));for(BrowserEngine e:profiles)if(e!=null)out.append("\nApplicant ").append(e.profile).append(e.run.diagnostics()).append("\n").append(String.join("\n",e.logs));return out.toString();}
+ void record(String message){android.content.SharedPreferences p=getSharedPreferences("diagnostics",0);String old=p.getString("events","");String next=old+"\n"+new java.text.SimpleDateFormat("MM-dd HH:mm:ss",java.util.Locale.US).format(new java.util.Date())+" "+message;if(next.length()>12000)next=next.substring(next.length()-12000);p.edit().putString("events",next).apply();}
+ @Override public void onTaskRemoved(Intent rootIntent){record("Task removed; active applicants="+activeCount()+"; monitoring retained");super.onTaskRemoved(rootIntent);}
+ @Override public void onDestroy(){record("Service destroyed; active applicants="+activeCount());destroying=true;handler.removeCallbacks(tick);connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();super.onDestroy();}
 }
+
 

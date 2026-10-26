@@ -88,39 +88,39 @@ public class GeckoIntegrationTest {
    server.close();
   }
  }
- @Test public void threeApplicantIsolationAndBackground()throws Exception{
-  ServerSocket server=new ServerSocket(8765);java.util.concurrent.atomic.AtomicIntegerArray counts=new java.util.concurrent.atomic.AtomicIntegerArray(3);
+ @Test public void sixApplicantIsolationAndBackground()throws Exception{
+  ServerSocket server=new ServerSocket(8765);java.util.concurrent.atomic.AtomicIntegerArray counts=new java.util.concurrent.atomic.AtomicIntegerArray(6);
   Thread thread=new Thread(()->{while(!server.isClosed())try(Socket socket=server.accept()){
    socket.setSoTimeout(1000);BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream()));String line=reader.readLine();
-   if(line!=null)for(int i=0;i<3;i++)if(line.contains("/attempt?profile="+(i+1)+"&"))counts.incrementAndGet(i);
+   if(line!=null)for(int i=0;i<6;i++)if(line.contains("/attempt?profile="+(i+1)+"&"))counts.incrementAndGet(i);
    while((line=reader.readLine())!=null&&!line.isEmpty()){}
    byte[] body="<!doctype html><html><body>Profile test</body></html>".getBytes("UTF-8");OutputStream out=socket.getOutputStream();out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes("UTF-8"));out.write(body);out.flush();
   }catch(IOException ignored){}});thread.setDaemon(true);thread.start();
   try{
    MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
    while(a.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);MonitorService service=a.serviceForTest();assertNotNull(service);
-   main(()->{service.profile(2);service.profile(3);});end=System.currentTimeMillis()+60000;
-   while(System.currentTimeMillis()<end&&!(service.profiles[0].ready&&service.profiles[1].ready&&service.profiles[2].ready))Thread.sleep(200);
+   main(()->{for(int n=2;n<=6;n++)service.profile(n);});end=System.currentTimeMillis()+60000;
+   while(System.currentTimeMillis()<end&&!java.util.Arrays.stream(service.profiles).allMatch(e->e.ready))Thread.sleep(200);
    for(BrowserEngine e:service.profiles)assertTrue("Extension ready "+e.profile,e.ready);
    shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
    main(()->{for(BrowserEngine e:service.profiles){e.smokeResult="";e.command("MULTI_SMOKE");}});end=System.currentTimeMillis()+45000;
-   while(System.currentTimeMillis()<end&&(service.profiles[0].smokeResult.isEmpty()||service.profiles[1].smokeResult.isEmpty()||service.profiles[2].smokeResult.isEmpty()))Thread.sleep(250);
+   while(System.currentTimeMillis()<end&&java.util.Arrays.stream(service.profiles).anyMatch(e->e.smokeResult.isEmpty()))Thread.sleep(250);
    for(BrowserEngine e:service.profiles){assertTrue("Applicant "+e.profile+": "+e.smokeResult,e.smokeResult.startsWith("PASS:"));System.out.println("Applicant "+e.profile+" "+e.smokeResult);}
-   int[] before={counts.get(0),counts.get(1),counts.get(2)};shell("input keyevent KEYCODE_HOME");shell("input keyevent KEYCODE_SLEEP");
+   int[] before=new int[6];for(int i=0;i<6;i++)before[i]=counts.get(i);shell("input keyevent KEYCODE_HOME");shell("input keyevent KEYCODE_SLEEP");
    // Reproduce GeckoView deactivation after detachment, without changing our cached state.
    main(()->{for(BrowserEngine e:service.profiles)for(org.mozilla.geckoview.GeckoSession page:e.sessions)if(page!=e.monitorSession&&page.isOpen())page.setActive(false);});
    for(int minute=1;minute<=5;minute++){
     Thread.sleep(60000);
-    for(int i=0;i<3;i++){assertTrue("Locked HTTP applicant "+i+" minute "+minute,counts.get(i)>before[i]);assertTrue("Run alive applicant "+i,service.profiles[i].run.armed);before[i]=counts.get(i);}
-    System.out.println("PASS all three applicants locked, minute "+minute+": "+counts);
+    for(int i=0;i<6;i++){assertTrue("Locked HTTP applicant "+i+" minute "+minute,counts.get(i)>before[i]);assertTrue("Run alive applicant "+i,service.profiles[i].run.armed);before[i]=counts.get(i);}
+    System.out.println("PASS all six applicants locked, minute "+minute+": "+counts);
    }
    shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");Thread.sleep(120000);
-   for(int i=0;i<3;i++)assertTrue("Doze HTTP applicant "+i,counts.get(i)>before[i]);
+   for(int i=0;i<6;i++)assertTrue("Doze HTTP applicant "+i,counts.get(i)>before[i]);
    main(()->service.profiles[1].run.stopByUser());Thread.sleep(1500);int stopped=counts.get(1),first=counts.get(0),third=counts.get(2);Thread.sleep(22000);
    assertEquals("Applicant 2 must stop",stopped,counts.get(1));assertTrue("Applicant 1 continues",counts.get(0)>first);assertTrue("Applicant 3 continues",counts.get(2)>third);
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");shell("wm dismiss-keyguard");shell("am start -n com.sarathi.anantnag.gecko/com.sarathi.geckotest.MainActivity");Thread.sleep(1500);
    main(()->{a.selectApplicant(3);a.selectApplicant(1);service.stopAll();});assertEquals("STOP ALL",0,service.activeCount());
-   System.out.println("PASS three applicants: storage isolation, native ownership, locked and Doze HTTP, independent STOP, switching, STOP ALL");
+   System.out.println("PASS six applicants: storage isolation, native ownership, locked and Doze HTTP, independent STOP, switching, STOP ALL");
   }finally{shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");server.close();}
  }
 
@@ -139,5 +139,6 @@ public class GeckoIntegrationTest {
  }
 
 }
+
 
 

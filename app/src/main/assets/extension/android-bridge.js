@@ -16,7 +16,7 @@
   if(d.monitoredTabId!==null)await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_STOP'}).catch(()=>{});
  }
  async function command(m){
-  if(m.type==='DISARMED'){await chrome.storage.local.set({androidServiceReady:false});await stop('Background service stopped — press START to begin again');return;}
+  if(m.type==='DISARMED'){await chrome.storage.local.set({androidServiceReady:false});const d=await chrome.storage.local.get({running:false,successWatch:false});if(d.running||d.successWatch)await stop('Background service stopped — press START to begin again');return;}
   if(m.type==='MULTI_SMOKE'&&typeof globalThis.runMultiSmoke==='function'){globalThis.runMultiSmoke();return;}
   if(m.type==='SMOKE_RUN' && typeof globalThis.runAndroidSmoke==='function'){globalThis.runAndroidSmoke();return;}
   if(m.type==='FOREGROUND'){
@@ -28,7 +28,7 @@
   else if(m.type==='FAILURE'){
    await chrome.storage.local.set({androidServiceReady:false});
    const d=await chrome.storage.local.get({monitorSessionId:'',monitoredTabId:null});
-   await reportMonitorFailure(d,'ANDROID_PAGE_ERROR','Browser page failed — inspect and restart manually');
+   await reportMonitorFailure(d,'ANDROID_PAGE_ERROR',m.reason||'Browser page failed — inspect and restart manually');
   }
   await state();
   if(m.id)port?.postMessage({type:'ACK',id:m.id});
@@ -52,7 +52,8 @@
   });
   port.onDisconnect.addListener(()=>{
    port=null;foreground=false;
-   chrome.storage.local.set({androidForeground:false,androidServiceReady:false}).then(()=>stop('App control disconnected — stopped')).catch(()=>{});
+   // A transient port reconnect does not erase a service-owned run. Native ownership
+   // still gates every action; the service fails closed if reconnect takes >15s.
    setTimeout(connect,1500);
   });
   port.postMessage({type:'READY',monitorUrl:browser.runtime.getURL('monitor.html')});
@@ -71,9 +72,10 @@
   return true;
  });
  // Reset runtime flags only; keep user settings, history, counts and uncertain booking lock.
- chrome.storage.local.set({running:false,successWatch:false,autoBookingEnabled:false,
+ (async()=>{const owner=await nativeRequest({type:'RESTORE'}).catch(()=>null);if(owner?.ok&&owner.armed){await chrome.storage.local.set({androidServiceReady:true});return;}await chrome.storage.local.set({running:false,successWatch:false,autoBookingEnabled:false,
   androidForeground:false,androidServiceReady:false,alarmActive:false,nextRetryAt:0,monitorLoopActive:false,
-  bookingStage:'STOPPED',lastStatus:'App opened — navigate to COV and press START'})
+  bookingStage:'STOPPED',lastStatus:'App opened — navigate to COV and press START'});})()
   .then(connect);
 })();
+
 

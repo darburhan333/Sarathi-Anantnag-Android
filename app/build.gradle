@@ -6,8 +6,8 @@ android {
   applicationId 'com.sarathi.anantnag.gecko'
   minSdk 26
   targetSdk 34
-  versionCode 300
-  versionName '3.0-v11.47'
+  versionCode 310
+  versionName '3.1-v11.47'
   testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
   ndk { abiFilters(project.findProperty('testAbi') ?: 'arm64-v8a') }
  }
@@ -25,3 +25,4 @@ dependencies {
 
 tasks.register('prepareProfiles', Exec) { commandLine 'python3', rootProject.file('scripts/prepare-profiles.py') }
 tasks.named('preBuild').configure { dependsOn 'prepareProfiles' }
+

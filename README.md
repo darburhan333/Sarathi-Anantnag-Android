@@ -1,3 +1,16 @@
+# V3.1 six-applicant update
+
+- Six lazily opened, isolated applicant containers and extension state stores.
+- Detach GeckoView displays on Activity pause; retain service-owned sessions and attach them again on resume, without navigating HOME.
+- Allow a transient native-port reconnect for up to 15 seconds while the same native service owns the run. Extension startup preserves running flags only if native RESTORE confirms an armed run; a new process never resumes automation silently.
+- Persist bounded lifecycle/failure diagnostics across process restarts. Copy log includes every opened applicant, native service/wake state, and process identity.
+- Preload the local monitor as soon as its bridge is ready, independently of remote website completion.
+- Larger cyan app title, smaller green developer credit, two rows of applicant tabs, status card below controls, and no Back/Reload toolbar actions.
+
+The user's recording demonstrates blank/loading delays and reset startup state, but does not establish whether the phone killed the process or a bridge restarted. These changes address confirmed code weaknesses; real-device background reliability remains unverified. Emulator fixtures cannot reproduce Infinix battery management or live Sarathi.
+
+## Prior V3.0 implementation record
+
 # MPARIVAHAN SLOT BOOKING -J&K 3.0
 
 Android app based on the GeckoView access test confirmed working on the user's Infinix phone. Uses GeckoView 158.0.20261021001945. User-started foreground service supports minimized and screen-off monitoring. Battery optimization exemption is required for reliable Doze operation; manufacturer restrictions still require device testing.
@@ -41,5 +54,6 @@ Run `gradle assembleRelease lintRelease`. `preBuild` generates Applicant 2/3 ext
 `python3 scripts/verify.py`: 8 suites against ported code, adapter tests, production permissions and syntax checks. All 15 original desktop suites also passed locally before and after porting. GitHub Actions builds/lints release and runs a separate x86_64 Android emulator integration test using a loopback fixture. The background fixture checks actual COV actions and loopback HTTP requests while minimized, locked, forced into Doze with exemption, and after Activity destruction/re-attachment. The three-applicant fixture also checks cookie, localStorage, IndexedDB and extension-state isolation, cross-profile message rejection, concurrent screen-off HTTP, independent Stop and Stop all. A separate smoke check installs the minified release and opens all three applicant bridges. These short emulator checks are not a 30-minute/2-hour real-device soak test. The fixture is debug-only; the release has no localhost host permission, cleartext traffic or smoke script.
 
 Offline/emulator tests do not prove live Sarathi behavior, phone alarm audibility, Telegram delivery, or booking success. Final phone validation remains necessary.
+
 
 

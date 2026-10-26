@@ -16,7 +16,7 @@ final class MonitorRun {
   if(armed)return;
   engine.service.beginForeground();
   armed=true;sawRunning=false;generation++;armedAt=lastBeat=lastProgress=lastTick=SystemClock.elapsedRealtime();longestGap=0;lastHeartbeatValue=lastProgressValue=0;
-  engine.service.markRunning(engine.profile,true);engine.activate();engine.service.refreshForeground(true);
+  engine.service.record("Applicant "+engine.profile+" START");engine.service.markRunning(engine.profile,true);engine.activate();engine.service.refreshForeground(true);
  }
  void disarm(){
   boolean wasArmed=armed;armed=false;sawRunning=false;generation++;
@@ -32,7 +32,7 @@ final class MonitorRun {
  void stopByUser(){if(engine!=null){engine.command("STOP");engine.command("SILENCE");engine.alerts.stop();}disarm();}
  void fail(String message){
   if(engine==null)return;
-  engine.log(message);engine.command("FAILURE");
+  engine.log(message);engine.service.record("Applicant "+engine.profile+" stopped: "+message);engine.command("FAILURE",message);
   try{engine.alerts.notify("Monitoring needs attention",message);engine.alerts.audio("TEST",true,85);}catch(Exception ignored){}
   disarm();
  }
@@ -62,7 +62,8 @@ final class MonitorRun {
  void tick(){
   if(armed){
    long now=SystemClock.elapsedRealtime(),gap=now-lastTick;lastTick=now;longestGap=Math.max(longestGap,gap);
-   if(gap>30000)fail("Phone suspended monitoring — check battery settings and press START");
+   if(engine.bridgeLostAt>0&&now-engine.bridgeLostAt>15000)fail("Monitor bridge did not reconnect within 15 seconds — open app");
+   else if(gap>30000)fail("Phone suspended monitoring — check battery settings and press START");
    else if(!sawRunning&&now-armedAt>25000)fail("Monitoring did not start — return to Sarathi and press START");
    else if(sawRunning&&now-lastBeat>60000)fail("No website heartbeat for 60 seconds — open Sarathi");
    else if(engine.lastState.optBoolean("running")&&!engine.lastState.optBoolean("calendarLock")&&now-lastProgress>60000)fail("No monitoring progress for 60 seconds — open Sarathi");
@@ -74,4 +75,5 @@ final class MonitorRun {
   return "\n"+(engine.foreground?"Foreground service":"Background service")+" · gap max "+(longestGap/1000)+"s · last page update "+((SystemClock.elapsedRealtime()-lastBeat)/1000)+"s ago";
  }
 }
+
 

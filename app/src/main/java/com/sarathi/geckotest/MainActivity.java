@@ -42,7 +42,7 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private BrowserEngine engine;
-    private boolean bound,visible;private final Button[] applicantButtons=new Button[3];
+    private boolean bound,visible;private final Button[] applicantButtons=new Button[MonitorService.PROFILE_COUNT];
     private GeckoView view,monitorView;
     private TextView status,monitorStatus;
     private Button monitorButton,batteryButton;
@@ -63,12 +63,12 @@ public class MainActivity extends Activity {
     private void command(String type){if(engine!=null)engine.command(type);}
     private void toggleMonitor(){if(engine!=null)engine.toggleMonitor();}
     void render(){
-      if(engine==null)return;
+      if(engine==null||!visible)return;
       if(engine.current!=null&&view.getSession()!=engine.current){view.releaseSession();view.setSession(engine.current);engine.activeStates.remove(engine.current);}
       if(engine.monitorSession!=null&&monitorView.getSession()!=engine.monitorSession){monitorView.releaseSession();monitorView.setSession(engine.monitorSession);engine.activeStates.remove(engine.monitorSession);}
       monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);
       monitorButton.setText(engine.showingMonitor?"Website":"Monitor");
-      for(int i=0;i<3;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];String label="Applicant "+(i+1)+(e!=null&&e.run.armed?" ●":"");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);applicantButtons[i].setAlpha(engine.profile==i+1?1f:0.65f);}
+      for(int i=0;i<MonitorService.PROFILE_COUNT;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];String label="Applicant "+(i+1)+(e!=null&&e.run.armed?" ●":"");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);applicantButtons[i].setAlpha(engine.profile==i+1?1f:0.65f);}
       if(!status.getText().toString().equals(engine.status))status.setText(engine.status);
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
@@ -119,33 +119,31 @@ public class MainActivity extends Activity {
         header.setPadding(dp(9),dp(6),dp(9),dp(8));
         root.addView(header);
         TextView heading = new TextView(this);
-        heading.setText("MPARIVAHAN SLOT BOOKING -J&K · 3.0\nDEVELOPED BY BURHAN MOHIDIN");
-        heading.setTextColor(Color.rgb(89,225,167));heading.setTextSize(13);
+        heading.setText("MPARIVAHAN SLOT BOOKING -J&K");
+        heading.setTextColor(Color.rgb(87,211,255));heading.setTextSize(19);
         heading.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         heading.setPadding(dp(4),dp(3),dp(4),dp(8));
         android.widget.ImageView logo=new android.widget.ImageView(this);logo.setImageResource(R.drawable.ic_launcher_foreground);logo.setContentDescription("Driving test logo");
-        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));brand.addView(heading,new LinearLayout.LayoutParams(0,-2,1));header.addView(brand);
-        LinearLayout applicants=new LinearLayout(this);for(int i=0;i<3;i++){final int n=i+1;applicantButtons[i]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->selectApplicant(n));}header.addView(applicants);
+        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.addView(heading);TextView developer=new TextView(this);developer.setText("V3.1 · DEVELOPED BY BURHAN MOHIDIN");developer.setTextSize(10);developer.setTextColor(Color.rgb(89,225,167));developer.setPadding(dp(4),0,0,dp(5));names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,-2,1));header.addView(brand);
+        for(int group=0;group<2;group++){LinearLayout applicants=new LinearLayout(this);for(int k=0;k<3;k++){final int n=group*3+k+1;applicantButtons[n-1]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->selectApplicant(n));}header.addView(applicants);}
         status = new TextView(this);
         status.setTextSize(12);
         status.setMaxLines(2);status.setTextColor(Color.rgb(157,177,201));
         status.setPadding(dp(4),0,dp(4),dp(3));
-        status.setText("Opening Parivahan…");header.addView(status);
+        status.setText("Opening Parivahan…");
         monitorStatus=new TextView(this);monitorStatus.setTextSize(12);monitorStatus.setMaxLines(3);
         monitorStatus.setTextColor(Color.rgb(223,234,248));
         monitorStatus.setPadding(dp(4),0,dp(4),dp(5));
-        monitorStatus.setText("Connecting monitor… website opens independently");header.addView(monitorStatus);
+        monitorStatus.setText("Connecting monitor… website opens independently");
         LinearLayout controls=new LinearLayout(this);
         monitorButton=button(controls,"Monitor",Color.rgb(37,99,235),this::toggleMonitor);
         button(controls,"Stop this",Color.rgb(190,42,66),()->{if(engine!=null)engine.run.stopByUser();});
         button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});header.addView(controls);
         LinearLayout row = new LinearLayout(this);
-        button(row, "Back", Color.rgb(56,73,102), () -> { if(engine!=null){if(engine.showingMonitor)toggleMonitor();else if(engine.current!=null&&engine.canGoBack)engine.navigate(()->engine.current.goBack());} });
         button(row, "Home", Color.rgb(4,120,87), () -> {if(engine!=null&&engine.current!=null)engine.navigate(()->engine.current.loadUri(BrowserEngine.HOME));});
-        button(row, "Reload", Color.rgb(14,116,144), () -> {if(engine!=null&&engine.current!=null)engine.navigate(()->engine.current.reload());});
         button(row, "Copy log", Color.rgb(104,65,165), () -> {
-            String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.0\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
-                    + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":String.join("\n",engine.logs)+engine.run.diagnostics()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
+            String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.1\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
+                    + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics", report));
             Toast.makeText(this, "Log copied", Toast.LENGTH_SHORT).show();
@@ -154,6 +152,9 @@ public class MainActivity extends Activity {
         LinearLayout battery=new LinearLayout(this);
         batteryButton=button(battery,"Background setup",Color.rgb(35,53,76),this::batterySettings);button(battery,"Stop all",Color.rgb(139,38,56),()->{if(engine!=null)engine.service.stopAll();});
         header.addView(battery);
+        LinearLayout details=new LinearLayout(this);details.setOrientation(LinearLayout.VERTICAL);details.setPadding(dp(9),dp(6),dp(9),dp(6));
+        GradientDrawable card=new GradientDrawable();card.setColor(Color.rgb(21,43,66));card.setCornerRadius(dp(10));details.setBackground(card);
+        status.setTextColor(Color.rgb(125,211,252));monitorStatus.setTextColor(Color.rgb(110,231,183));details.addView(status);details.addView(monitorStatus);header.addView(details);
         view = new GeckoView(this);
         FrameLayout pages=new FrameLayout(this);
         pages.addView(view,new FrameLayout.LayoutParams(-1,-1));
@@ -171,7 +172,7 @@ public class MainActivity extends Activity {
       else super.onBackPressed();
     }
     @Override protected void onResume(){super.onResume();visible=true;if(engine!=null){engine.service.activity=this;engine.service.visible=true;engine.foreground=true;engine.foregroundState();}}
-    @Override protected void onPause(){visible=false;if(engine!=null){engine.service.visible=false;engine.foreground=false;engine.foregroundState();}super.onPause();}
+    @Override protected void onPause(){view.releaseSession();monitorView.releaseSession();visible=false;if(engine!=null){engine.service.visible=false;engine.foreground=false;engine.activeStates.clear();engine.foregroundState();}super.onPause();}
     @Override protected void onStop(){
       super.onStop();
       if(engine!=null){BrowserEngine e=engine;e.service.handler.post(()->{e.activeStates.clear();e.activate();});}
@@ -183,5 +184,6 @@ public class MainActivity extends Activity {
       super.onDestroy();
     }
 }
+
 
 

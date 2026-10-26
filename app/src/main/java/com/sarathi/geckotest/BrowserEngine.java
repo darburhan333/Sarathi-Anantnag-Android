@@ -54,6 +54,7 @@ final class BrowserEngine {
     String status="Opening Parivahan…", monitorStatus="Connecting monitor…", monitorUrl;
     boolean canGoBack, foreground, showingMonitor, ready, monitoring, destroyed;
     boolean firstPageRecorded;
+    long bridgeLostAt;
     final long startupAt=SystemClock.elapsedRealtime();
     WebExtension.Port nativePort;
     WebExtension extension;
@@ -77,7 +78,7 @@ final class BrowserEngine {
     void detach(MainActivity a){if(activity==a)activity=null;}
     void foregroundState(){
       if(nativePort!=null){JSONObject o=json("FOREGROUND");try{o.put("active",foreground);}catch(Exception ignored){}nativePort.postMessage(o);}
-      activate();render();
+      render();activate();
     }
     void activate(){
       for(GeckoSession s:sessions)if(s.isOpen()){
@@ -101,7 +102,8 @@ final class BrowserEngine {
       run.fail("Website needs your input — unlock and reopen the app");return false;
     }
     private JSONObject json(String type){JSONObject o=new JSONObject();try{o.put("type",type);}catch(Exception ignored){}return o;}
-    void command(String type){if(nativePort!=null)nativePort.postMessage(json(type));}
+    void command(String type){command(type,null);}
+    void command(String type,String reason){if(nativePort!=null){JSONObject o=json(type);if(reason!=null)try{o.put("reason",reason);}catch(Exception ignored){}nativePort.postMessage(o);}}
     void navigate(Runnable action){
       if(nativePort==null){log("Monitor not connected — wait or restart app");return;}
       pendingId=String.valueOf(System.nanoTime());afterStop=action;
@@ -125,7 +127,7 @@ final class BrowserEngine {
         case "READY":
           monitorUrl=o.optString("monitorUrl");ready=true;foregroundState();
           log("Monitor connected in "+(SystemClock.elapsedRealtime()-startupAt)+" ms");
-          log("Monitor ready — open Sarathi, then MONITOR to start");if(firstPageRecorded)prepareMonitor();break;
+          log("Monitor ready — open Sarathi, then MONITOR to start");prepareMonitor();break;
         case "STATE":
           monitoring=o.optBoolean("running")||o.optBoolean("successWatch");
           lastState=o;
@@ -148,11 +150,11 @@ final class BrowserEngine {
         });
         ext.setMessageDelegate(new WebExtension.MessageDelegate(){
           @Override public void onConnect(WebExtension.Port port){
-            nativePort=port;
+            nativePort=port;bridgeLostAt=0;service.record("Applicant "+profile+" bridge connected");
             port.setDelegate(new WebExtension.PortDelegate(){
               @Override public void onPortMessage(Object message,WebExtension.Port p){receive(message);}
               @Override public void onDisconnect(WebExtension.Port p){
-                if(nativePort==p){nativePort=null;ready=false;run.fail("Monitor connection lost — reopen and press START");}
+                if(nativePort==p){nativePort=null;ready=false;if(!destroyed){bridgeLostAt=SystemClock.elapsedRealtime();service.record("Applicant "+profile+" bridge disconnected; waiting up to 15 seconds for reconnect");}}
               }
             });
           }
@@ -166,6 +168,7 @@ final class BrowserEngine {
                 case "SECURE_GET":result.put("values",SecureSettings.read(service));break;
                 case "SECURE_SET":SecureSettings.write(service,m.getJSONObject("values"));break;
                 case "SUMMARY":result.put("text",service.summary());break;
+                case "RESTORE":result.put("armed",run.armed);break;
                 case "AUTHORIZE":if(!run.authorize())throw new IllegalStateException("Monitoring stopped");break;
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;
                 case "DISARM":run.disarm();break;
@@ -315,5 +318,6 @@ final class BrowserEngine {
         return s;
     }
 }
+
 
 
