@@ -62,6 +62,7 @@ jobs:
           api-level: 36
           arch: x86_64
           profile: pixel_6
+          ram-size: 4096
           disable-animations: true
           script: bash scripts/emulator-test.sh
       - uses: actions/upload-artifact@v4

@@ -53,7 +53,7 @@ final class BrowserEngine {
     final ArrayList<String> logs=new ArrayList<>();
     String status="Opening Parivahan…", monitorStatus="Connecting monitor…", monitorUrl;
     boolean canGoBack, foreground, showingMonitor, ready, monitoring, destroyed;
-    boolean firstPageRecorded;
+    boolean firstPageRecorded;int installAttempts;
     long bridgeLostAt;
     final long startupAt=SystemClock.elapsedRealtime();
     WebExtension.Port nativePort;
@@ -163,6 +163,7 @@ final class BrowserEngine {
       }
     }
     private void installExtension(){
+      installAttempts++;
       runtime.getWebExtensionController().ensureBuiltIn("resource://android/assets/"+assetPath,extensionId).accept(ext->runOnUiThread(()->{
         if(destroyed)return;
         extension=ext;for(GeckoSession session:sessions)bindProfileGuard(session);
@@ -213,7 +214,7 @@ final class BrowserEngine {
             return GeckoResult.fromValue((Object)result.toString());
           }
         },"sarathi");
-      }),e->runOnUiThread(()->{ready=false;log("Monitor installation failed: "+e.getClass().getSimpleName());}));
+      }),e->runOnUiThread(()->{ready=false;log("Monitor installation failed: "+e.getClass().getSimpleName());if(!destroyed&&installAttempts<3)service.handler.postDelayed(()->{if(!destroyed)installExtension();},2000L*installAttempts);}));
     }
 
     private String safeLocation(String url) {

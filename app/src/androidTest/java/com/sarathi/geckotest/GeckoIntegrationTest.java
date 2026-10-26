@@ -104,13 +104,19 @@ public class GeckoIntegrationTest {
   try{
    MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
    while(a.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);MonitorService service=a.serviceForTest();assertNotNull(service);
-   main(()->{for(int n=2;n<=9;n++)service.profile(n);});end=System.currentTimeMillis()+60000;
-   while(System.currentTimeMillis()<end&&!java.util.Arrays.stream(service.profiles).allMatch(e->e.ready))Thread.sleep(200);
-   for(BrowserEngine e:service.profiles)assertTrue("Extension ready "+e.profile,e.ready);
    shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
-   main(()->{for(BrowserEngine e:service.profiles){e.smokeResult="";e.command("MULTI_SMOKE");}});end=System.currentTimeMillis()+45000;
-   while(System.currentTimeMillis()<end&&java.util.Arrays.stream(service.profiles).anyMatch(e->e.smokeResult.isEmpty()))Thread.sleep(250);
-   for(BrowserEngine e:service.profiles){assertTrue("Applicant "+e.profile+": "+e.smokeResult,e.smokeResult.startsWith("PASS:"));System.out.println("Applicant "+e.profile+" "+e.smokeResult);}
+   main(service::stopAll);
+   // Follow the real user flow: open and start one applicant at a time. All nine
+   // still run concurrently for every locked-screen and Doze assertion below.
+   for(int n=1;n<=9;n++){
+    final int number=n;main(()->a.selectApplicant(number));BrowserEngine e=service.profiles[n-1];
+    end=System.currentTimeMillis()+60000;while(!e.ready&&System.currentTimeMillis()<end)Thread.sleep(200);
+    assertTrue("Extension ready "+n,e.ready);
+    main(()->{e.smokeResult="";e.command("MULTI_SMOKE");});end=System.currentTimeMillis()+45000;
+    while(e.smokeResult.isEmpty()&&System.currentTimeMillis()<end)Thread.sleep(250);
+    assertTrue("Applicant "+n+": "+e.smokeResult,e.smokeResult.startsWith("PASS:"));
+    System.out.println("Applicant "+n+" "+e.smokeResult);
+   }
    int[] before=new int[9];for(int i=0;i<9;i++)before[i]=counts.get(i);shell("input keyevent KEYCODE_HOME");shell("input keyevent KEYCODE_SLEEP");
    // Reproduce GeckoView deactivation after detachment, without changing our cached state.
    main(()->{for(BrowserEngine e:service.profiles)for(org.mozilla.geckoview.GeckoSession page:e.sessions)if(page!=e.monitorSession&&page.isOpen())page.setActive(false);});
@@ -126,7 +132,7 @@ public class GeckoIntegrationTest {
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");shell("wm dismiss-keyguard");shell("am start -n com.sarathi.anantnag.gecko/com.sarathi.geckotest.MainActivity");Thread.sleep(1500);
    main(()->{a.selectApplicant(3);a.selectApplicant(1);service.stopAll();});assertEquals("STOP ALL",0,service.activeCount());
    System.out.println("PASS nine applicants: storage isolation, native ownership, locked and Doze HTTP, independent STOP, switching, STOP ALL");
-  }finally{shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");server.close();}
+  }finally{main(()->{MonitorService owner=activity.getActivity().serviceForTest();if(owner!=null)owner.stopAll();});shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");server.close();}
  }
 
  @Test public void encryptedSettingsRoundTrip()throws Exception{
