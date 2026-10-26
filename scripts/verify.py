@@ -16,4 +16,5 @@ with tempfile.TemporaryDirectory() as tmp:
  shutil.copytree(root/'scripts/content-tests',work/'tests')
  for test in sorted((work/'tests').glob('*.js')):
   subprocess.run(['node',str(test)],check=True)
-print('PASS: 8 ported-code suites, Android adapter checks, production host permissions and syntax')
+print('PASS: Ported-code suites, Android adapter checks, production host permissions and syntax')
+

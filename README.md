@@ -1,5 +1,7 @@
 # V3.1 six-applicant update
 
+Additional changes: HMV / Heavy Motor Vehicle COV checkbox selection by its own label; long-press each applicant to save or dial its separate encrypted phone number. Phone numbers toolbar control edits/removes numbers. ACTION_DIAL only; no automatic call or call permission. HMV changes cover COV selection; existing assisted quota booking rules remain unchanged.
+
 - Six lazily opened, isolated applicant containers and extension state stores.
 - Detach GeckoView displays on Activity pause; retain service-owned sessions and attach them again on resume, without navigating HOME.
 - Allow a transient native-port reconnect for up to 15 seconds while the same native service owns the run. Extension startup preserves running flags only if native RESTORE confirms an armed run; a new process never resumes automation silently.
@@ -54,6 +56,7 @@ Run `gradle assembleRelease lintRelease`. `preBuild` generates Applicant 2/3 ext
 `python3 scripts/verify.py`: 8 suites against ported code, adapter tests, production permissions and syntax checks. All 15 original desktop suites also passed locally before and after porting. GitHub Actions builds/lints release and runs a separate x86_64 Android emulator integration test using a loopback fixture. The background fixture checks actual COV actions and loopback HTTP requests while minimized, locked, forced into Doze with exemption, and after Activity destruction/re-attachment. The three-applicant fixture also checks cookie, localStorage, IndexedDB and extension-state isolation, cross-profile message rejection, concurrent screen-off HTTP, independent Stop and Stop all. A separate smoke check installs the minified release and opens all three applicant bridges. These short emulator checks are not a 30-minute/2-hour real-device soak test. The fixture is debug-only; the release has no localhost host permission, cleartext traffic or smoke script.
 
 Offline/emulator tests do not prove live Sarathi behavior, phone alarm audibility, Telegram delivery, or booking success. Final phone validation remains necessary.
+
 
 
 

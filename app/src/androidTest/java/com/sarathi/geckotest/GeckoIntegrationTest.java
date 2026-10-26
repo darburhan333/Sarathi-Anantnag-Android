@@ -138,7 +138,24 @@ public class GeckoIntegrationTest {
   }finally{for(String k:new String[]{"botToken","chatId","chatId2"})if(!original.has(k))original.put(k,"");SecureSettings.write(c,original);}
  }
 
+ @Test public void applicantPhonesAreSeparateAndEncrypted()throws Exception{
+  android.content.Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  String[] original=new String[6];for(int n=1;n<=6;n++)original[n-1]=ApplicantContacts.read(c,n);
+  try{
+   for(int n=1;n<=6;n++)ApplicantContacts.save(c,n,"+1 (202) 555-010"+n);
+   for(int n=1;n<=6;n++){
+    assertEquals("+1202555010"+n,ApplicantContacts.read(c,n));
+    assertFalse(c.getSharedPreferences("applicant-contacts",0).getString("phone"+n,"").contains("1202555010"));
+   }
+   ApplicantContacts.remove(c,2);assertEquals("",ApplicantContacts.read(c,2));assertEquals("+12025550101",ApplicantContacts.read(c,1));
+   for(String bad:new String[]{"","123","*123#","1234567,99","tel:1234567890","1234567890123456"}){
+    try{ApplicantContacts.normalize(bad);fail("Unsafe or invalid number accepted");}catch(IllegalArgumentException expected){}
+   }
+  }finally{for(int n=1;n<=6;n++){if(original[n-1].isEmpty())ApplicantContacts.remove(c,n);else ApplicantContacts.save(c,n,original[n-1]);}}
+ }
+
 }
+
 
 
 

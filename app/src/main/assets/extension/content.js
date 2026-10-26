@@ -152,7 +152,18 @@
     const proceed = document.getElementById('prcdbook');
     if (!form || !proceed || proceed.form !== form || !visible(proceed)) return null;
     const checkboxes = Array.from(form.querySelectorAll('input[type="checkbox"][name="iscov"]'));
-    const selected = checkboxes.filter(el => (el.value === '4' || el.value === '3') && !el.disabled && visible(el));
+    const selected = checkboxes.filter(el => {
+      if (el.disabled || !visible(el)) return false;
+      // Read this checkbox's own label, never the whole form (which mixes COVs).
+      const labels = Array.from(el.labels || []).map(label => label.textContent || '');
+      labels.push(el.getAttribute?.('aria-label') || '', el.getAttribute?.('title') || '');
+      for (let node=el.nextSibling; node && node.nodeType===3; node=node.nextSibling) labels.push(node.textContent || '');
+      const cell=el.closest?.('td');
+      if(cell && cell.querySelectorAll('input[type="checkbox"]').length===1) labels.push(cell.textContent || '');
+      const label=norm(labels.join(' '));
+      return label ? /\b(?:LMV|MCWG|HMV)\b|\bheavy\s+motor\s+vehicle\b/i.test(label)
+                   : (el.value === '4' || el.value === '3');
+    });
     if (!selected.length) return null;
     return {form, proceed, selected};
   }
@@ -766,4 +777,5 @@
     if(await confirmOwnership() && cachedRunning && !calendarLocked && !sessionLocked){localStop=false;processLoop();}
   }).catch(() => {});
 })();
+
 

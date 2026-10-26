@@ -78,6 +78,27 @@ public class MainActivity extends Activity {
       else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
     void selectApplicant(int number){if(engine==null||engine.profile==number)return;MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
+    private void applicantPhone(int number){
+      try{String phone=ApplicantContacts.read(this,number);
+        if(phone.isEmpty()){editApplicantPhone(number);return;}
+        startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));
+      }catch(android.content.ActivityNotFoundException e){Toast.makeText(this,"No dialer app is available",Toast.LENGTH_LONG).show();}
+      catch(Exception e){Toast.makeText(this,"Could not read phone number. Open Phone numbers to update it.",Toast.LENGTH_LONG).show();}
+    }
+    private void managePhones(){
+      String[] labels=new String[MonitorService.PROFILE_COUNT];for(int i=0;i<labels.length;i++)labels[i]="Applicant "+(i+1);
+      new AlertDialog.Builder(this).setTitle("Edit applicant phone number").setItems(labels,(dialog,index)->editApplicantPhone(index+1)).setNegativeButton("Cancel",null).show();
+    }
+    private void editApplicantPhone(int number){
+      android.widget.EditText input=new android.widget.EditText(this);input.setInputType(android.text.InputType.TYPE_CLASS_PHONE);input.setSingleLine(true);input.setHint("Phone number, e.g. +91…");
+      try{input.setText(ApplicantContacts.read(this,number));}catch(Exception ignored){}
+      AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Applicant "+number+" phone number").setMessage("Long-press this applicant to open the saved number in your dialer.").setView(input)
+       .setPositiveButton("Save",null).setNeutralButton("Remove",null).setNegativeButton("Cancel",null).create();
+      dialog.setOnShowListener(unused->{
+       dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{ApplicantContacts.save(this,number,input.getText().toString());dialog.dismiss();Toast.makeText(this,"Phone number saved",Toast.LENGTH_SHORT).show();}catch(IllegalArgumentException e){input.setError(e.getMessage());}catch(Exception e){input.setError("Could not save securely. Please try again.");}});
+       dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{try{ApplicantContacts.remove(this,number);dialog.dismiss();Toast.makeText(this,"Phone number removed",Toast.LENGTH_SHORT).show();}catch(Exception e){input.setError("Could not remove number. Please try again.");}});
+      });dialog.show();
+    }
     private void batterySettings(){
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
@@ -125,7 +146,7 @@ public class MainActivity extends Activity {
         heading.setPadding(dp(4),dp(3),dp(4),dp(8));
         android.widget.ImageView logo=new android.widget.ImageView(this);logo.setImageResource(R.drawable.ic_launcher_foreground);logo.setContentDescription("Driving test logo");
         LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.addView(heading);TextView developer=new TextView(this);developer.setText("V3.1 · DEVELOPED BY BURHAN MOHIDIN");developer.setTextSize(10);developer.setTextColor(Color.rgb(89,225,167));developer.setPadding(dp(4),0,0,dp(5));names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,-2,1));header.addView(brand);
-        for(int group=0;group<2;group++){LinearLayout applicants=new LinearLayout(this);for(int k=0;k<3;k++){final int n=group*3+k+1;applicantButtons[n-1]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->selectApplicant(n));}header.addView(applicants);}
+        for(int group=0;group<2;group++){LinearLayout applicants=new LinearLayout(this);for(int k=0;k<3;k++){final int n=group*3+k+1;applicantButtons[n-1]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->selectApplicant(n));applicantButtons[n-1].setOnLongClickListener(v->{applicantPhone(n);return true;});}header.addView(applicants);}
         status = new TextView(this);
         status.setTextSize(12);
         status.setMaxLines(2);status.setTextColor(Color.rgb(157,177,201));
@@ -148,6 +169,7 @@ public class MainActivity extends Activity {
             cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics", report));
             Toast.makeText(this, "Log copied", Toast.LENGTH_SHORT).show();
         });
+        button(row,"Phone numbers",Color.rgb(14,116,144),this::managePhones);
         header.addView(row);
         LinearLayout battery=new LinearLayout(this);
         batteryButton=button(battery,"Background setup",Color.rgb(35,53,76),this::batterySettings);button(battery,"Stop all",Color.rgb(139,38,56),()->{if(engine!=null)engine.service.stopAll();});
@@ -184,6 +206,7 @@ public class MainActivity extends Activity {
       super.onDestroy();
     }
 }
+
 
 
 
