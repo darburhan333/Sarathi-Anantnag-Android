@@ -29,7 +29,7 @@ final class MonitorRun {
   engine.service.refreshForeground(true);
   if(engine!=null){engine.activate();engine.render();}
  }
- void stopByUser(){if(engine!=null){engine.command("STOP");engine.alerts.stop();}disarm();}
+ void stopByUser(){if(engine!=null){engine.command("STOP");engine.command("SILENCE");engine.alerts.stop();}disarm();}
  void fail(String message){
   if(engine==null)return;
   engine.log(message);engine.command("FAILURE");

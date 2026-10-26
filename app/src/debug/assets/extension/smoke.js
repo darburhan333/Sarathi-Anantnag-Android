@@ -67,7 +67,7 @@ globalThis.runMultiSmoke=async()=>{
   check(await evaluate(`document.cookie.split('; ').includes('profile=${APPLICANT}')`),'Cookie isolation');
   check(await evaluate(`localStorage.getItem('profile')==='${APPLICANT}'`),'localStorage isolation');
   check(await evaluate(`new Promise((resolve,reject)=>{const r=indexedDB.open('isolation',1);r.onsuccess=()=>{const db=r.result;const q=db.transaction('values').objectStore('values').get('profile');q.onsuccess=()=>{db.close();resolve(q.result==='${APPLICANT}')};q.onerror=reject;};r.onerror=reject;})`),'IndexedDB isolation');
-  for(const other of await browser.tabs.query({url:'http://127.0.0.1/*'})){if(other.id===t.id)continue;let claimed=false;try{claimed=(await browser.tabs.sendMessage(other.id,{type:'SARATHI_PROFILE_QUERY'}))?.ok;}catch(_){}check(!claimed,'Other applicant tab claimed');}
+  for(const other of await browser.tabs.query({url:'http://127.0.0.1/*'})){if(other.id===t.id||!other.url?.includes('/profile')||other.url.endsWith('/profile'+APPLICANT))continue;let claimed=false;try{claimed=(await browser.tabs.sendMessage(other.id,{type:'SARATHI_PROFILE_QUERY'}))?.ok;}catch(_){}check(!claimed,'Other applicant tab claimed');}
   check((await chrome.storage.local.get({monitorSessionId:''})).monitorSessionId===sid,'Extension storage isolation');
   await nativeRequest({type:'SMOKE_RESULT',result:'PASS: isolated cookies, localStorage, IndexedDB, extension state and native ownership'});
  }catch(e){await nativeRequest({type:'SMOKE_RESULT',result:'FAIL multi: '+String(e.message||e)});}

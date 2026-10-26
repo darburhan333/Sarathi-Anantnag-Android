@@ -59,7 +59,7 @@
   await state();
  }
  chrome.storage.onChanged.addListener((changes,area)=>{
-  if(area==='local' && Object.keys(defaults).some(k=>changes[k]))scheduleState();
+  if(area==='local' && Object.keys(defaults).some(k=>changes[k])){if(changes.running||changes.successWatch)state().catch(()=>{});else scheduleState();}
  });
  chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   if(!sender.url?.startsWith(browser.runtime.getURL('')))return;
