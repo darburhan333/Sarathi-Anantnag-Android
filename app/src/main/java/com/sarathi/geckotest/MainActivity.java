@@ -200,7 +200,12 @@ public class MainActivity extends Activity {
     @Override protected void onPause(){view.releaseSession();monitorView.releaseSession();visible=false;if(engine!=null){engine.service.visible=false;engine.foreground=false;engine.activeStates.clear();engine.foregroundState();}super.onPause();}
     @Override protected void onStop(){
       super.onStop();
-      if(engine!=null){BrowserEngine e=engine;e.service.handler.post(()->{e.activeStates.clear();e.activate();});}
+      // Do not re-activate Gecko sessions from Activity.onStop. At this point
+      // the Activity is no longer visible; reasserting session activity here
+      // races with onPause()/GeckoView detachment and can disturb Sarathi page
+      // lifecycles. The foreground service owns monitor health checks and
+      // MonitorRun stops a run if its heartbeat/recovery checks fail.
+      if(engine!=null)engine.service.record("Activity onStop: preserving browser sessions; no session activation or navigation");
     }
     @Override protected void onDestroy(){
       view.releaseSession();monitorView.releaseSession();
