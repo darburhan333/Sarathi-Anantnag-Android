@@ -189,9 +189,13 @@ final class BrowserEngine {
               JSONObject m=(JSONObject)message;
               switch(m.optString("type")){
                 case "ARM":run.arm();break;
-                case "SECURE_GET":result.put("values",SecureSettings.read(service));break;
-                case "SECURE_SET":SecureSettings.write(service,m.getJSONObject("values"));break;
-                case "SUMMARY":result.put("text",service.summary());break;
+                case "SECURE_GET":result.put("values",SecureSettings.read(service,profile));break;
+                case "SECURE_SET":SecureSettings.write(service,profile,m.getJSONObject("values"));service.releaseStatus(profile);break;
+                case "SECURE_REMOVE":SecureSettings.remove(service,profile);service.releaseStatus(profile);break;
+                case "SECURE_IMPORT":SecureSettings.importLegacy(service,profile);service.releaseStatus(profile);break;
+                case "STATUS_CLAIM":if(!service.claimStatus(profile))throw new IllegalStateException("This bot already has a status receiver in another applicant. Disable that receiver first.");break;
+                case "STATUS_RELEASE":service.releaseStatus(profile);break;
+                case "SUMMARY":result.put("text","Applicant "+profile+" · "+(run.armed?"Monitoring":"Stopped")+" · checks "+lastState.optInt("sessionAttempts")+" · "+lastState.optString("bookingStage","Ready")+run.diagnostics());break;
                 case "RESTORE":result.put("armed",run.armed);break;
                 case "AUTHORIZE":return run.authorization();
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;

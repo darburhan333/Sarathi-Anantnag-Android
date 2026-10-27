@@ -35,3 +35,4 @@ const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('ass
  console.log('PASS: real content script STOP -> START resumes without recovery alarm');
 
 })().catch(e=>{console.error(e);process.exit(1)});
+

@@ -42,7 +42,7 @@ final class PhoneAlerts {
  void notify(String title,String message){
   NotificationManager nm=activity.getSystemService(NotificationManager.class);
   if(!nm.areNotificationsEnabled())throw new IllegalStateException("Allow Sarathi notifications in Android Settings");
-  PendingIntent open=PendingIntent.getActivity(activity,0,new Intent(activity,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+  PendingIntent open=PendingIntent.getActivity(activity,100+profile,new Intent(activity,MainActivity.class).putExtra("applicant",profile).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
   Notification n=new Notification.Builder(activity,"sarathi-alerts").setSmallIcon(R.drawable.ic_notification)
    .setContentTitle("Applicant "+profile+" · "+title).setContentText(message).setStyle(new Notification.BigTextStyle().bigText(message))
    .setCategory(Notification.CATEGORY_ALARM).setContentIntent(open).setAutoCancel(true).build();

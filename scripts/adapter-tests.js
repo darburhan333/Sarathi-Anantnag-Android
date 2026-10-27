@@ -26,3 +26,4 @@ const root=path.resolve(__dirname,'../app/src/main/assets/extension');
  const result=await ctx.chrome.scripting.executeScript({target:{tabId:7},files:['a.js','b.js']});assert.equal(result.join(','),'a.js,b.js');
  console.log('PASS: Firefox injection, native audio/notification, document-bound reservation, service authorization, stopped cleanup');
 })().catch(e=>{console.error(e);process.exitCode=1});
+

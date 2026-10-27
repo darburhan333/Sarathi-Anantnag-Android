@@ -11,3 +11,4 @@ async function test(stage,locked,green){
  assert.equal(alerts[0].kind,green?'GREEN_DATE':'CALENDAR');
 }
 (async()=>{await test('MONITORING',false,false);await test('MANUAL REVIEW REQUIRED',true,true);await test('GREEN WED/THU SELECTED',true,true);console.log('PASS: calendar status preserves later stages; green alert requires green date');})().catch(e=>{console.error(e);process.exit(1)});
+

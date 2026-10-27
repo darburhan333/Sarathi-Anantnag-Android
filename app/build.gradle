@@ -1,13 +1,13 @@
 plugins { id 'com.android.application' }
 android {
  namespace 'com.sarathi.geckotest'
- compileSdk 37
+ compileSdk { version = release(37) { minorApiLevel = 0 } }
  defaultConfig {
   applicationId 'com.sarathi.anantnag.gecko'
   minSdk 26
   targetSdk 34
-  versionCode 320
-  versionName '3.2-v11.47'
+  versionCode 330
+  versionName '3.3-v11.47'
   testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
   ndk { abiFilters(project.findProperty('testAbi') ?: 'arm64-v8a') }
  }

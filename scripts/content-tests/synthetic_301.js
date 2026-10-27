@@ -30,3 +30,4 @@ const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('ass
  assert.equal(settings.running,false);assert.equal(settings.sessionAttempts,301);assert.equal(settings.sessionCounterId,'synthetic');assert(settings.lastAttemptAt>0);
  console.log('PASS: synthetic COV loop completed 301 attempts without counter cap or unexpected exit');
 })().catch(e=>{console.error(e);process.exit(1)});
+

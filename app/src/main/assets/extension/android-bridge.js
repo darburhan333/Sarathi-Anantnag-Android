@@ -25,6 +25,7 @@
    await chrome.storage.local.set({androidForeground:foreground});
    // Visibility is independent of service authorization. Minimize/lock keeps the run alive.
   } else if(m.type==='STOP'){await chrome.storage.local.set({androidServiceReady:false});await stop('Stopped by user');await nativeRequest({type:'DISARM'});}
+  else if(m.type==='SAFE_STOP'){await chrome.storage.local.set({androidServiceReady:false});await stop(m.reason||'Monitoring stopped — press START');}
   else if(m.type==='SILENCE')await chrome.storage.local.set({alarmActive:false});
   else if(m.type==='FAILURE'){
    await chrome.storage.local.set({androidServiceReady:false});
@@ -44,7 +45,14 @@
      const d=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,successWatch:false,calendarLock:false,bookingClickIssued:false});
      let safe=false;
      if(d.running&&!d.calendarLock&&!d.bookingClickIssued&&d.monitoredTabId!==null&&d.monitorSessionId){
-      const r=await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_HEALTH_PING',sessionId:d.monitorSessionId});
+      let r=await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_HEALTH_PING',sessionId:d.monitorSessionId});
+      if(r?.ok&&r.owner&&r.sessionId===d.monitorSessionId&&r.safeToRestart){
+       const live=await chrome.storage.local.get({running:false,monitorSessionId:'',monitoredTabId:null,calendarLock:false,bookingClickIssued:false});
+       if(live.running&&live.monitorSessionId===d.monitorSessionId&&live.monitoredTabId===d.monitoredTabId&&!live.calendarLock&&!live.bookingClickIssued){
+        await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_RECOVER',sessionId:d.monitorSessionId});
+        r=await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_HEALTH_PING',sessionId:d.monitorSessionId});
+       }
+      }
       const now=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,calendarLock:false,bookingClickIssued:false});
       safe=!!(r?.ok&&r.owner&&r.safeToResume&&r.sessionId===d.monitorSessionId&&now.running&&!now.calendarLock&&!now.bookingClickIssued&&now.monitoredTabId===d.monitoredTabId&&now.monitorSessionId===d.monitorSessionId);
      }
@@ -56,7 +64,7 @@
     (async()=>{
      const d=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,successWatch:false});
      if(!(d.running||d.successWatch)||d.monitoredTabId===null)return;
-     const r=await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_HEALTH_PING',sessionId:d.monitorSessionId});
+     let timer;const r=await Promise.race([chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_HEALTH_PING',sessionId:d.monitorSessionId}),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),5000);})]).finally(()=>clearTimeout(timer));
      const now=await chrome.storage.local.get({monitorSessionId:'',running:false,successWatch:false});
      if(r?.ok&&r.owner&&r.sessionId===d.monitorSessionId&&now.monitorSessionId===d.monitorSessionId&&(now.running||now.successWatch))
       await chrome.storage.local.set({heartbeatAt:Date.now(),monitorProgressAt:r.lastLoopProgress||0,monitorLoopActive:r.loopActive===true});

@@ -16,3 +16,4 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert');
  el('chatId2').value='222';await events['saveTelegram:click'][0]();assert.equal(state.chatId,'444');assert.equal(state.chatId2,'333');assert.equal(state.botToken,'123456:'+ 'b'.repeat(25));
  console.log('PASS: live UI settings sync, dirty-only saves, receipt watcher STOP control');
 })().catch(e=>{console.error(e);process.exitCode=1});
+

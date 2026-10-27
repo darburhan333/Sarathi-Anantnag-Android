@@ -31,3 +31,4 @@ async function check(mode){
  console.log('PASS: '+mode+' before Proceed does not count or click');
 }
 (async()=>{await check('stop');await check('disabled')})().catch(e=>{console.error(e);process.exit(1)});
+

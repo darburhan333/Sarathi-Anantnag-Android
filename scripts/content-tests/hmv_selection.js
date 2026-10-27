@@ -8,7 +8,7 @@ async function check(label){
  const box={labels:[{textContent:label}],isConnected:true,disabled:false,checked:false,value:'unknown-heavy-code',click(){this.checked=true},getBoundingClientRect(){return {width:3,height:3}}};
  const bike={...box,value:'3',checked:false,click(){this.checked=true}};
  const disabled={...box,disabled:true,checked:false};
- const unrelated={...box,labels:[{textContent:'MCWOG'}],value:'unrelated',checked:false};
+ const unrelated={...box,labels:[{textContent:'TRACTOR'}],value:'unrelated',checked:false};
  const form={querySelectorAll:()=>[box,bike,disabled,unrelated]};
  const proceed={isConnected:true,id:'prcdbook',form,click(){
   clicks++;
@@ -33,5 +33,5 @@ async function check(label){
  assert.equal(box.checked,true,label+' must be selected');assert.equal(bike.checked,true,'MCWG preserved');assert.equal(disabled.checked,false,'Disabled HMV excluded');assert.equal(unrelated.checked,false,'Unrelated COV excluded');
  console.log('PASS: '+label+' selected alongside MCWG, disabled/unrelated classes excluded');
 }
-(async()=>{await check('HMV');await check('Heavy Motor Vehicle');})().catch(e=>{console.error(e);process.exit(1)});
+(async()=>{await check('HMV');await check('Heavy Motor Vehicle');await check('MCWOG');await check('Transport Vehicle-M/HMV (Goods and Passenger) TRANS');})().catch(e=>{console.error(e);process.exit(1)});
 

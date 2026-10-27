@@ -1,13 +1,13 @@
 // Read-only Telegram receiver. One enabled receiver per bot, on one Chrome profile.
 // One bounded long poll per minute works with Chrome 109's alarm minimum.
 (() => {
-  if(globalThis.APPLICANT>1)return;
+
   const ALARM = 'sarathi-telegram-status';
   const defaults = {telegramStatusEnabled:false,botToken:'',chatId:'',
-    telegramStatusOffset:0,telegramStatusBot:'',telegramStatusSince:0};
+    telegramStatusOffset:0,telegramStatusBot:'',telegramStatusSince:0,telegramConfigRevision:''};
   let busy=false, epoch=0, activeController=null;
   const config=()=>chrome.storage.local.get(defaults);
-  const same=(a,b)=>b.telegramStatusEnabled && a.botToken===b.botToken && a.chatId===b.chatId;
+  const same=(a,b)=>b.telegramStatusEnabled && a.botToken===b.botToken && a.chatId===b.chatId && a.telegramConfigRevision===b.telegramConfigRevision;
   const validToken=t=>/^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(t);
   const date=t=>t ? new Date(t).toLocaleString('en-GB',{timeZone:'Asia/Kolkata',hour12:true})+' IST' : 'Not recorded';
   async function api(token,method,body,timeout=12000){
@@ -56,7 +56,7 @@
     const localDay=new Date(now);const key=localDay.getFullYear()+'-'+String(localDay.getMonth()+1).padStart(2,'0')+'-'+String(localDay.getDate()).padStart(2,'0');
     // Only controlled stage text; never send DOM text, cookies, URLs, applicant details or OTP.
     const stage=String(d.bookingStage||'STANDBY').replace(/[^A-Za-z0-9 _/-]/g,'').slice(0,80);
-    return ['MPARIVAHAN SLOT BOOKING -J&K | 3.0','Monitor: '+status,
+    return ['MPARIVAHAN SLOT BOOKING -J&K | 3.3','Monitor: '+status,
       'Attempts today (9 AM–9 PM, phone local time): '+(d.attemptDay===key?Number(d.attempts)||0:0),
       'Attempts this session: '+(d.sessionCounterId===d.monitorSessionId && d.monitorSessionId?Number(d.sessionAttempts)||0:'Not recorded for this older session'),
       'Last recorded Proceed click: '+date(d.lastAttemptAt), 'Last status update: '+date(d.lastCheck),
@@ -67,7 +67,8 @@
     if(busy)return;busy=true;const generation=epoch;
     try{
       let c=await config();
-      if(!c.telegramStatusEnabled)return;
+      if(!c.telegramStatusEnabled){if(globalThis.PROFILE_MODE)await nativeRequest({type:'STATUS_RELEASE'});return;}
+      if(globalThis.PROFILE_MODE){const claim=await nativeRequest({type:'STATUS_CLAIM'});if(!claim?.ok)throw Error(claim?.error||'Status receiver unavailable');}
       c.botToken=c.botToken.trim();c.chatId=String(c.chatId||'').trim();
       if(!validToken(c.botToken)||!/^\d+$/.test(c.chatId))throw Error('Status needs a valid saved token and a private primary Chat ID.');
       const current=async()=>generation===epoch && same(c,await config());
@@ -100,13 +101,14 @@
       }
     }catch(e){
       if(generation===epoch)await chrome.storage.local.set({telegramStatusError:e.name==='AbortError'?'Telegram status request timed out; next scheduled check will retry.':String(e.message||e).replace(/\d{6,}:[A-Za-z0-9_-]{20,}/g,'[REDACTED]').slice(0,220)}).catch(()=>{});
-    }finally{busy=false;}
+    }finally{busy=false;if(generation!==epoch)setTimeout(()=>poll(),0);}
   }
   chrome.alarms.create(ALARM,{periodInMinutes:1});
   chrome.alarms.onAlarm.addListener(a=>{if(a.name===ALARM)poll();});
   chrome.storage.onChanged.addListener((changes,area)=>{
-    if(area!=='local'||!['telegramStatusEnabled','botToken','chatId'].some(k=>changes[k]))return;
+    if(area!=='local'||!['telegramStatusEnabled','botToken','chatId','telegramConfigRevision'].some(k=>changes[k]))return;
     epoch++;activeController?.abort();
+    if(globalThis.PROFILE_MODE)nativeRequest({type:'STATUS_RELEASE'}).catch(()=>{});
     // Alarm remains available if changing settings interrupts an in-flight poll.
     poll();
   });
@@ -114,4 +116,5 @@
   // Test hook only in Node VM; absent in Chrome's service worker.
   if(typeof module!=='undefined')module.exports={poll,report};
 })();
+
 

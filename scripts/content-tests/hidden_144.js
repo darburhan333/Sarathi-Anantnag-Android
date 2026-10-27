@@ -30,3 +30,4 @@ const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('ass
  assert.equal(settings.running,false);
  console.log('PASS: 301 COV attempts with page timers unavailable, using worker wait replies');
 })().catch(e=>{console.error(e);process.exit(1)});
+

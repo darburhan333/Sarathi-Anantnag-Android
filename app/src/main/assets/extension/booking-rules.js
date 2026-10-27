@@ -59,3 +59,4 @@ function select(dates,stopped){
 }
 root.BookingRules={classKind,validDate,quota,quotaHeader,calendarMonthTitle,select};
 })(typeof globalThis!=='undefined'?globalThis:this);
+

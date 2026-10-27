@@ -42,6 +42,7 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private BrowserEngine engine;
+    private int notificationApplicant=1;
     private boolean bound,visible;private final Button[] applicantButtons=new Button[MonitorService.PROFILE_COUNT];
     private GeckoView view,monitorView;
     private TextView status,monitorStatus;
@@ -49,6 +50,7 @@ public class MainActivity extends Activity {
     private final android.content.ServiceConnection connection=new android.content.ServiceConnection(){
       public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
         engine=((MonitorService.LocalBinder)binder).getService().engine;
+        if(getIntent().hasExtra("applicant")){engine=engine.service.profile(notificationApplicant);engine.service.engine=engine;}
         engine.service.activity=MainActivity.this;engine.service.visible=visible;engine.attach(MainActivity.this);engine.foreground=visible;engine.foregroundState();
       }
       public void onServiceDisconnected(android.content.ComponentName name){engine=null;status.setText("Service disconnected — reopen the app");}
@@ -73,28 +75,49 @@ public class MainActivity extends Activity {
       if(!status.getText().toString().equals(engine.status))status.setText(engine.status);
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
-      if(batteryButton!=null)batteryButton.setText(exempt?"Background setup ✓":"Background setup !");
+      if(batteryButton!=null)batteryButton.setText((exempt&&!power.isPowerSaveMode()&&getSystemService(android.app.NotificationManager.class).areNotificationsEnabled())?"Background\nsetup ✓":"Background\nsetup !");
       String text="Applicant "+engine.profile+" · "+engine.monitorStatus+engine.run.diagnostics();if(!monitorStatus.getText().toString().equals(text))monitorStatus.setText(text);
       if(visible&&engine.monitoring)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
       else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
     void selectApplicant(int number){if(engine==null||engine.profile==number)return;MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
+    private boolean directCalls(){return getSharedPreferences("calling",0).getBoolean("direct",false);}
+    private void openDialer(String phone){startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));}
     private void applicantPhone(int number){
       try{String phone=ApplicantContacts.read(this,number);
-        if(phone.isEmpty()){editApplicantPhone(number);return;}
-        startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));
-      }catch(android.content.ActivityNotFoundException e){Toast.makeText(this,"No dialer app is available",Toast.LENGTH_LONG).show();}
+        if(phone.isEmpty()){editApplicantPhone(number,false);return;}
+        if(directCalls()&&checkSelfPermission(Manifest.permission.CALL_PHONE)==PackageManager.PERMISSION_GRANTED){
+          try{startActivity(new Intent(Intent.ACTION_CALL,Uri.fromParts("tel",phone,null)));}
+          catch(SecurityException|android.content.ActivityNotFoundException e){openDialer(phone);}
+        }else openDialer(phone);
+      }catch(android.content.ActivityNotFoundException e){Toast.makeText(this,"No calling app is available",Toast.LENGTH_LONG).show();}
       catch(Exception e){Toast.makeText(this,"Could not read phone number. Open Phone numbers to update it.",Toast.LENGTH_LONG).show();}
     }
     private void managePhones(){
-      String[] labels=new String[MonitorService.PROFILE_COUNT];for(int i=0;i<labels.length;i++)labels[i]="Applicant "+(i+1);
-      new AlertDialog.Builder(this).setTitle("Edit applicant phone number").setItems(labels,(dialog,index)->editApplicantPhone(index+1)).setNegativeButton("Cancel",null).show();
+      LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(12),dp(8),dp(12),dp(8));
+      android.widget.Switch direct=new android.widget.Switch(this);direct.setText("Direct call on long-press");direct.setTextSize(14);direct.setMinHeight(dp(48));
+      direct.setChecked(directCalls()&&checkSelfPermission(Manifest.permission.CALL_PHONE)==PackageManager.PERMISSION_GRANTED);panel.addView(direct);
+      TextView hint=new TextView(this);hint.setText("OFF: opens dialer. ON: calls immediately. Your phone may show its call screen.");hint.setTextSize(12);panel.addView(hint);
+      android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout entries=new LinearLayout(this);entries.setOrientation(LinearLayout.VERTICAL);scroll.addView(entries);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(340)));
+      AlertDialog list=new AlertDialog.Builder(this).setTitle("Applicant phone numbers").setView(panel).setNegativeButton("Close",null).create();
+      direct.setOnCheckedChangeListener((v,checked)->{
+        if(checked&&checkSelfPermission(Manifest.permission.CALL_PHONE)!=PackageManager.PERMISSION_GRANTED){direct.setChecked(false);requestPermissions(new String[]{Manifest.permission.CALL_PHONE},20);Toast.makeText(this,"After allowing Phone permission, turn the switch on.",Toast.LENGTH_LONG).show();return;}
+        getSharedPreferences("calling",0).edit().putBoolean("direct",checked).apply();
+      });
+      for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){
+        final int number=n;String phone="";boolean readable=true;try{phone=ApplicantContacts.read(this,n);}catch(Exception e){readable=false;}
+        LinearLayout row=new LinearLayout(this);row.setBaselineAligned(false);
+        final String label="Applicant "+n+"  ·  "+(!readable?"Needs attention":phone.isEmpty()?"No number added":"Saved · …"+phone.substring(Math.max(0,phone.length()-4)));
+        button(row,label,phone.isEmpty()?Color.rgb(37,65,103):Color.rgb(14,116,110),()->{list.dismiss();editApplicantPhone(number,true);});entries.addView(row);
+      }
+      list.show();
     }
-    private void editApplicantPhone(int number){
+    private void editApplicantPhone(int number,boolean returnToList){
       android.widget.EditText input=new android.widget.EditText(this);input.setInputType(android.text.InputType.TYPE_CLASS_PHONE);input.setSingleLine(true);input.setHint("Phone number, e.g. +91…");
       try{input.setText(ApplicantContacts.read(this,number));}catch(Exception ignored){}
-      AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Applicant "+number+" phone number").setMessage("Long-press this applicant to open the saved number in your dialer.").setView(input)
+      AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Applicant "+number+" phone number").setMessage("Long-press this applicant to use the saved number.").setView(input)
        .setPositiveButton("Save",null).setNeutralButton("Remove",null).setNegativeButton("Cancel",null).create();
+      dialog.setOnDismissListener(unused->{if(returnToList&&!isFinishing()&&!isDestroyed())managePhones();});
       dialog.setOnShowListener(unused->{
        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{ApplicantContacts.save(this,number,input.getText().toString());dialog.dismiss();Toast.makeText(this,"Phone number saved",Toast.LENGTH_SHORT).show();}catch(IllegalArgumentException e){input.setError(e.getMessage());}catch(Exception e){input.setError("Could not save securely. Please try again.");}});
        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{try{ApplicantContacts.remove(this,number);dialog.dismiss();Toast.makeText(this,"Phone number removed",Toast.LENGTH_SHORT).show();}catch(Exception e){input.setError("Could not remove number. Please try again.");}});
@@ -103,7 +126,7 @@ public class MainActivity extends Activity {
     private void batterySettings(){
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
-      String message="Android Doze exemption: "+(exempt?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+(power.isPowerSaveMode()?"ON — turn it off":"OFF")+"\n\nAllow background activity and autostart in your "+android.os.Build.MANUFACTURER+" phone settings. Manufacturer battery managers can still stop the app. Keep the ongoing monitoring notification visible. Force-stop or reboot ends monitoring; START again manually.";
+      String message="Android Doze exemption: "+(exempt?"ALLOWED":"REQUIRED")+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+(power.isPowerSaveMode()?"ON — turn it off":"OFF")+"\n\nAllow background activity and autostart in your "+android.os.Build.MANUFACTURER+" phone settings. Manufacturer battery managers can still stop the app. Keep the ongoing monitoring notification visible. Force-stop or reboot ends monitoring; START again manually.";
       new AlertDialog.Builder(this).setTitle("Locked-screen monitoring setup").setMessage(message)
        .setPositiveButton(exempt?"App settings":"Allow exemption",(d,w)->{
          try{startActivity(new Intent(exempt?android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS:android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,Uri.parse("package:"+getPackageName())));}
@@ -114,7 +137,7 @@ public class MainActivity extends Activity {
     private Button button(LinearLayout row, String label, int color, Runnable action) {
         Button b = new Button(this);
         b.setText(label);b.setContentDescription(label);
-        b.setAllCaps(false);b.setTextSize(11);
+        b.setAllCaps(false);b.setTextSize(11);b.setGravity(Gravity.CENTER);b.setMaxLines(2);b.setEllipsize(android.text.TextUtils.TruncateAt.END);row.setBaselineAligned(false);
         b.setTypeface(Typeface.DEFAULT,Typeface.NORMAL);
         b.setTextColor(Color.WHITE);
         b.setMinHeight(dp(48));b.setMinimumHeight(dp(48));
@@ -124,13 +147,13 @@ public class MainActivity extends Activity {
         shape.setColor(color);shape.setCornerRadius(dp(12));
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF),shape,null));
         b.setOnClickListener(v -> action.run());
-        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,Math.max(dp(52),(int)Math.ceil(getResources().getDisplayMetrics().scaledDensity*30)+dp(10)),1);
         params.setMargins(dp(2),dp(2),dp(2),dp(2));
         row.addView(b,params);
         return b;
     }
     @Override public void onCreate(Bundle state) {
-        super.onCreate(state);
+        super.onCreate(state);notificationApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,getIntent().getIntExtra("applicant",1)));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -146,13 +169,13 @@ public class MainActivity extends Activity {
         heading.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         heading.setPadding(dp(4),dp(3),dp(4),dp(8));
         android.widget.ImageView logo=new android.widget.ImageView(this);logo.setImageResource(R.drawable.ic_launcher_foreground);logo.setContentDescription("Driving test logo");
-        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.addView(heading);TextView developer=new TextView(this);developer.setText("V3.2 · DEVELOPED BY BURHAN MOHIDIN");developer.setTextSize(10);developer.setTextColor(Color.rgb(89,225,167));developer.setPadding(dp(4),0,0,dp(5));names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,-2,1));header.addView(brand);
+        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.addView(heading);TextView developer=new TextView(this);developer.setText("V3.3 · DEVELOPED BY BURHAN MOHIDIN");developer.setTextSize(10);developer.setTextColor(Color.rgb(89,225,167));developer.setPadding(dp(4),0,0,dp(5));names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,Math.max(dp(52),(int)Math.ceil(getResources().getDisplayMetrics().scaledDensity*30)+dp(10)),1));header.addView(brand);
         for(int group=0;group<2;group++){LinearLayout applicants=new LinearLayout(this);for(int k=0;k<4;k++){final int n=group*4+k+1;applicantButtons[n-1]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->selectApplicant(n));applicantButtons[n-1].setOnLongClickListener(v->{applicantPhone(n);return true;});}header.addView(applicants);}
         LinearLayout utilities=new LinearLayout(this);
         applicantButtons[8]=button(utilities,"Applicant 9",Color.rgb(37,65,103),()->selectApplicant(9));
         applicantButtons[8].setOnLongClickListener(v->{applicantPhone(9);return true;});
-        batteryButton=button(utilities,"Background setup",Color.rgb(35,53,76),this::batterySettings);
-        button(utilities,"Phone numbers",Color.rgb(14,116,144),this::managePhones);
+        batteryButton=button(utilities,"Background\nsetup",Color.rgb(35,53,76),this::batterySettings);
+        button(utilities,"Phone\nnumbers",Color.rgb(14,116,144),this::managePhones);
         header.addView(utilities);
         status = new TextView(this);
         status.setTextSize(12);
@@ -166,13 +189,14 @@ public class MainActivity extends Activity {
         LinearLayout controls=new LinearLayout(this);
         monitorButton=button(controls,"Monitor",Color.rgb(37,99,235),this::toggleMonitor);
         Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.run.stopByUser();});
-        button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});
+        Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});
+        silenceButton.setOnLongClickListener(v->{if(engine!=null){engine.service.silenceAll();Toast.makeText(this,"All applicant alarms silenced",Toast.LENGTH_SHORT).show();}return true;});
         monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);monitorButton.setTextSize(12);
         stopButton.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Stop all applicants?").setPositiveButton("Stop all",(d,w)->{if(engine!=null)engine.service.stopAll();}).setNegativeButton("Cancel",null).show();return true;});
         button(controls,"Home",Color.rgb(4,120,87),()->{if(engine!=null)engine.home();});header.addView(controls);
         button(utilities, "Copy log", Color.rgb(104,65,165), () -> {
-            String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.2\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
-                    + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
+            String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.3\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
+                    + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics", report));
             Toast.makeText(this, "Log copied", Toast.LENGTH_SHORT).show();
@@ -191,13 +215,14 @@ public class MainActivity extends Activity {
         if(android.os.Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
           requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},10);
     }
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);notificationApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,intent.getIntExtra("applicant",1)));if(engine!=null&&intent.hasExtra("applicant"))selectApplicant(notificationApplicant);}
     @Override public void onBackPressed(){
       if(engine!=null&&engine.showingMonitor)toggleMonitor();
       else if(engine!=null&&engine.current!=null&&engine.canGoBack)engine.navigate(()->engine.current.goBack());
       else super.onBackPressed();
     }
-    @Override protected void onResume(){super.onResume();visible=true;if(engine!=null){engine.service.activity=this;engine.service.visible=true;engine.foreground=true;engine.ensureUsable();engine.foregroundState();}}
-    @Override protected void onPause(){view.releaseSession();monitorView.releaseSession();visible=false;if(engine!=null){engine.service.visible=false;engine.foreground=false;engine.activeStates.clear();engine.foregroundState();}super.onPause();}
+    @Override protected void onResume(){super.onResume();visible=true;if(engine!=null){engine.service.activity=this;if(!engine.service.visible)for(BrowserEngine e:engine.service.profiles)if(e!=null&&e.run.armed)e.run.tick();engine.service.visible=true;engine.service.record("Activity resumed; "+engine.service.clockDiagnostics());engine.foreground=true;engine.ensureUsable();engine.foregroundState();}}
+    @Override protected void onPause(){view.releaseSession();monitorView.releaseSession();visible=false;if(engine!=null){engine.service.visible=false;engine.service.record("Activity minimized; screen="+getSystemService(android.os.PowerManager.class).isInteractive()+"; active="+engine.service.activeCount());engine.foreground=false;engine.activeStates.clear();engine.foregroundState();}super.onPause();}
     @Override protected void onStop(){
       super.onStop();
       if(engine!=null){BrowserEngine e=engine;e.service.handler.post(()->{e.activeStates.clear();e.activate();});}

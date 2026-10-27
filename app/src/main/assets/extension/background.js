@@ -54,32 +54,61 @@ const api = 'https://api.telegram.org/bot';
 chrome.storage.local.get({chatId:''}).then(d=>{if(!d.chatId) return chrome.storage.local.set({chatId:PRIMARY_CHAT_ID});}).catch(()=>{});
 // Configure the bot token locally in the TELEGRAM tab. Never distribute a live token.
 
-async function sendTelegram(message) {
-  if(globalThis.PROFILE_MODE)message="Applicant "+globalThis.APPLICANT+" · "+message;
-  const {chatId='',chatId2='',botToken=''} = await chrome.storage.local.get({chatId:'',chatId2:'',botToken:''});
-  if (!/^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(botToken.trim())) throw Error('Configure Telegram bot token in the TELEGRAM tab.');
-  const ids = [...new Set([(chatId.trim() || PRIMARY_CHAT_ID), chatId2.trim()].filter(Boolean))];
-  if (!ids.length || ids.some(id => !/^-?\d+$/.test(id))) throw Error('Enter valid numeric Chat IDs.');
-  const results = await Promise.allSettled(ids.map(async id => {
-    const started=Date.now();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
-    let response,result;
-    try {
-      response = await fetch(api + botToken.trim() + '/sendMessage', {
-        method:'POST', headers:{'Content-Type':'application/json'}, signal:controller.signal,
-        body:JSON.stringify({chat_id:id,text:message,disable_notification:false})
-      });
-      result = await response.json();
-    } finally { clearTimeout(timeout); }
-    if (!response.ok || !result.ok) throw Error('Telegram API rejected recipient '+(ids.indexOf(id)+1)+' (HTTP '+response.status+', error '+(result.error_code||'unknown')+'). Check token, recipient and whether bot was started.');
-    return {id,ms:Date.now()-started};
-  }));
-  const errors = results.filter(r=>r.status==='rejected').map(r=>String(r.reason));
-  await chrome.storage.local.set({telegramDeliveryStatus: results.map((r,i)=>'Recipient '+(i+1)+': '+(r.status==='fulfilled'?'API accepted in '+r.value.ms+'ms':'failed: '+String(r.reason?.message||r.reason).replace(/\d{6,}:[A-Za-z0-9_-]{20,}/g,'[REDACTED]').slice(0,100))).join(' | '),telegramLastAttempt:Date.now()});
-  if (errors.length) throw Error(errors.join('; '));
-  return true;
+// Persistent bounded outbox. No credentials are stored in queued messages.
+let telegramQueue=Promise.resolve();
+function withTelegramQueue(work){const p=telegramQueue.then(work,work);telegramQueue=p.catch(()=>{});return p;}
+async function deliverTelegramRecipient(token,id,text){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+ try{
+  const response=await fetch(api+token.trim()+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({chat_id:id,text,disable_notification:false})});
+  const data=await response.json();
+  if(response.ok&&data.ok)return {accepted:true};
+  // Retry only an explicit rate-limit rejection. A timeout/5xx has unknown delivery;
+  // blindly resending it could duplicate a slot alarm.
+  if(response.status===429||data.error_code===429)return {retry:true,delay:Math.max(30000,Math.min(600000,Number(data.parameters?.retry_after||30)*1000))};
+  return {error:'API rejected (HTTP '+response.status+')'};
+ }catch(e){return {error:e.name==='AbortError'?'Timed out; delivery unknown — not resent':'Connection failed; delivery unknown — not resent'};}
+ finally{clearTimeout(timer);}
 }
+async function drainTelegram(){return withTelegramQueue(async()=>{
+ const d=await chrome.storage.local.get({telegramOutbox:[],telegramConfigRevision:'',botToken:'',telegramEnabled:true});let jobs=d.telegramOutbox||[],now=Date.now(),changed=false;const messages=[];
+ for(const job of jobs){
+  if(job.revision!==d.telegramConfigRevision||now-job.createdAt>600000||job.tries>=4){job.done=true;changed=true;messages.push('Expired or configuration changed');continue;}
+  if(job.nextAt>now)continue;
+  if(typeof navigator!=='undefined'&&navigator.onLine===false){job.nextAt=now+60000;changed=true;messages.push('Queued offline');continue;}
+  if(!d.telegramEnabled&&!job.test){job.done=true;changed=true;continue;}
+  job.tries++;job.nextAt=now+Math.min(120000,30000*Math.pow(2,job.tries-1));
+  // Persist reservation BEFORE sending. Interrupted in-flight jobs are not replayed.
+  const ids=[...job.pending];job.pending=[];await chrome.storage.local.set({telegramOutbox:jobs});
+  for(const id of ids){
+   const live=await chrome.storage.local.get({telegramConfigRevision:'',telegramEnabled:true});
+   if(live.telegramConfigRevision!==job.revision||(!live.telegramEnabled&&!job.test)){messages.push('Cancelled after settings changed');break;}
+   const delayed=now-job.createdAt>15000?'[Delayed alert; originally '+new Date(job.createdAt).toISOString()+']\n':'';
+   const result=await deliverTelegramRecipient(d.botToken,id,delayed+job.message);
+   if(result.retry){job.pending.push(id);job.nextAt=Math.max(job.nextAt,Date.now()+result.delay);messages.push('Rate limited — queued retry');}
+   else messages.push(result.accepted?'API accepted':result.error);
+  }
+  job.done=job.pending.length===0;changed=true;
+ }
+ if(changed)await chrome.storage.local.set({telegramOutbox:jobs.filter(j=>!j.done&&j.pending.length).slice(-30),telegramDeliveryStatus:messages.join(' | '),telegramLastAttempt:Date.now()});
+ return messages.join(' | ');
+});}
+async function sendTelegram(message,test=false){
+ if(globalThis.PROFILE_MODE)message='Applicant '+globalThis.APPLICANT+' · '+message;
+ await withTelegramQueue(async()=>{
+  const d=await chrome.storage.local.get({chatId:'',chatId2:'',botToken:'',telegramConfigRevision:'',telegramOutbox:[]});
+  if(!/^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(d.botToken.trim()))throw Error('Configure this applicant’s Telegram token.');
+  const ids=[...new Set([d.chatId.trim(),d.chatId2.trim()].filter(Boolean))];if(!ids.length||ids.some(id=>!/^\-?\d+$/.test(id)))throw Error('Enter valid numeric Chat IDs.');
+  const jobs=d.telegramOutbox||[];
+  if(!jobs.some(j=>j.message===message&&j.revision===d.telegramConfigRevision&&Date.now()-j.createdAt<60000))jobs.push({message,pending:ids,revision:d.telegramConfigRevision,createdAt:Date.now(),nextAt:0,tries:0,test});
+  await chrome.storage.local.set({telegramOutbox:jobs.slice(-30)});
+ });
+ const result=await drainTelegram();
+ if(!result.includes('API accepted')||/unknown|rejected|queued|Expired/.test(result))throw Error(result||'Message queued for retry');
+ return true;
+}
+chrome.alarms.create('sarathi-telegram-delivery',{periodInMinutes:1});
+chrome.alarms.onAlarm.addListener(a=>{if(a.name==='sarathi-telegram-delivery')drainTelegram().catch(()=>{});});
 
 async function audioCommand(action){
  const settings=await chrome.storage.local.get({soundEnabled:true,volume:85});
@@ -129,7 +158,7 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
   if (!['SARATHI_ALERT','TEST_TELEGRAM','TEST_DESKTOP','SARATHI_BOOKED','SARATHI_WARNING','SARATHI_SMS_READY'].includes(msg?.type)) return;
   const processAlert=async()=>{
     if(msg.type==='TEST_DESKTOP'){return {delivery:showDesktopNotification({type:'basic',iconUrl:'icon.png',title:'Sarathi TEST Desktop Alert',message:'Desktop notifications are working. This is a test, not a real slot.'},'sarathi-test-'+Date.now())};}
-    if(msg.type==='TEST_TELEGRAM'){return {delivery:sendTelegram('🔔 MPARIVAHAN SLOT BOOKING -J&K TEST ALERT — phone notifications are connected.')}}
+    if(msg.type==='TEST_TELEGRAM'){return {delivery:sendTelegram('🔔 MPARIVAHAN SLOT BOOKING -J&K TEST ALERT — phone notifications are connected.',true)}}
     if (!sender.url?.startsWith('https://sarathi.parivahan.gov.in/')) return;
     const owner=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,successWatch:false});
     if(!msg.sessionId || msg.sessionId!==owner.monitorSessionId || sender.tab?.id!==owner.monitoredTabId || (!owner.running&&!owner.successWatch))return;
@@ -206,6 +235,7 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
 chrome.alarms.create('sarathi-health', {periodInMinutes:1});
 chrome.alarms.onAlarm.addListener(async alarm=>{
  if(alarm.name!=='sarathi-health')return;
+ if(globalThis.PROFILE_MODE)return; // Native service owns Android recovery; no competing 90s restart.
  const d=await chrome.storage.local.get({running:false,successWatch:false,calendarLock:false,bookingClickIssued:false,heartbeatAt:0,monitorProgressAt:0,monitoredTabId:null,healthMisses:0,healthWarningAt:0,monitorSessionId:''});
  const current=async()=>{
    const now=await chrome.storage.local.get({running:false,successWatch:false,monitorSessionId:'',monitoredTabId:null,calendarLock:false,bookingClickIssued:false});
@@ -323,7 +353,7 @@ chrome.tabs?.onRemoved?.addListener(tabId=>{
 
 
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
- if(m?.type!=='SECURE_PROXY'||!sender.url?.startsWith(browser.runtime.getURL(''))||!['SECURE_GET','SECURE_SET'].includes(m.request?.type))return;
+ if(m?.type!=='SECURE_PROXY'||!sender.url?.startsWith(browser.runtime.getURL(''))||!['SECURE_GET','SECURE_SET','SECURE_REMOVE','SECURE_IMPORT'].includes(m.request?.type))return;
  nativeRequest(m.request).then(reply).catch(e=>reply({ok:false,error:String(e.message||e)}));return true;
 });
 

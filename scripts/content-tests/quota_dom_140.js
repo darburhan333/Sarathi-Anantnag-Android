@@ -26,3 +26,4 @@ assert.equal(parse(false,'13 seats').entries.length,0);
 console.log('PASS: real quota parser accepts both layouts and 1000; rejects shared/unsafe/unverified counts');
 
 module.exports={ctx,parse,E};
+

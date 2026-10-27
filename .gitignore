@@ -11,5 +11,6 @@ app/src/debug/assets/extension3/
 local.properties
 
 
-app/src/main/assets/extension[4-6]/
-app/src/debug/assets/extension[4-6]/
+app/src/main/assets/extension[4-9]/
+app/src/debug/assets/extension[4-9]/
+

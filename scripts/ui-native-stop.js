@@ -19,3 +19,4 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('p
  assert(!state.monitorSessionId,'Cancelled START must not create a new session');
  console.log('PASS: native STOP cancels pending monitor START');
 })().catch(e=>{console.error(e);process.exitCode=1});
+

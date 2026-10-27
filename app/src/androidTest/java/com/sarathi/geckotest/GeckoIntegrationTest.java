@@ -25,6 +25,26 @@ public class GeckoIntegrationTest {
   assertTrue(label+": page did not make another HTTP request",requests.get()>beforeRequests);
   System.out.println("PASS "+label+": "+before+" -> "+s.attemptsForTest());
  }
+ @Test public void backgroundStallStopsAllWithoutClosingPages()throws Exception{
+  MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
+  while(a.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
+  MonitorService service=a.serviceForTest();assertNotNull(service);
+  shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
+  java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
+  main(()->{
+   service.stopAll();BrowserEngine one=service.profile(1),two=service.profile(2);
+   one.run.arm();two.run.arm();Object page=one.current;
+   one.run.waitFor(8000).accept(r->cancelled.set(r.toString().contains("cancelled")));
+   service.visible=false;
+   try{one.run.recover("Injected minimized stall");
+    assertEquals(0,service.activeCount());assertSame(page,one.current);
+    assertFalse(one.run.recovering);assertFalse(two.run.recovering);
+    assertFalse(one.alerts.isRepeating());assertFalse(two.alerts.isRepeating());
+    service.stopForBackground("Duplicate callback");assertEquals(0,service.activeCount());
+   }finally{service.visible=true;}
+  });
+  assertTrue("All native waits must be cancelled",cancelled.get());
+ }
  @Test public void realExtensionLoop() throws Exception {
   ServerSocket server=new ServerSocket(8765);
   Thread thread=new Thread(()->{while(!server.isClosed())try(Socket socket=server.accept()){
@@ -52,7 +72,8 @@ public class GeckoIntegrationTest {
    while(s.engine.run.recovering&&System.currentTimeMillis()<end)Thread.sleep(100);
    assertTrue("Verified COV recovery must preserve the run",s.engine.run.armed);
    assertFalse("Verified COV recovery must finish",s.engine.run.recovering);
-   shell("input keyevent KEYCODE_HOME");progress(s,"minimized",22);
+   shell("input keyevent KEYCODE_HOME");// Screen remains ON. Exercise the reported 50–60s boundary repeatedly.
+   for(int minute=0;minute<10;minute++)progress(s,"minimized screen-on minute "+minute,60);
    shell("input keyevent KEYCODE_SLEEP");progress(s,"screen locked",45);
    shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");progress(s,"forced Doze with exemption",22);
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");
@@ -141,16 +162,16 @@ public class GeckoIntegrationTest {
 
  @Test public void encryptedSettingsRoundTrip()throws Exception{
   android.content.Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();
-  org.json.JSONObject original=SecureSettings.read(c);
+  org.json.JSONObject original=SecureSettings.read(c,1);
   String marker="TEST_ONLY_NOT_A_TELEGRAM_TOKEN";
   try{
-   SecureSettings.write(c,new org.json.JSONObject().put("botToken",marker).put("chatId","12345").put("chatId2","67890"));
-   assertEquals(marker,SecureSettings.read(c).getString("botToken"));
-   String persisted=c.getSharedPreferences("secure",0).getString("config","");
+   SecureSettings.write(c,1,new org.json.JSONObject().put("botToken",marker).put("chatId","12345").put("chatId2","67890"));
+   assertEquals(marker,SecureSettings.read(c,1).getString("botToken"));
+   String persisted=c.getSharedPreferences("secure",0).getString("config-profile-1","");
    assertFalse("Token must not be persisted as plaintext",persisted.contains(marker));
    assertFalse("Chat IDs must not be persisted as plaintext",persisted.contains("12345"));
    System.out.println("PASS Android Keystore encrypted credential round-trip");
-  }finally{for(String k:new String[]{"botToken","chatId","chatId2"})if(!original.has(k))original.put(k,"");SecureSettings.write(c,original);}
+  }finally{for(String k:new String[]{"botToken","chatId","chatId2"})if(!original.has(k))original.put(k,"");SecureSettings.write(c,1,original);}
  }
 
  @Test public void applicantPhonesAreSeparateAndEncrypted()throws Exception{
@@ -210,6 +231,22 @@ public class GeckoIntegrationTest {
    run.recovered("stale-other-run",true);assertTrue("Stale reply must not resume",run.recovering);
    run.stopByUser();run.recovered("stale-other-run",true);assertFalse("STOP must win over recovery",run.armed);
   });
+ }
+
+ @Test public void telegramCredentialsAreIsolated()throws Exception{
+  android.content.Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  org.json.JSONObject[] originals=new org.json.JSONObject[9];
+  for(int n=1;n<=9;n++)originals[n-1]=SecureSettings.read(c,n);
+  try{
+   for(int n=1;n<=9;n++)SecureSettings.write(c,n,new org.json.JSONObject().put("botToken","TEST_TOKEN_"+n).put("chatId","CHAT_"+n));
+   SecureSettings.remove(c,4);
+   for(int n=1;n<=9;n++){if(n==4)assertEquals("",SecureSettings.read(c,n).optString("botToken"));else assertEquals("TEST_TOKEN_"+n,SecureSettings.read(c,n).getString("botToken"));}
+  }finally{for(int n=1;n<=9;n++){SecureSettings.remove(c,n);SecureSettings.write(c,n,originals[n-1]);}}
+ }
+ @Test public void silenceAllPreservesRuns()throws Exception{
+  MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;while(a.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
+  MonitorService s=a.serviceForTest();assertNotNull(s);shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
+  main(()->{BrowserEngine one=s.profile(1),two=s.profile(2);one.run.arm();two.run.arm();one.alerts.audio("START",true,0);two.alerts.audio("START",true,0);s.silenceAll();assertTrue(one.run.armed);assertTrue(two.run.armed);assertFalse(one.alerts.isRepeating());assertFalse(two.alerts.isRepeating());s.stopAll();});
  }
 
 }

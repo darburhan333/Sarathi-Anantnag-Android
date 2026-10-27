@@ -160,8 +160,11 @@
       for (let node=el.nextSibling; node && node.nodeType===3; node=node.nextSibling) labels.push(node.textContent || '');
       const cell=el.closest?.('td');
       if(cell && cell.querySelectorAll('input[type="checkbox"]').length===1) labels.push(cell.textContent || '');
+      // Sarathi places checkbox, description and COV code in separate cells.
+      const row=el.closest?.('tr');
+      if(row && row.querySelectorAll('input[type="checkbox"][name="iscov"]').length===1) labels.push(row.textContent || '');
       const label=norm(labels.join(' '));
-      return label ? /\b(?:LMV|MCWG|HMV)\b|\bheavy\s+motor\s+vehicle\b/i.test(label)
+      return label ? /\b(?:LMV|MCWG|MCWOG|HMV|TRANS)\b|\bheavy\s+motor\s+vehicle\b/i.test(label)
                    : (el.value === '4' || el.value === '3');
     });
     if (!selected.length) return null;
@@ -213,7 +216,7 @@
     if(!calendar && getCovForm())return;
     const text = calendar ? '' : pageText();
     const quotaLabel = !calendar && /available\s+quota/i.test(text);
-    const bookingCalendar = calendar || (quotaLabel && /\b(?:LMV|MCWG)\b/i.test(text) && !getCovForm());
+    const bookingCalendar = calendar || (quotaLabel && /\b(?:LMV|MCWG|MCWOG|HMV|TRANS)\b/i.test(text) && !getCovForm());
     if (!bookingCalendar) return;
     bookingPaused = true;
     calendarLocked = true;
@@ -445,7 +448,7 @@
         if(waited<1800 || Date.now()-quotaStableAt<600)return;
         if(options.length!==extracted.total || !options.length){
           if(waited<9000)return;
-          await stopAssist('Quota radio/count mapping remains ambiguous after loading — manual review');return;
+          await stopAssist('Quota class/count mapping is unsupported or ambiguous — handle this page manually. Assisted quota booking currently supports LMV/MCWG only.');return;
         }
         if(!shownDate){if(waited<9000)return;await stopAssist('Quota date is missing, invalid or ambiguous — manual review');return;}
         if(shownDate!==d.scanPending){
@@ -699,6 +702,7 @@
       (async()=>{
         const owner=await confirmOwnership();
         return {ok:true,page:location.pathname,owner,loopActive,
+          safeToRestart:owner&&!loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
           safeToResume:owner&&loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
           lastLoopProgress,loopStartedAt,covPresent:!!getCovForm(),calendar:realCalendar(),
           popup:noSlotsTextPresent(),sessionId};
@@ -716,7 +720,7 @@
         calendarLocked=!!d.calendarLock;sessionLocked=!!d.sessionLock;bookingPaused=calendarLocked;
         localStop=false;
         // If a loop has made no progress for 90s on the COV page, invalidate that generation.
-        if(message.type==='SARATHI_RECOVER'&&loopActive&&Date.now()-lastLoopProgress>90000&&getCovForm()&&!calendarLocked){
+        if(!globalThis.PROFILE_MODE&&message.type==='SARATHI_RECOVER'&&loopActive&&Date.now()-lastLoopProgress>90000&&getCovForm()&&!calendarLocked){
           loopGeneration++;loopActive=false;
         }
         if(!loopActive&&!calendarLocked&&!sessionLocked){setStatus(message.type==='SARATHI_RECOVER'?'Monitor loop recovered — waiting for COV':'Start received; searching for COV form');processLoop();}

@@ -41,8 +41,13 @@ final class MonitorRun {
   engine.service.markRunning(engine.profile,false);engine.service.refreshForeground(true);engine.activate();engine.render();
  }
  void stopByUser(){lastReason="Stopped by user";disarm();engine.command("STOP");engine.command("SILENCE");engine.alerts.stop();engine.alerts.clearNotification();}
+ void stopForBackground(String message){
+  if(!armed)return;lastReason=message;engine.log(message);
+  disarm(false);engine.command("SAFE_STOP",message);
+ }
  void fail(String message){
   if(!armed)return; // Idle and duplicate browser callbacks must not alarm.
+  if(!engine.service.visible){engine.service.stopForBackground(message);return;}
   lastReason=message;engine.log(message);engine.service.record("Applicant "+engine.profile+" stopped: "+message);
   // Revoke first. FAILURE updates the dashboard; only native code delivers this failure alarm.
   disarm(false);engine.command("FAILURE",message);
@@ -71,6 +76,7 @@ final class MonitorRun {
  private void finishWait(GeckoResult<Object> r,boolean ok){if(waits.remove(r)==null)return;delayed.remove(r);r.complete(ok?"{\"ok\":true}":"{\"ok\":false,\"cancelled\":true}");}
  void recover(String reason){
   if(!armed||recovering)return;
+  if(!engine.service.visible){engine.service.stopForBackground(reason);return;}
   if(recoveryProgressValue==lastProgressValue){fail("No page progress after recovery — inspect Sarathi and press START");return;}
   recoveryProgressValue=lastProgressValue;recovering=true;recoveryAt=SystemClock.elapsedRealtime();recoveryId=generation+":"+recoveryAt;
   lastReason="Checking session after delay";engine.service.record("Applicant "+engine.profile+" recovery: "+reason+"; "+engine.service.clockDiagnostics());

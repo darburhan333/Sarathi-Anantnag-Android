@@ -58,6 +58,24 @@ public final class MonitorService extends Service {
   // Retain a bounded delivery grace period after monitoring stops.
   if(activeCount()==0&&!alerting()&&stopAfter>0&&now>=stopAfter&&wake.isHeld())wake.release();
  }
+ private final java.util.Map<Integer,String> statusBots=new java.util.HashMap<>();
+ private final java.util.Map<Integer,Long> statusClaims=new java.util.HashMap<>();
+ boolean claimStatus(int profile)throws Exception{
+  String token=SecureSettings.read(this,profile).optString("botToken").trim();if(token.isEmpty())throw new IllegalStateException("Configure this applicant's bot first");
+  String bot=token.split(":",2)[0];long now=SystemClock.elapsedRealtime();
+  for(Integer other:new java.util.ArrayList<>(statusBots.keySet()))if(now-statusClaims.getOrDefault(other,0L)>90000){statusBots.remove(other);statusClaims.remove(other);}
+  for(java.util.Map.Entry<Integer,String> e:statusBots.entrySet())if(e.getKey()!=profile&&bot.equals(e.getValue()))return false;
+  statusBots.put(profile,bot);statusClaims.put(profile,now);return true;
+ }
+ void releaseStatus(int profile){statusBots.remove(profile);statusClaims.remove(profile);}
+ void silenceAll(){for(BrowserEngine e:profiles)if(e!=null){e.alerts.stop();e.command("SILENCE");}refreshForeground(true);}
+ void stopForBackground(String detail){
+  if(activeCount()==0)return;
+  String message="Background monitoring stopped for all applicants — inspect pages and press START";
+  record(message+"; cause="+detail);
+  for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)e.run.stopForBackground(message);
+  refreshForeground(true);
+ }
  void stopAll(){for(BrowserEngine e:profiles)if(e!=null)e.run.stopByUser();}
  void failAll(String message){for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)e.run.fail(message);}
  @Override public int onStartCommand(Intent intent,int flags,int id){if(intent!=null&&"STOP".equals(intent.getAction()))stopAll();else if(intent==null)stopSelf();return START_NOT_STICKY;}

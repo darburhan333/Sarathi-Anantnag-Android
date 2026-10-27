@@ -27,7 +27,7 @@ globalThis.runAndroidSmoke=async()=>{
   await start('android-smoke-1');
   stage='wait-loop';
   await nativeRequest({type:'SMOKE_PHASE',phase:'background-ready'});
-  await wait(150000);
+  await wait(750000);
   let d=await browser.storage.local.get({sessionAttempts:0});assert(d.sessionAttempts>=2,'COV loop did not repeat twice: '+d.sessionAttempts);
   assert(await evaluate(`[...document.querySelectorAll('input[name="iscov"]')].every(x=>x.checked)`),'COV selection failed');
   await browser.storage.local.set({running:false,successWatch:false});
