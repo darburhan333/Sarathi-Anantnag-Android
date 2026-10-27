@@ -1,18 +1,42 @@
 plugins { id 'com.android.application' }
+def releaseStorePath = System.getenv('RELEASE_KEYSTORE_PATH')
+def releaseStorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD')
+def releaseKeyAlias = System.getenv('ANDROID_KEY_ALIAS')
+def releaseKeyPassword = System.getenv('ANDROID_KEY_PASSWORD')
+def hasReleaseSigning = [releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { it != null && !it.trim().isEmpty() }
 android {
  namespace 'com.sarathi.geckotest'
  compileSdk { version = release(37) { minorApiLevel = 0 } }
  defaultConfig {
-  applicationId 'com.sarathi.anantnag.gecko'
+  applicationId 'com.sarathi.anantnag.gecko.v33'
   minSdk 26
   targetSdk 34
-  versionCode 330
-  versionName '3.3-v11.47'
+  versionCode 331
+  versionName '3.3-v11.47-newkey'
   testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
   ndk { abiFilters(project.findProperty('testAbi') ?: 'arm64-v8a') }
  }
  packaging { jniLibs { useLegacyPackaging = true } }
- buildTypes { release { minifyEnabled true; shrinkResources true; proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'; if(project.hasProperty('smokeRelease')) signingConfig signingConfigs.debug } }
+ signingConfigs {
+  if (hasReleaseSigning) {
+   release {
+    storeFile file(releaseStorePath)
+    storePassword releaseStorePassword
+    keyAlias releaseKeyAlias
+    keyPassword releaseKeyPassword
+   }
+  }
+ }
+ buildTypes {
+  release {
+   minifyEnabled true
+   shrinkResources true
+   proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+   if (hasReleaseSigning) {
+    signingConfig signingConfigs.release
+   }
+  }
+ }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
 dependencies {
@@ -21,9 +45,5 @@ dependencies {
  androidTestImplementation 'androidx.test:rules:1.6.1'
  androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 }
-
-
 tasks.register('prepareProfiles', Exec) { commandLine 'python3', rootProject.file('scripts/prepare-profiles.py') }
 tasks.named('preBuild').configure { dependsOn 'prepareProfiles' }
-
-
