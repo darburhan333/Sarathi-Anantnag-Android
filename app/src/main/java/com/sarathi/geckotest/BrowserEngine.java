@@ -189,8 +189,8 @@ final class BrowserEngine {
               JSONObject m=(JSONObject)message;
               switch(m.optString("type")){
                 case "ARM":run.arm();break;
-                case "SECURE_GET":result.put("values",SecureSettings.read(service));break;
-                case "SECURE_SET":SecureSettings.write(service,m.getJSONObject("values"));break;
+                case "SECURE_GET":result.put("values",SecureSettings.read(service,profile));break;
+                case "SECURE_SET":SecureSettings.write(service,profile,m.getJSONObject("values"));break;
                 case "SUMMARY":result.put("text",service.summary());break;
                 case "RESTORE":result.put("armed",run.armed);break;
                 case "AUTHORIZE":return run.authorization();
