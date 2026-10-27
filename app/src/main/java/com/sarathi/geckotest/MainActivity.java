@@ -42,7 +42,7 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private BrowserEngine engine;
-    private boolean bound,visible;private int pendingCallApplicant;private final Button[] applicantButtons=new Button[MonitorService.PROFILE_COUNT];
+    private boolean bound,visible;private int pendingCallApplicant;private final Button[] phoneListButtons=new Button[MonitorService.PROFILE_COUNT];private final Button[] applicantButtons=new Button[MonitorService.PROFILE_COUNT];
     private GeckoView view,monitorView;
     private TextView status,monitorStatus;
     private Button monitorButton,batteryButton;
@@ -97,11 +97,18 @@ public class MainActivity extends Activity {
         openDialerForApplicant(number);
       }catch(Exception e){Toast.makeText(this,"Could not read phone number. Open Phone numbers to update it.",Toast.LENGTH_LONG).show();}
     }
+    private String phoneLabel(int number){
+      try{return "Applicant "+number+(ApplicantContacts.read(this,number).isEmpty()?"   ·   NOT ADDED":"   ✓   NUMBER SAVED");}
+      catch(Exception ex){return "Applicant "+number+"   ·   STATUS UNAVAILABLE";}
+    }
+    private void refreshPhoneListItem(int number){Button b=phoneListButtons[number-1];if(b!=null)b.setText(phoneLabel(number));}
     private void managePhones(){
-      String[] labels=new String[MonitorService.PROFILE_COUNT];
-      for(int i=0;i<labels.length;i++){try{labels[i]="Applicant "+(i+1)+(ApplicantContacts.read(this,i+1).isEmpty()?"  ·  Not added":"  ✓  Saved");}catch(Exception ex){labels[i]="Applicant "+(i+1)+"  ·  Status unavailable";}}
+      android.widget.ScrollView scroll=new android.widget.ScrollView(this);
+      LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(dp(8),dp(4),dp(8),dp(4));scroll.addView(list);
+      int[] colours={0xFF2563EB,0xFF0F766E,0xFF7C3AED,0xFFB45309,0xFF0369A1,0xFFBE123C,0xFF4D7C0F,0xFF6D28D9,0xFF0E7490};
+      for(int i=1;i<=MonitorService.PROFILE_COUNT;i++){final int number=i;Button item=new Button(this);item.setAllCaps(false);item.setTextSize(13);item.setTextColor(Color.WHITE);item.setGravity(Gravity.CENTER_VERTICAL);item.setSingleLine(false);item.setMaxLines(2);item.setPadding(dp(12),dp(4),dp(12),dp(4));item.setMinHeight(dp(48));item.setText(phoneLabel(i));GradientDrawable bg=new GradientDrawable();bg.setColor(colours[i-1]);bg.setCornerRadius(dp(10));item.setBackground(new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF),bg,null));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(54));lp.setMargins(0,dp(3),0,dp(3));list.addView(item,lp);phoneListButtons[i-1]=item;item.setOnClickListener(v->editApplicantPhone(number));}
       boolean direct=getPreferences(MODE_PRIVATE).getBoolean("direct_call_enabled",false);
-      new AlertDialog.Builder(this).setTitle("Applicant phone numbers").setItems(labels,(dialog,index)->editApplicantPhone(index+1))
+      new AlertDialog.Builder(this).setTitle("Applicant phone numbers").setView(scroll)
        .setNeutralButton("Direct call: "+(direct?"ON":"OFF"),(dialog,which)->{getPreferences(MODE_PRIVATE).edit().putBoolean("direct_call_enabled",!direct).apply();Toast.makeText(this,"Direct calling "+(!direct?"enabled":"disabled"),Toast.LENGTH_SHORT).show();managePhones();})
        .setNegativeButton("Close",null).show();
     }
@@ -118,8 +125,8 @@ public class MainActivity extends Activity {
       AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Applicant "+number+" phone number").setMessage("Long-press this applicant to open the saved number in your dialer.").setView(input)
        .setPositiveButton("Save",null).setNeutralButton("Remove",null).setNegativeButton("Cancel",null).create();
       dialog.setOnShowListener(unused->{
-       dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{ApplicantContacts.save(this,number,input.getText().toString());dialog.dismiss();Toast.makeText(this,"Phone number saved",Toast.LENGTH_SHORT).show();}catch(IllegalArgumentException e){input.setError(e.getMessage());}catch(Exception e){input.setError("Could not save securely. Please try again.");}});
-       dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{try{ApplicantContacts.remove(this,number);dialog.dismiss();Toast.makeText(this,"Phone number removed",Toast.LENGTH_SHORT).show();}catch(Exception e){input.setError("Could not remove number. Please try again.");}});
+       dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{ApplicantContacts.save(this,number,input.getText().toString());refreshPhoneListItem(number);dialog.dismiss();Toast.makeText(this,"Phone number saved",Toast.LENGTH_SHORT).show();}catch(IllegalArgumentException e){input.setError(e.getMessage());}catch(Exception e){input.setError("Could not save securely. Please try again.");}});
+       dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{try{ApplicantContacts.remove(this,number);refreshPhoneListItem(number);dialog.dismiss();Toast.makeText(this,"Phone number removed",Toast.LENGTH_SHORT).show();}catch(Exception e){input.setError("Could not remove number. Please try again.");}});
       });dialog.show();
     }
     private void batterySettings(){
