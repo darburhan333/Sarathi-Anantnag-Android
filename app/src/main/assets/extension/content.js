@@ -164,7 +164,10 @@
       const row=el.closest?.('tr');
       if(row) labels.push(row.textContent || '');
       const label=norm(labels.join(' '));
-      return label ? /\b(?:LMV|MCWG|MCWOG|HMV|TRANS|TRANS\/M-HMV)\b|\bmotor\s+cycle\s+without\s+gear\b|\btransport\s+vehicle\s*[-–]?\s*m\s*\/\s*hmv\b|\bheavy\s+motor\s+vehicle\b/i.test(label)
+      const supportedCode=/\b(?:LMV|MCWG|HMV)\b/i.test(label)
+        || (/\bMCWOG\b/i.test(label) && /\bmotor\s+cycle\s+without\s+gear\b/i.test(label))
+        || (/\bTRANS\b/i.test(label) && /\btransport\s+vehicle\b/i.test(label));
+      return label ? supportedCode || /\bheavy\s+motor\s+vehicle\b/i.test(label)
                    : (el.value === '4' || el.value === '3');
     });
     if (!selected.length) return null;
