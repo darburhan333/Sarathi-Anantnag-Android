@@ -166,7 +166,8 @@ public class MainActivity extends Activity {
         LinearLayout controls=new LinearLayout(this);
         monitorButton=button(controls,"Monitor",Color.rgb(37,99,235),this::toggleMonitor);
         Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.run.stopByUser();});
-        button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});
+        Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null){engine.alerts.stop();command("SILENCE");}});
+        silenceButton.setOnLongClickListener(v->{if(engine!=null){for(BrowserEngine applicant:engine.service.profiles)if(applicant!=null){applicant.alerts.stop();applicant.command("SILENCE");}}Toast.makeText(this,"Active alarms silenced across all applicants; monitoring continues",Toast.LENGTH_SHORT).show();return true;});
         monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);monitorButton.setTextSize(12);
         stopButton.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Stop all applicants?").setPositiveButton("Stop all",(d,w)->{if(engine!=null)engine.service.stopAll();}).setNegativeButton("Cancel",null).show();return true;});
         button(controls,"Home",Color.rgb(4,120,87),()->{if(engine!=null)engine.home();});header.addView(controls);
