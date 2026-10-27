@@ -17,6 +17,7 @@
  }
  async function command(m){
   if(m.type==='DISARMED'){await chrome.storage.local.set({androidServiceReady:false});const d=await chrome.storage.local.get({running:false,successWatch:false});if(d.running||d.successWatch)await stop('Background service stopped — press START to begin again');return;}
+  if(m.type==='AUDIT_SMOKE'&&typeof globalThis.auditProfileIsolation==='function'){globalThis.auditProfileIsolation();return;}
   if(m.type==='MULTI_SMOKE'&&typeof globalThis.runMultiSmoke==='function'){globalThis.runMultiSmoke();return;}
   if(m.type==='SMOKE_RUN' && typeof globalThis.runAndroidSmoke==='function'){globalThis.runAndroidSmoke();return;}
   if(m.type==='FOREGROUND'){

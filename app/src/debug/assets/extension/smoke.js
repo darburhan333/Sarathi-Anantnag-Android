@@ -72,3 +72,24 @@ globalThis.runMultiSmoke=async()=>{
   await nativeRequest({type:'SMOKE_RESULT',result:'PASS: isolated cookies, localStorage, IndexedDB, extension state and native ownership'});
  }catch(e){await nativeRequest({type:'SMOKE_RESULT',result:'FAIL multi: '+String(e.message||e)});}
 };
+
+
+// Re-read every profile after all nine have written storage, not just immediately
+// after each profile writes its own value.
+globalThis.auditProfileIsolation=async()=>{
+ try{
+  const d=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:''});
+  const check=(ok,msg)=>{if(!ok)throw Error(msg);};
+  check(d.monitorSessionId==='multi-'+APPLICANT,'Extension storage changed');
+  const evaluate=async code=>(await browser.tabs.executeScript(d.monitoredTabId,{code}))[0];
+  check(await evaluate(`document.cookie.split('; ').includes('profile=${APPLICANT}')`),'Cookie changed after other applicants started');
+  check(await evaluate(`localStorage.getItem('profile')==='${APPLICANT}'`),'localStorage changed');
+  check(await evaluate(`new Promise((resolve,reject)=>{const r=indexedDB.open('isolation',1);r.onsuccess=()=>{const db=r.result;const q=db.transaction('values').objectStore('values').get('profile');q.onsuccess=()=>{db.close();resolve(q.result==='${APPLICANT}')};q.onerror=reject;};r.onerror=reject;})`),'IndexedDB changed');
+  for(const other of await browser.tabs.query({url:'http://127.0.0.1/*'})){
+   if(other.id===d.monitoredTabId||!other.url?.includes('/profile'))continue;
+   let claimed=false;try{claimed=(await browser.tabs.sendMessage(other.id,{type:'SARATHI_PROFILE_QUERY'}))?.ok;}catch(_){}
+   check(!claimed,'Cross-applicant page accepted');
+  }
+  await nativeRequest({type:'SMOKE_RESULT',result:'PASS: all-nine storage and cross-profile audit'});
+ }catch(e){await nativeRequest({type:'SMOKE_RESULT',result:'FAIL audit: '+String(e.message||e)});}
+};

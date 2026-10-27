@@ -117,6 +117,10 @@ public class GeckoIntegrationTest {
     assertTrue("Applicant "+n+": "+e.smokeResult,e.smokeResult.startsWith("PASS:"));
     System.out.println("Applicant "+n+" "+e.smokeResult);
    }
+   main(()->{for(BrowserEngine e:service.profiles){e.smokeResult="";e.command("AUDIT_SMOKE");}});
+   end=System.currentTimeMillis()+45000;
+   while(System.currentTimeMillis()<end&&java.util.Arrays.stream(service.profiles).anyMatch(e->e.smokeResult.isEmpty()))Thread.sleep(250);
+   for(BrowserEngine e:service.profiles)assertTrue("Concurrent isolation "+e.profile+": "+e.smokeResult,e.smokeResult.startsWith("PASS:"));
    int[] before=new int[9];for(int i=0;i<9;i++)before[i]=counts.get(i);shell("input keyevent KEYCODE_HOME");shell("input keyevent KEYCODE_SLEEP");
    // Reproduce GeckoView deactivation after detachment, without changing our cached state.
    main(()->{for(BrowserEngine e:service.profiles)for(org.mozilla.geckoview.GeckoSession page:e.sessions)if(page!=e.monitorSession&&page.isOpen())page.setActive(false);});
