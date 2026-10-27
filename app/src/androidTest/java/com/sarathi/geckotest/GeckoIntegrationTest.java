@@ -30,11 +30,12 @@ public class GeckoIntegrationTest {
   while(a.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
   MonitorService service=a.serviceForTest();assertNotNull(service);
   shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
-  java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
+  java.util.concurrent.CountDownLatch completed=new java.util.concurrent.CountDownLatch(2);
+  java.util.concurrent.atomic.AtomicInteger cancelled=new java.util.concurrent.atomic.AtomicInteger();
   main(()->{
    service.stopAll();BrowserEngine one=service.profile(1),two=service.profile(2);
    one.run.arm();two.run.arm();Object page=one.current;
-   one.run.waitFor(8000).accept(r->cancelled.set(r.toString().contains("cancelled")));
+   for(BrowserEngine e:new BrowserEngine[]{one,two})e.run.waitFor(8000).accept(r->{if(r.toString().contains("\"cancelled\":true"))cancelled.incrementAndGet();completed.countDown();});
    service.visible=false;
    try{one.run.recover("Injected minimized stall");
     assertEquals(0,service.activeCount());assertSame(page,one.current);
@@ -43,7 +44,10 @@ public class GeckoIntegrationTest {
     service.stopForBackground("Duplicate callback");assertEquals(0,service.activeCount());
    }finally{service.visible=true;}
   });
-  assertTrue("All native waits must be cancelled",cancelled.get());
+  // GeckoResult listeners are dispatched asynchronously on the main looper.
+  // Wait from the instrumentation thread so that looper can deliver both callbacks.
+  assertTrue("Both wait callbacks must arrive",completed.await(5,java.util.concurrent.TimeUnit.SECONDS));
+  assertEquals("All applicants native waits must be cancelled",2,cancelled.get());
  }
  @Test public void realExtensionLoop() throws Exception {
   ServerSocket server=new ServerSocket(8765);
