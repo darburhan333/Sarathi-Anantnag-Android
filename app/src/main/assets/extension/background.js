@@ -4,7 +4,6 @@ async function showDesktopNotification(options, id) {
  if(!result?.ok)throw Error(result?.error||'Android notifications unavailable');
  return id||'android-alert';
 }
-const PRIMARY_CHAT_ID = '';
 // Serialize critical authorization and one-time booking reservations in the MV3 worker.
 let gateQueue=Promise.resolve();
 let alertQueue=Promise.resolve();
@@ -51,14 +50,13 @@ async function authorizeAction(msg,sender){
  return {authorized:true};
 }
 const api = 'https://api.telegram.org/bot';
-chrome.storage.local.get({chatId:''}).then(d=>{if(!d.chatId) return chrome.storage.local.set({chatId:PRIMARY_CHAT_ID});}).catch(()=>{});
 // Configure the bot token locally in the TELEGRAM tab. Never distribute a live token.
 
 async function sendTelegram(message) {
   if(globalThis.PROFILE_MODE)message="Applicant "+globalThis.APPLICANT+" · "+message;
   const {chatId='',chatId2='',botToken=''} = await chrome.storage.local.get({chatId:'',chatId2:'',botToken:''});
   if (!/^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(botToken.trim())) throw Error('Configure Telegram bot token in the TELEGRAM tab.');
-  const ids = [...new Set([(chatId.trim() || PRIMARY_CHAT_ID), chatId2.trim()].filter(Boolean))];
+  const ids = [...new Set([chatId.trim(), chatId2.trim()].filter(Boolean))];
   if (!ids.length || ids.some(id => !/^-?\d+$/.test(id))) throw Error('Enter valid numeric Chat IDs.');
   const results = await Promise.allSettled(ids.map(async id => {
     const started=Date.now();
