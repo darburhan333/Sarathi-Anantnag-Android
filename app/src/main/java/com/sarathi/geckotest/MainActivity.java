@@ -117,14 +117,16 @@ public class MainActivity extends Activity {
         b.setAllCaps(false);b.setTextSize(11);
         b.setTypeface(Typeface.DEFAULT,Typeface.NORMAL);
         b.setTextColor(Color.WHITE);
-        b.setMinHeight(dp(48));b.setMinimumHeight(dp(48));
+        b.setMinHeight(dp(52));b.setMinimumHeight(dp(52));
         b.setMinWidth(0);b.setMinimumWidth(0);
+        b.setGravity(Gravity.CENTER);
+        b.setSingleLine(false);b.setMaxLines(2);
         b.setPadding(dp(4),dp(4),dp(4),dp(4));
         GradientDrawable shape=new GradientDrawable();
         shape.setColor(color);shape.setCornerRadius(dp(12));
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF),shape,null));
         b.setOnClickListener(v -> action.run());
-        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(56),1);
         params.setMargins(dp(2),dp(2),dp(2),dp(2));
         row.addView(b,params);
         return b;
