@@ -160,8 +160,11 @@
       for (let node=el.nextSibling; node && node.nodeType===3; node=node.nextSibling) labels.push(node.textContent || '');
       const cell=el.closest?.('td');
       if(cell && cell.querySelectorAll('input[type="checkbox"]').length===1) labels.push(cell.textContent || '');
+      // COV description and code are in sibling cells of this checkbox's row.
+      const row=el.closest?.('tr');
+      if(row) labels.push(row.textContent || '');
       const label=norm(labels.join(' '));
-      return label ? /\b(?:LMV|MCWG|HMV)\b|\bheavy\s+motor\s+vehicle\b/i.test(label)
+      return label ? /\b(?:LMV|MCWG|MCWOG|HMV|TRANS|TRANS\/M-HMV)\b|\bmotor\s+cycle\s+without\s+gear\b|\btransport\s+vehicle\s*[-–]?\s*m\s*\/\s*hmv\b|\bheavy\s+motor\s+vehicle\b/i.test(label)
                    : (el.value === '4' || el.value === '3');
     });
     if (!selected.length) return null;
