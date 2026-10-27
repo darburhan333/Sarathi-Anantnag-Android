@@ -42,7 +42,7 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private BrowserEngine engine;
-    private boolean bound,visible;private final Button[] applicantButtons=new Button[MonitorService.PROFILE_COUNT];
+    private boolean bound,visible;private int pendingCallApplicant;private final Button[] applicantButtons=new Button[MonitorService.PROFILE_COUNT];
     private GeckoView view,monitorView;
     private TextView status,monitorStatus;
     private Button monitorButton,batteryButton;
@@ -79,16 +79,38 @@ public class MainActivity extends Activity {
       else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
     void selectApplicant(int number){if(engine==null||engine.profile==number)return;MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
+    private void openDialerForApplicant(int number){
+      try{String phone=ApplicantContacts.read(this,number);if(phone.isEmpty()){editApplicantPhone(number);return;}
+        startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));
+      }catch(Exception e){Toast.makeText(this,"Could not open dialer. Check the saved phone number.",Toast.LENGTH_LONG).show();}
+    }
     private void applicantPhone(int number){
       try{String phone=ApplicantContacts.read(this,number);
         if(phone.isEmpty()){editApplicantPhone(number);return;}
-        startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));
-      }catch(android.content.ActivityNotFoundException e){Toast.makeText(this,"No dialer app is available",Toast.LENGTH_LONG).show();}
-      catch(Exception e){Toast.makeText(this,"Could not read phone number. Open Phone numbers to update it.",Toast.LENGTH_LONG).show();}
+        if(getPreferences(MODE_PRIVATE).getBoolean("direct_call_enabled",false)){
+          if(android.os.Build.VERSION.SDK_INT<23 || checkSelfPermission(Manifest.permission.CALL_PHONE)==PackageManager.PERMISSION_GRANTED){
+            startActivity(new Intent(Intent.ACTION_CALL,Uri.fromParts("tel",phone,null)));return;
+          }
+          pendingCallApplicant=number;
+          requestPermissions(new String[]{Manifest.permission.CALL_PHONE},21);return;
+        }
+        openDialerForApplicant(number);
+      }catch(Exception e){Toast.makeText(this,"Could not read phone number. Open Phone numbers to update it.",Toast.LENGTH_LONG).show();}
     }
     private void managePhones(){
-      String[] labels=new String[MonitorService.PROFILE_COUNT];for(int i=0;i<labels.length;i++)labels[i]="Applicant "+(i+1);
-      new AlertDialog.Builder(this).setTitle("Edit applicant phone number").setItems(labels,(dialog,index)->editApplicantPhone(index+1)).setNegativeButton("Cancel",null).show();
+      String[] labels=new String[MonitorService.PROFILE_COUNT];
+      for(int i=0;i<labels.length;i++){try{labels[i]="Applicant "+(i+1)+(ApplicantContacts.read(this,i+1).isEmpty()?"  ·  Not added":"  ✓  Saved");}catch(Exception ex){labels[i]="Applicant "+(i+1)+"  ·  Status unavailable";}}
+      boolean direct=getPreferences(MODE_PRIVATE).getBoolean("direct_call_enabled",false);
+      new AlertDialog.Builder(this).setTitle("Applicant phone numbers").setItems(labels,(dialog,index)->editApplicantPhone(index+1))
+       .setNeutralButton("Direct call: "+(direct?"ON":"OFF"),(dialog,which)->{getPreferences(MODE_PRIVATE).edit().putBoolean("direct_call_enabled",!direct).apply();Toast.makeText(this,"Direct calling "+(!direct?"enabled":"disabled"),Toast.LENGTH_SHORT).show();managePhones();})
+       .setNegativeButton("Close",null).show();
+    }
+    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
+      super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+      if(requestCode==21&&pendingCallApplicant>0){int number=pendingCallApplicant;pendingCallApplicant=0;
+        if(grantResults.length>0&&grantResults[0]==PackageManager.PERMISSION_GRANTED)applicantPhone(number);
+        else{Toast.makeText(this,"Call permission denied; opening dialer instead",Toast.LENGTH_SHORT).show();openDialerForApplicant(number);}
+      }
     }
     private void editApplicantPhone(int number){
       android.widget.EditText input=new android.widget.EditText(this);input.setInputType(android.text.InputType.TYPE_CLASS_PHONE);input.setSingleLine(true);input.setHint("Phone number, e.g. +91…");
