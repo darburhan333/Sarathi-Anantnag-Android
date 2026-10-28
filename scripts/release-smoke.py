@@ -1,6 +1,6 @@
 """Exercise the actual minified release UI, with no debug extension or fixture hooks."""
 import subprocess,time,xml.etree.ElementTree as ET,re
-PACKAGE='com.sarathi.anantnag.gecko'
+PACKAGE='com.sarathi.anantnag.gecko.v33'
 def adb(*args):return subprocess.check_output(['adb',*args],text=True)
 def snapshot():
  adb('shell','uiautomator','dump','/sdcard/release-ui.xml')

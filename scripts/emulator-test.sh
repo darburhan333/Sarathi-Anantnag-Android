@@ -39,7 +39,8 @@ if [ "$result" -eq 0 ]; then
   "$APKSIGNER" verify --verbose "$APK_PATH" || exit 1
   echo "Installing signed release smoke APK: $APK_PATH"
   # Clear only the disposable CI emulator so debug extensions cannot survive into release smoke.
-  adb install -r "$APK_PATH" || exit 1
+  adb uninstall com.sarathi.anantnag.gecko.v33 || exit 1
+  adb install "$APK_PATH" || exit 1
   adb shell pm clear com.sarathi.anantnag.gecko.v33 || exit 1
   python3 scripts/release-smoke.py || exit 1
 fi

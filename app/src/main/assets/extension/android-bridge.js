@@ -51,6 +51,8 @@
   port=browser.runtime.connectNative('sarathi');
   let pingBusy=false;
   port.onMessage.addListener(m=>{
+   // Page readiness and a pending START must never hold up STOP/SILENCE.
+   if(m.type==='START_READY'||m.type==='PAGE_QUERY'){command(m).catch(e=>port?.postMessage({type:'ERROR',message:String(e.message||e)}));return;}
    if(m.type==='RECOVER_CHECK'){
     // Out of the control queue: a stale tab message must not block recovery or STOP.
     (async()=>{

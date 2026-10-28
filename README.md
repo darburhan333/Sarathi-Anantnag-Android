@@ -1,3 +1,17 @@
+# MPARIVAHAN SLOT BOOKING -J&K 3.4
+
+This update keeps the v3.3 package (`com.sarathi.anantnag.gecko.v33`) and repository release signing secrets. Version code: 340.
+
+- Timing stalls pause native action permission and verify the same applicant/session. Four attempts use 5/15/30-second backoff; unsuccessful recovery alerts and stops only that applicant. Booking/calendar locks still require manual review. No missed requests are replayed.
+- Start All uses the existing guarded start flow, skips unopened/active/unready applicants and preserves uncertain booking locks. Stop cancels pending batch starts. Results appear in Copy log.
+- Page-ready messages require a response from the owned content script. Loading and slow/unverified states no longer assert that navigation completion means usable content.
+- Nine profiles, independent encrypted Telegram settings, COV support, phone options, Silence All and Stop All are retained. Header height adapts to landscape.
+- Release smoke tests use a disposable emulator signing key; distributed APKs use repository release secrets only.
+
+A foreground service and wake lock cannot guarantee uninterrupted execution under all manufacturer power policies. Recovery handling is not proof of continuous background polling. Validate on the affected Infinix device using elapsed/uptime gaps and actual page progress. Do not uninstall v3.3 when installing a same-certificate update.
+
+## Previous documentation
+
 # MPARIVAHAN SLOT BOOKING -J&K 3.3
 
 Nine independent applicant containers, built from the completed V3.2 baseline. The website engine and package identity are unchanged. Release versionCode is 330; use the existing private release certificate for in-place updates.

@@ -4,6 +4,9 @@ on:
     branches:
       - build/mparivahan-v3.4-recovery
   workflow_dispatch:
+concurrency:
+  group: sarathi-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:

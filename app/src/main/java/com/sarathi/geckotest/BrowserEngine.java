@@ -142,7 +142,7 @@ final class BrowserEngine {
       render();activate();
       runtime.getWebExtensionController().setTabActive(showingMonitor?monitorSession:current,true);
     }
-    private String pageQuery="",pageUrl="";
+    private String pageQuery="",pageUrl="";private boolean pageReady;
     private void receive(Object message){
       if(!(message instanceof JSONObject))return;
       JSONObject o=(JSONObject)message;
@@ -160,7 +160,7 @@ final class BrowserEngine {
         case "ACK":
           finishNavigation(o.optString("id"));break;
         case "START_RESULT":if(o.optString("batch").equals(service.startBatch)){log("Start All: "+o.optString("reason"));service.record("Applicant "+profile+" Start All: "+o.optString("reason"));}break;
-        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){log(o.optBoolean("covReady")?"Page ready · COV selection":"Page ready · navigate to COV to start");}break;
+        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;log(o.optBoolean("covReady")?"Page ready · COV selection":"Page ready · navigate to COV to start");}break;
         case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"),o.optBoolean("terminal"),o.optString("reason","No verification details"));break;
         case "ERROR":log(o.optString("message"));break;
       }
@@ -314,8 +314,9 @@ final class BrowserEngine {
             @Override public void onPageStart(GeckoSession session, String url) {
                 if(!sessions.contains(session)||!session.isOpen()||session==monitorSession)return;
                 if(session!=current&&!run.armed)showSession(session);
-                pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
+                pageReady=false;pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
                 log("Loading " + safeLocation(url));
+                final String loadingId=pageQuery;service.handler.postDelayed(()->{if(!destroyed&&!pageReady&&loadingId.equals(pageQuery))log("Connection slow or page not verified · waiting for Sarathi");},15000);
             }
             @Override public void onPageStop(GeckoSession session, boolean success) {
                 if (session == current) {
