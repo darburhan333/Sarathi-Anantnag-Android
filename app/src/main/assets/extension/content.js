@@ -697,7 +697,7 @@
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if(message?.type==='SARATHI_PROFILE_QUERY'){sendResponse({ok:true});return false;}
+    if(message?.type==='SARATHI_PROFILE_QUERY'){sendResponse({ok:true,ready:document.readyState!=='loading',covReady:!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),page:location.href});return false;}
     if (message?.type === 'SARATHI_HEALTH_PING') {
       (async()=>{
         const owner=await confirmOwnership();
@@ -705,7 +705,7 @@
           safeToRestart:owner&&!loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
           safeToResume:owner&&loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
           lastLoopProgress,loopStartedAt,covPresent:!!getCovForm(),calendar:realCalendar(),
-          popup:noSlotsTextPresent(),sessionId};
+          expired:EXPIRY_TEXT.test(pageText(true)),locked:sessionLocked||calendarLocked, busy:bookingActionBusy||inFlight, popup:noSlotsTextPresent(),sessionId};
       })().then(sendResponse).catch(()=>sendResponse({ok:false}));return true;
     }
     if (message?.type === 'SARATHI_START' || message?.type === 'SARATHI_RECOVER') {

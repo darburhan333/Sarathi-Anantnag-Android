@@ -142,6 +142,7 @@ final class BrowserEngine {
       render();activate();
       runtime.getWebExtensionController().setTabActive(showingMonitor?monitorSession:current,true);
     }
+    private String pageQuery="",pageUrl="";
     private void receive(Object message){
       if(!(message instanceof JSONObject))return;
       JSONObject o=(JSONObject)message;
@@ -158,7 +159,9 @@ final class BrowserEngine {
           break;
         case "ACK":
           finishNavigation(o.optString("id"));break;
-        case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"));break;
+        case "START_RESULT":if(o.optString("batch").equals(service.startBatch)){log("Start All: "+o.optString("reason"));service.record("Applicant "+profile+" Start All: "+o.optString("reason"));}break;
+        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){log(o.optBoolean("covReady")?"Page ready · COV selection":"Page ready · navigate to COV to start");}break;
+        case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"),o.optBoolean("terminal"),o.optString("reason","No verification details"));break;
         case "ERROR":log(o.optString("message"));break;
       }
     }
@@ -188,7 +191,7 @@ final class BrowserEngine {
               if(sender.session!=null)throw new IllegalArgumentException("Only background messages allowed");
               JSONObject m=(JSONObject)message;
               switch(m.optString("type")){
-                case "ARM":run.arm();break;
+                case "ARM":if(!m.optString("batch").isEmpty()&&!m.optString("batch").equals(service.startBatch))throw new IllegalStateException("Start All cancelled");run.arm();break;
                 case "SECURE_GET":result.put("values",SecureSettings.read(service,profile));break;
                 case "SECURE_SET":SecureSettings.write(service,profile,m.getJSONObject("values"));service.releaseStatus(profile);break;
                 case "SECURE_REMOVE":SecureSettings.remove(service,profile);service.releaseStatus(profile);break;
@@ -311,11 +314,13 @@ final class BrowserEngine {
             @Override public void onPageStart(GeckoSession session, String url) {
                 if(!sessions.contains(session)||!session.isOpen()||session==monitorSession)return;
                 if(session!=current&&!run.armed)showSession(session);
+                pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
                 log("Loading " + safeLocation(url));
             }
             @Override public void onPageStop(GeckoSession session, boolean success) {
                 if (session == current) {
-                    log(success?"Page ready":"Page could not load — check connection or use Home");
+                    log(success?"Navigation finished · checking page readiness":"Page could not load — check connection or use Home");
+                    if(success)command("PAGE_QUERY",pageQuery);
                     if(!firstPageRecorded){firstPageRecorded=true;logs.add("First page completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);service.handler.post(BrowserEngine.this::prepareMonitor);}
                 }
             }

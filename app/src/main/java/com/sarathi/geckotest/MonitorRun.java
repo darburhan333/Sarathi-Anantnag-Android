@@ -4,7 +4,9 @@ import android.os.*;import org.json.JSONObject;import org.mozilla.geckoview.Geck
 final class MonitorRun {
  final BrowserEngine engine;final Handler handler;boolean armed,sawRunning,recovering;
  private long armedAt,lastBeat,lastProgress,lastTick,longestGap,lastHeartbeatValue,lastProgressValue,recoveryAt;
- private long recoveryProgressValue=-1;
+ private long recoveryRetryAt,verifiedAt;
+ private int recoveryAttempt;
+ private static final long[] RETRY_DELAYS={5000,15000,30000};
  private int generation;private String recoveryId="",lastReason="Ready";
  private final Map<GeckoResult<Object>,Runnable> waits=new IdentityHashMap<>();
  private final Set<GeckoResult<Object>> authorizations=Collections.newSetFromMap(new IdentityHashMap<>());
@@ -25,13 +27,13 @@ final class MonitorRun {
   if(!engine.service.visible||engine.service.activity==null)throw new IllegalStateException("Open app before START");
   if(armed)return;engine.service.beginForeground();
   armed=true;sawRunning=false;recovering=false;generation++;lastReason="Running";
-  armedAt=lastBeat=lastProgress=lastTick=SystemClock.elapsedRealtime();longestGap=0;recoveryProgressValue=-1;lastHeartbeatValue=lastProgressValue=0;
+  armedAt=lastBeat=lastProgress=lastTick=SystemClock.elapsedRealtime();longestGap=0;recoveryAttempt=0;verifiedAt=0;lastHeartbeatValue=lastProgressValue=0;
   engine.alerts.clearNotification();engine.service.record("Applicant "+engine.profile+" START run="+generation);
   engine.service.markRunning(engine.profile,true);engine.activate();engine.service.refreshForeground(true);
  }
  void disarm(){disarm(true);}
  private void disarm(boolean notifyBridge){
-  boolean wasArmed=armed;armed=false;sawRunning=false;recovering=false;generation++;
+  boolean wasArmed=armed;if(wasArmed)engine.service.record("Applicant "+engine.profile+" DISARM run="+generation+" reason="+lastReason+diagnostics()+"; "+engine.service.clockDiagnostics());armed=false;sawRunning=false;recovering=false;generation++;
   if(wasArmed&&notifyBridge)engine.command("DISARMED");
   Map<GeckoResult<Object>,Runnable> pending=new IdentityHashMap<>(waits);waits.clear();delayed.clear();
   ArrayList<GeckoResult<Object>> actions=new ArrayList<>(authorizations);authorizations.clear();for(GeckoResult<Object> r:actions)r.complete("{\"ok\":false}");
@@ -40,14 +42,13 @@ final class MonitorRun {
   }
   engine.service.markRunning(engine.profile,false);engine.service.refreshForeground(true);engine.activate();engine.render();
  }
- void stopByUser(){lastReason="Stopped by user";disarm();engine.command("STOP");engine.command("SILENCE");engine.alerts.stop();engine.alerts.clearNotification();}
+ void stopByUser(){engine.service.cancelStartBatch();lastReason="Stopped by user";disarm();engine.command("STOP");engine.command("SILENCE");engine.alerts.stop();engine.alerts.clearNotification();}
  void stopForBackground(String message){
   if(!armed)return;lastReason=message;engine.log(message);
   disarm(false);engine.command("SAFE_STOP",message);
  }
  void fail(String message){
   if(!armed)return; // Idle and duplicate browser callbacks must not alarm.
-  if(!engine.service.visible){engine.service.stopForBackground(message);return;}
   lastReason=message;engine.log(message);engine.service.record("Applicant "+engine.profile+" stopped: "+message);
   // Revoke first. FAILURE updates the dashboard; only native code delivers this failure alarm.
   disarm(false);engine.command("FAILURE",message);
@@ -58,7 +59,7 @@ final class MonitorRun {
   if(beat>lastHeartbeatValue){lastHeartbeatValue=beat;lastBeat=now;}
   if(progress>lastProgressValue){lastProgressValue=progress;lastProgress=now;}
   boolean active=state.optBoolean("running")||state.optBoolean("successWatch");
-  if(armed){if(active)sawRunning=true;else if(sawRunning){lastReason="Monitoring completed or stopped";disarm();return;}engine.service.refreshForeground(false);}
+  if(armed){if(active)sawRunning=true;else if(sawRunning){lastReason="Extension stopped: "+state.optString("bookingStage")+" / "+state.optString("lastStatus");disarm();return;}engine.service.refreshForeground(false);}
  }
  GeckoResult<Object> waitFor(long ms){
   GeckoResult<Object> result=new GeckoResult<>();
@@ -76,32 +77,44 @@ final class MonitorRun {
  private void finishWait(GeckoResult<Object> r,boolean ok){if(waits.remove(r)==null)return;delayed.remove(r);r.complete(ok?"{\"ok\":true}":"{\"ok\":false,\"cancelled\":true}");}
  void recover(String reason){
   if(!armed||recovering)return;
-  boolean tickGap=reason!=null&&reason.startsWith("Main-thread tick gap");
-  // Minimized state alone is not a failure: verify the existing session through the bridge.
-  // If verification fails or times out, fail closed without reloading or replaying actions.
-  if(recoveryProgressValue==lastProgressValue&&!tickGap){fail("No page progress after recovery — inspect Sarathi and press START");return;}
-  recoveryProgressValue=lastProgressValue;recovering=true;recoveryAt=SystemClock.elapsedRealtime();recoveryId=generation+":"+recoveryAt;
-  lastReason="Checking session after delay";engine.service.logStallDiagnostics("Applicant "+engine.profile+" "+reason);engine.service.record("Applicant "+engine.profile+" recovery: "+reason+"; "+engine.service.clockDiagnostics());
+  recovering=true;recoveryAttempt=0;recoveryRetryAt=0;
+  lastReason="Paused: "+reason;engine.service.logStallDiagnostics("Applicant "+engine.profile+" "+reason);
+  engine.service.record("Applicant "+engine.profile+" recovery started: "+reason+diagnostics());
+  attemptRecovery();
+ }
+ private void attemptRecovery(){
+  if(!armed||!recovering)return;
+  recoveryAttempt++;recoveryAt=SystemClock.elapsedRealtime();recoveryRetryAt=0;
+  recoveryId=generation+":"+recoveryAt+":"+recoveryAttempt;
+  engine.service.record("Applicant "+engine.profile+" verification attempt="+recoveryAttempt+" id="+recoveryId+diagnostics());
   engine.activate();engine.command("RECOVER_CHECK",recoveryId);engine.render();
  }
- void recovered(String id,boolean safe){
-  if(!armed||!recovering||!recoveryId.equals(id))return;
-  if(!safe){fail("Session could not be verified after delay — inspect Sarathi and press START");return;}
-  recovering=false;lastTick=lastBeat=lastProgress=SystemClock.elapsedRealtime();lastReason="Session verified after delay";
+ private void retryRecovery(String reason){
+  if(recoveryRetryAt!=0)return;
+  lastReason="Paused: "+reason;
+  engine.service.record("Applicant "+engine.profile+" verification failed attempt="+recoveryAttempt+" reason="+reason+diagnostics());
+  if(recoveryAttempt>RETRY_DELAYS.length){fail("Recovery exhausted: "+reason+" — inspect Sarathi and press START");return;}
+  recoveryRetryAt=SystemClock.elapsedRealtime()+RETRY_DELAYS[recoveryAttempt-1];
+ }
+ void recovered(String id,boolean safe){recovered(id,safe,false,"Session not yet verified");}
+ void recovered(String id,boolean safe,boolean terminal,String reason){
+  if(!armed||!recovering||recoveryRetryAt!=0||!recoveryId.equals(id))return;
+  if(!safe){if(terminal)fail("Recovery requires manual attention: "+reason);else retryRecovery(reason);return;}
+  recovering=false;lastTick=verifiedAt=SystemClock.elapsedRealtime();lastReason="Session verified after delay";
+  // Verification is not page progress. Preserve the real heartbeat/progress ages.
   engine.service.record("Applicant "+engine.profile+" recovery verified; no navigation or booking replay");
-  // Only already-pending waits continue. Page gates re-check ownership/document before actions.
   for(GeckoResult<Object> r:new ArrayList<>(delayed))finishWait(r,true);
   ArrayList<GeckoResult<Object>> actions=new ArrayList<>(authorizations);authorizations.clear();for(GeckoResult<Object> r:actions)r.complete("{\"ok\":true}");
  }
  void tick(){
   if(!armed)return;long now=SystemClock.elapsedRealtime(),gap=now-lastTick;lastTick=now;longestGap=Math.max(longestGap,gap);
-  if(recovering){if(now-recoveryAt>15000)fail("Session recovery timed out — inspect Sarathi and press START");}
-  else if(engine.bridgeLostAt>0&&now-engine.bridgeLostAt>15000)fail("Monitor bridge did not reconnect — open app");
+  if(recovering){if(recoveryRetryAt!=0){if(now>=recoveryRetryAt)attemptRecovery();}else if(now-recoveryAt>15000)retryRecovery("Verification reply timed out");}
+  else if(engine.bridgeLostAt>0&&now-engine.bridgeLostAt>15000)recover("Monitor bridge disconnected");
   else if(gap>30000){engine.service.logStallDiagnostics("main-thread tick gap "+gap+"ms; applicant="+engine.profile);recover("Main-thread tick gap "+gap+"ms");}
   else if(!sawRunning&&now-armedAt>25000)fail("Monitoring did not start — return to Sarathi and press START");
-  else if(sawRunning&&now-lastBeat>60000)recover("No page heartbeat for 60 seconds");
-  else if(engine.lastState.optBoolean("running")&&!engine.lastState.optBoolean("calendarLock")&&now-lastProgress>60000)recover("No page progress for 60 seconds");
+  else if(sawRunning&&now-Math.max(lastBeat,verifiedAt)>60000)recover("No page heartbeat for 60 seconds");
+  else if(engine.lastState.optBoolean("running")&&!engine.lastState.optBoolean("calendarLock")&&now-Math.max(lastProgress,verifiedAt)>60000)recover("No page progress for 60 seconds");
   if(armed){engine.activate();engine.command("PING");if(engine.foreground)engine.render();}
  }
- String diagnostics(){return "\n"+(recovering?"RECOVERING":armed?(engine.foreground?"FOREGROUND":"BACKGROUND"):"IDLE")+" · longest tick gap "+longestGap/1000+"s"+(armed?" · last progress "+(SystemClock.elapsedRealtime()-lastProgress)/1000+"s ago":" · "+lastReason);}
+ String diagnostics(){return "\n"+(recovering?"RECOVERING":armed?(engine.foreground?"FOREGROUND":"BACKGROUND"):"IDLE")+" · run="+generation+" · recovery="+recoveryAttempt+" · longest tick gap "+longestGap/1000+"s"+(armed?" · last progress "+(SystemClock.elapsedRealtime()-lastProgress)/1000+"s ago · heartbeat "+(SystemClock.elapsedRealtime()-lastBeat)/1000+"s ago":" · "+lastReason);}
 }

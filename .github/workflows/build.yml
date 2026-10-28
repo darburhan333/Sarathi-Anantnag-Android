@@ -2,7 +2,7 @@ name: Build and test Sarathi Gecko V11.47 port (new signed app)
 on:
   push:
     branches:
-      - build/mparivahan-v3.3-new-signed-app
+      - build/mparivahan-v3.4-recovery
   workflow_dispatch:
 permissions:
   contents: read
@@ -67,13 +67,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: steps.signing.outputs.available == 'true'
         with:
-          name: MParivahan-JK-3.3-arm64-signed-new-package
+          name: MParivahan-JK-3.4-arm64-signed-new-package
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: steps.signing.outputs.available != 'true'
         with:
-          name: MParivahan-JK-3.3-arm64-unsigned-new-package
+          name: MParivahan-JK-3.4-arm64-unsigned-new-package
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
   gecko-integration:

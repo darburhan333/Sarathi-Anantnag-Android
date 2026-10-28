@@ -4,9 +4,9 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('p
  const els=new Map();const el=id=>{if(!els.has(id))els.set(id,{value:'',checked:false,dataset:{},classList:{toggle(){}},addEventListener(){},replaceChildren(){}});return els.get(id);};
  const chrome={
   storage:{local:{get:async k=>typeof k==='string'?{[k]:state[k]}:{...k,...state},set:async p=>{Object.assign(state,p);changes.forEach(f=>f(Object.fromEntries(Object.entries(p).map(([k,v])=>[k,{newValue:v}])),'local'));}},onChanged:{addListener:f=>changes.push(f)}},
-  tabs:{query:async()=>[{id:7,active:true}],sendMessage:async()=>({ok:true})},
+  tabs:{query:async()=>[{id:7,active:true}],sendMessage:async()=>({ok:true,ready:true,covReady:true})},
   scripting:{executeScript:()=>new Promise(r=>releaseInjection=r)},
-  runtime:{sendMessage:async()=>({ok:true})}
+  runtime:{onMessage:{addListener(){}},sendMessage:async()=>({ok:true})}
  };
  const ctx={chrome,document:{getElementById:el,querySelectorAll:()=>[],addEventListener(){},createElement:()=>({})},window:{addEventListener(){},confirm:()=>true},navigator:{onLine:true},Date,Math,crypto:require('crypto').webcrypto,setInterval(){},setTimeout,console,Blob,URL};
  vm.createContext(ctx);vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/src/main/assets/extension/ui.js'),'utf8'),ctx);

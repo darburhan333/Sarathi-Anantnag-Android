@@ -6,14 +6,14 @@ async function openWindow(){return;}
 on('openWindow',()=>openWindow().catch(e=>feedback(e.message)));
 async function target(){const d=await chrome.storage.local.get('monitoredTabId');let tabs=await chrome.tabs.query({url:'https://sarathi.parivahan.gov.in/*'});if(globalThis.PROFILE_MODE){const matches=await Promise.all(tabs.map(async t=>{try{return (await chrome.tabs.sendMessage(t.id,{type:'SARATHI_PROFILE_QUERY'}))?.ok?t:null;}catch(_){return null;}}));tabs=matches.filter(Boolean);}return tabs.find(t=>t.id===d.monitoredTabId)||tabs.find(t=>t.active)||tabs[0];}
 let runBusy=false,runEpoch=0;
-async function run(start){
+async function run(start,batch=""){
  if(start && runBusy)return;
  const epoch=++runEpoch;
  if(start)runBusy=true;
- try{await runAction(start,epoch);}finally{if(start)runBusy=false;}
+ try{await runAction(start,epoch,batch);}finally{if(start)runBusy=false;}
 }
-async function runAction(start,epoch){
- if(start && !(await chrome.storage.local.get({androidForeground:false})).androidForeground){feedback('Return to the app before starting.');return;}
+async function runAction(start,epoch,batch=""){
+ if(start && !batch && !(await chrome.storage.local.get({androidForeground:false})).androidForeground){feedback('Return to the app before starting.');return;}
  const valid=()=>epoch===runEpoch;
  if(!start){
    await chrome.storage.local.set({running:false,successWatch:false,autoBookingEnabled:false,nextRetryAt:0,bookingStage:'STOPPED',lastStatus:'Stopped by user'});
@@ -24,11 +24,15 @@ async function runAction(start,epoch){
  }
  const t=await target();if(!valid())return;
  if(!t){feedback('Open and log into Sarathi first.');return;}
+ const readiness=await chrome.tabs.sendMessage(t.id,{type:'SARATHI_PROFILE_QUERY'}).catch(()=>null);
+ if(!valid())return;
+ if(!readiness?.ready||!readiness?.covReady){feedback('Waiting for a ready COV selection page.');return;}
  const prior=await chrome.storage.local.get({bookingClickIssued:false});if(!valid())return;
+ if(batch&&prior.bookingClickIssued){feedback('Skipped: previous booking lock requires manual review.');return;}
  if(prior.bookingClickIssued && !window.confirm('A previous BOOK SLOT submission was initiated. Verify its result on Sarathi before starting a new monitoring session. Start a NEW session and reset the booking lock?')){feedback('Start cancelled — previous booking submission stays locked.');return;}
  const session=crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(36).slice(2);
  try{
-   const armed=await chrome.runtime.sendMessage({type:'ANDROID_ARM'});if(!armed?.ok)throw Error(armed?.error||'Background service could not start');if(!valid())return;
+   const armed=await chrome.runtime.sendMessage({type:'ANDROID_ARM',batch});if(!armed?.ok)throw Error(armed?.error||'Background service could not start');if(!valid())return;
    await chrome.scripting.executeScript({target:{tabId:t.id},files:globalThis.PROFILE_MODE?['profile-guard.js','booking-rules.js','content.js']:['booking-rules.js','content.js']});if(!valid())return;
    await chrome.storage.local.set({monitoredTabId:t.id,monitorSessionId:session,monitorStartedAt:Date.now(),sessionAttempts:0,sessionCounterId:session,navigationSessionId:'',navigationLastAt:0,navigationCompletedAt:0,monitorFailureKey:'',monitorFailureAt:0,failureDesktopError:'',failureTelegramError:'',successWatch:true,calendarLock:false,sessionLock:false,bookingStage:'MONITORING',bookingClickIssued:false,bookingReservationId:'',bookingReservationDocument:'',bookingDispatchStarted:false,bookingSubmittedAt:0,bookingResponseWarned:false,quotaAlertKey:'',scanMonth:'',scanChecked:[],scanFallback:null,scanPending:'',scanPendingAt:0,scanReturning:false,warningKind:'',warningAt:0,warningEvents:[],calendarAlertKey:'',calendarAlertAt:0,running:true,lastStatus:'Connecting to Sarathi…',heartbeatAt:0,smsAlertKey:'',healthMisses:0,healthWarningAt:0,lastProceedGateAt:0,monitorProgressAt:0,monitorLoopActive:false,nextRetryAt:0});
    if(!valid()){await chrome.storage.local.set({running:false,successWatch:false,nextRetryAt:0});return;}
@@ -158,3 +162,14 @@ $('telegramStatusEnabled')?.addEventListener('change',async()=>{await chrome.sto
 
 if(globalThis.PROFILE_MODE){document.title='Applicant '+globalThis.APPLICANT+' · MPARIVAHAN SLOT BOOKING -J&K';const heading=document.querySelector('header b');if(heading)heading.textContent+=' · Applicant '+globalThis.APPLICANT;}
 
+
+chrome.runtime.onMessage.addListener((m,sender,reply)=>{
+ if(m?.type!=='ANDROID_START_READY'||!sender.url?.startsWith(browser.runtime.getURL('')))return;
+ (async()=>{
+  const before=await chrome.storage.local.get({running:false,successWatch:false});
+  if(before.running||before.successWatch)return {ok:false,reason:'Already active'};
+  await run(true,m.batch);
+  const after=await chrome.storage.local.get({running:false,lastStatus:''});
+  return {ok:after.running===true,reason:after.running?'Started':($('feedback')?.textContent||after.lastStatus||'Not ready')};
+ })().then(reply).catch(e=>reply({ok:false,reason:String(e.message||e)}));return true;
+});

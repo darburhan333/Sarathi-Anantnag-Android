@@ -15,8 +15,8 @@ public final class MonitorService extends Service {
  final class LocalBinder extends Binder{MonitorService getService(){return MonitorService.this;}}
  @Override public IBinder onBind(Intent intent){return binder;}
  private final ConnectivityManager.NetworkCallback networks=new ConnectivityManager.NetworkCallback(){
-  @Override public void onAvailable(Network n){handler.post(()->{if(network!=null&&!network.equals(n))failAll("Network changed — inspect applicants before START");network=n;});}
-  @Override public void onLost(Network n){handler.post(()->{if(n.equals(network)){network=null;failAll("Network lost — reconnect before START");}});}
+  @Override public void onAvailable(Network n){handler.post(()->{if(network!=null&&!network.equals(n))recoverAll("Network changed; verifying existing sessions");network=n;});}
+  @Override public void onLost(Network n){handler.post(()->{if(n.equals(network)){network=null;recoverAll("Network unavailable; waiting for session verification");}});}
  };
  @Override public void onCreate(){super.onCreate();clockThread.start();clock=new Handler(clockThread.getLooper());
   getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("sarathi-monitor","Background monitoring",NotificationManager.IMPORTANCE_LOW));
@@ -79,7 +79,16 @@ public final class MonitorService extends Service {
   for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)e.run.stopForBackground(message);
   refreshForeground(true);
  }
- void stopAll(){for(BrowserEngine e:profiles)if(e!=null)e.run.stopByUser();}
+ String startBatch="";
+ void cancelStartBatch(){startBatch="";}
+ void startAllReady(){
+  if(!visible||activity==null)return;
+  startBatch=java.util.UUID.randomUUID().toString();
+  for(BrowserEngine e:profiles){if(e==null)continue;if(e.run.armed||!e.monitorReady||e.current==null||!e.current.isOpen()){record("Applicant "+e.profile+" Start All skipped: active or page unavailable");continue;}e.command("START_READY",startBatch);}
+  android.widget.Toast.makeText(this,"Starting ready applicants; results in Copy log",android.widget.Toast.LENGTH_LONG).show();
+ }
+ void stopAll(){cancelStartBatch();for(BrowserEngine e:profiles)if(e!=null)e.run.stopByUser();}
+ void recoverAll(String message){for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)e.run.recover(message);}
  void failAll(String message){for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)e.run.fail(message);}
  @Override public int onStartCommand(Intent intent,int flags,int id){if(intent!=null&&"STOP".equals(intent.getAction()))stopAll();else if(intent==null)stopSelf();return START_NOT_STICKY;}
  private final Runnable clockTick=new Runnable(){public void run(){if(destroying)return;

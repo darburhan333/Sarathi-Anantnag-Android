@@ -52,6 +52,30 @@ public class GeckoIntegrationTest {
   assertTrue("Both wait callbacks must arrive",completed.await(5,java.util.concurrent.TimeUnit.SECONDS));
   assertEquals("Explicit STOP must cancel every pending native wait",2,cancelled.get());
  }
+ @Test public void backgroundRecoveryRetriesAndIsolatesFailure()throws Exception{
+  MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
+  while(a.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
+  MonitorService service=a.serviceForTest();assertNotNull(service);
+  shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33");
+  java.lang.reflect.Field id=MonitorRun.class.getDeclaredField("recoveryId");id.setAccessible(true);
+  java.lang.reflect.Field retry=MonitorRun.class.getDeclaredField("recoveryRetryAt");retry.setAccessible(true);
+  main(()->{
+   service.stopAll();BrowserEngine one=service.profile(1),two=service.profile(2);
+   one.run.arm();two.run.arm();service.visible=false;
+   try{
+    one.run.recover("Injected screen-off stall");
+    for(int i=0;i<4;i++){
+     String attempt=(String)id.get(one.run);
+     one.run.recovered(attempt,false,false,"Page reply timed out");
+     if(i<3){assertTrue("Transient verification failure must retain run",one.run.armed);assertFalse(one.run.authorize());assertTrue(two.run.armed);retry.setLong(one.run,1);one.run.tick();}
+    }
+    assertFalse("Exhausted recovery must revoke affected applicant",one.run.armed);
+    assertTrue("Other applicants must continue",two.run.armed);
+    assertTrue("Failure must alarm while minimized",one.alerts.isRepeating());
+   }catch(IllegalAccessException e){throw new AssertionError(e);}finally{service.visible=true;service.stopAll();}
+  });
+ }
+
  @Test public void realExtensionLoop() throws Exception {
   ServerSocket server=new ServerSocket(8765);
   Thread thread=new Thread(()->{while(!server.isClosed())try(Socket socket=server.accept()){

@@ -3,6 +3,9 @@
  let port=null, foreground=false, commandQueue=Promise.resolve();
  const defaults={running:false,successWatch:false,bookingStage:'STOPPED',lastStatus:'Ready',
   attempts:0,sessionAttempts:0,alarmActive:false,bookingClickIssued:false,androidForeground:false,androidServiceReady:false,heartbeatAt:0,monitorProgressAt:0,lastCheck:0,calendarLock:false};
+ async function tabRequest(id,message){
+  let timer;try{return await Promise.race([chrome.tabs.sendMessage(id,message),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Page reply timed out')),5000);})]);}finally{clearTimeout(timer);}
+ }
  let stateTimer=null;
  function scheduleState(){if(stateTimer!==null)return;stateTimer=setTimeout(()=>{stateTimer=null;state().catch(()=>{});},250);}
  async function state(){
@@ -16,6 +19,15 @@
   if(d.monitoredTabId!==null)chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_STOP'}).catch(()=>{});
  }
  async function command(m){
+  if(m.type==='START_READY'){
+   const result=await chrome.runtime.sendMessage({type:'ANDROID_START_READY',batch:m.reason});
+   port?.postMessage({type:'START_RESULT',batch:m.reason,ok:result?.ok===true,reason:result?.reason||'Monitor page unavailable'});return;
+  }
+  if(m.type==='PAGE_QUERY'){
+   const tabs=await chrome.tabs.query({url:'https://sarathi.parivahan.gov.in/*'});
+   for(const tab of tabs){try{const r=await tabRequest(tab.id,{type:'SARATHI_PROFILE_QUERY'});if(r?.ok&&r.ready){port?.postMessage({type:'PAGE_READY',id:m.reason,url:r.page,covReady:r.covReady});return;}}catch(_) {}}
+   return;
+  }
   if(m.type==='DISARMED'){await chrome.storage.local.set({androidServiceReady:false});const d=await chrome.storage.local.get({running:false,successWatch:false});if(d.running||d.successWatch)await stop('Background service stopped — press START to begin again');return;}
   if(m.type==='AUDIT_SMOKE'&&typeof globalThis.auditProfileIsolation==='function'){globalThis.auditProfileIsolation();return;}
   if(m.type==='MULTI_SMOKE'&&typeof globalThis.runMultiSmoke==='function'){globalThis.runMultiSmoke();return;}
@@ -43,21 +55,23 @@
     // Out of the control queue: a stale tab message must not block recovery or STOP.
     (async()=>{
      const d=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,successWatch:false,calendarLock:false,bookingClickIssued:false});
-     let safe=false;
+     let safe=false,terminal=false,reason='Page has not confirmed a safe COV state';
      if(d.running&&!d.calendarLock&&!d.bookingClickIssued&&d.monitoredTabId!==null&&d.monitorSessionId){
-      let r=await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_HEALTH_PING',sessionId:d.monitorSessionId});
+      let r=await tabRequest(d.monitoredTabId,{type:'SARATHI_HEALTH_PING',sessionId:d.monitorSessionId});
       if(r?.ok&&r.owner&&r.sessionId===d.monitorSessionId&&r.safeToRestart){
        const live=await chrome.storage.local.get({running:false,monitorSessionId:'',monitoredTabId:null,calendarLock:false,bookingClickIssued:false});
        if(live.running&&live.monitorSessionId===d.monitorSessionId&&live.monitoredTabId===d.monitoredTabId&&!live.calendarLock&&!live.bookingClickIssued){
-        await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_RECOVER',sessionId:d.monitorSessionId});
-        r=await chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_HEALTH_PING',sessionId:d.monitorSessionId});
+        await tabRequest(d.monitoredTabId,{type:'SARATHI_RECOVER',sessionId:d.monitorSessionId});
+        r=await tabRequest(d.monitoredTabId,{type:'SARATHI_HEALTH_PING',sessionId:d.monitorSessionId});
        }
       }
+      if(r?.expired||r?.locked||r?.calendar){terminal=true;reason='Session expired or calendar/manual input requires attention';}
       const now=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,calendarLock:false,bookingClickIssued:false});
       safe=!!(r?.ok&&r.owner&&r.safeToResume&&r.sessionId===d.monitorSessionId&&now.running&&!now.calendarLock&&!now.bookingClickIssued&&now.monitoredTabId===d.monitoredTabId&&now.monitorSessionId===d.monitorSessionId);
      }
-     port?.postMessage({type:'RECOVERED',id:m.reason,safe});
-    })().catch(()=>port?.postMessage({type:'RECOVERED',id:m.reason,safe:false}));return;
+     if(d.bookingClickIssued||d.calendarLock){terminal=true;reason='Booking/calendar lock preserved; inspect manually';}
+     port?.postMessage({type:'RECOVERED',id:m.reason,safe,terminal,reason});
+    })().catch(e=>port?.postMessage({type:'RECOVERED',id:m.reason,safe:false,terminal:false,reason:String(e.message||e)}));return;
    }
    if(m.type==='PING'){
     if(pingBusy)return;pingBusy=true;
@@ -86,7 +100,7 @@
  });
  chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   if(!sender.url?.startsWith(browser.runtime.getURL('')))return;
-  if(m?.type==='ANDROID_ARM'){nativeRequest({type:'ARM'}).then(async r=>{if(r?.ok)await chrome.storage.local.set({androidServiceReady:true});reply(r);}).catch(e=>reply({ok:false,error:String(e.message||e)}));return true;}
+  if(m?.type==='ANDROID_ARM'){nativeRequest({type:'ARM',batch:m.batch||''}).then(async r=>{if(r?.ok)await chrome.storage.local.set({androidServiceReady:true});reply(r);}).catch(e=>reply({ok:false,error:String(e.message||e)}));return true;}
   if(m?.type==='ANDROID_UI_READY'){nativeRequest({type:'UI_READY'}).then(reply);return true;}
   if(m?.type!=='ANDROID_EXPORT')return;
   nativeRequest({type:'SHARE',text:String(m.text||'').slice(0,60000)})
