@@ -29,7 +29,7 @@ public class GeckoIntegrationTest {
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
   while(a.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
   MonitorService service=a.serviceForTest();assertNotNull(service);
-  shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
+  shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33");
   java.util.concurrent.CountDownLatch completed=new java.util.concurrent.CountDownLatch(2);
   java.util.concurrent.atomic.AtomicInteger cancelled=new java.util.concurrent.atomic.AtomicInteger();
   main(()->{
@@ -65,7 +65,7 @@ public class GeckoIntegrationTest {
    while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(300);
    assertTrue("Built-in extension did not connect",a.extensionReadyForTest());
    MonitorService s=a.serviceForTest();
-   shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
+   shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33");
    main(a::runSmokeForTest);
    end=System.currentTimeMillis()+30000;
    while(!s.engine.smokePhase.equals("background-ready")&&System.currentTimeMillis()<end)Thread.sleep(200);
@@ -129,7 +129,7 @@ public class GeckoIntegrationTest {
   try{
    MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
    while(a.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);MonitorService service=a.serviceForTest();assertNotNull(service);
-   shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
+   shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33");
    main(service::stopAll);
    // Follow the real user flow: open and start one applicant at a time. All nine
    // still run concurrently for every locked-screen and Doze assertion below.
@@ -158,7 +158,7 @@ public class GeckoIntegrationTest {
    for(int i=0;i<9;i++)assertTrue("Doze HTTP applicant "+i,counts.get(i)>before[i]);
    main(()->service.profiles[1].run.stopByUser());Thread.sleep(1500);int stopped=counts.get(1),first=counts.get(0),third=counts.get(2);Thread.sleep(22000);
    assertEquals("Applicant 2 must stop",stopped,counts.get(1));assertTrue("Applicant 1 continues",counts.get(0)>first);assertTrue("Applicant 3 continues",counts.get(2)>third);
-   shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");shell("wm dismiss-keyguard");shell("am start -n com.sarathi.anantnag.gecko/com.sarathi.geckotest.MainActivity");Thread.sleep(1500);
+   shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");shell("wm dismiss-keyguard");shell("am start -n com.sarathi.anantnag.gecko.v33/com.sarathi.geckotest.MainActivity");Thread.sleep(1500);
    main(()->{a.selectApplicant(3);a.selectApplicant(1);service.stopAll();});assertEquals("STOP ALL",0,service.activeCount());
    System.out.println("PASS nine applicants: storage isolation, native ownership, locked and Doze HTTP, independent STOP, switching, STOP ALL");
   }finally{main(()->{MonitorService owner=activity.getActivity().serviceForTest();if(owner!=null)owner.stopAll();});shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");server.close();}
@@ -198,7 +198,7 @@ public class GeckoIntegrationTest {
   MainActivity a=activity.getActivity();long deadline=System.currentTimeMillis()+60000;
   while(!a.extensionReadyForTest()&&System.currentTimeMillis()<deadline)Thread.sleep(200);
   assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();
-  shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
+  shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33");
   java.util.concurrent.atomic.AtomicInteger completions=new java.util.concurrent.atomic.AtomicInteger();
   java.util.concurrent.atomic.AtomicInteger cancelled=new java.util.concurrent.atomic.AtomicInteger();
   main(()->{service.arm();for(int i=0;i<20;i++)service.waitFor(200).accept(value->{completions.incrementAndGet();if(value.toString().contains("cancelled"))cancelled.incrementAndGet();});service.engine.run.disarm();service.engine.run.disarm();});
@@ -225,7 +225,7 @@ public class GeckoIntegrationTest {
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
   while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(200);
   assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();
-  shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
+  shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33");
   main(()->{
    service.arm();MonitorRun run=service.engine.run;run.recover("Injected scheduling stall");
    assertFalse("Recovery must revoke action permission",run.authorize());
@@ -249,7 +249,7 @@ public class GeckoIntegrationTest {
  }
  @Test public void silenceAllPreservesRuns()throws Exception{
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;while(a.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
-  MonitorService s=a.serviceForTest();assertNotNull(s);shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko");
+  MonitorService s=a.serviceForTest();assertNotNull(s);shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33");
   main(()->{BrowserEngine one=s.profile(1),two=s.profile(2);one.run.arm();two.run.arm();one.alerts.audio("START",true,0);two.alerts.audio("START",true,0);s.silenceAll();assertTrue(one.run.armed);assertTrue(two.run.armed);assertFalse(one.alerts.isRepeating());assertFalse(two.alerts.isRepeating());s.stopAll();});
  }
 
