@@ -35,7 +35,7 @@ public class GeckoIntegrationTest {
   main(()->{
    service.stopAll();BrowserEngine one=service.profile(1),two=service.profile(2);
    one.run.arm();two.run.arm();Object page=one.current;
-   for(BrowserEngine e:new BrowserEngine[]{one,two})e.run.waitFor(8000).accept(r->{if(r.toString().contains("\\"cancelled\\":true"))cancelled.incrementAndGet();completed.countDown();});
+   for(BrowserEngine e:new BrowserEngine[]{one,two})e.run.waitFor(8000).accept(r->{if(r.toString().contains("\"cancelled\":true"))cancelled.incrementAndGet();completed.countDown();});
    service.visible=false;
    try{
     one.run.recover("Main-thread tick gap 45000ms");
