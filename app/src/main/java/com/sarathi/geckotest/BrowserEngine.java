@@ -86,8 +86,8 @@ final class BrowserEngine {
         boolean changed=!java.util.Objects.equals(activeStates.get(s),active);
         // GeckoView may deactivate a detached/hidden session independently of our cache.
         // Reassert active browser sessions while monitoring, including an older selected tab.
-        if(changed||(run.armed&&s==current))s.setActive(active);
-        if(changed){s.setPriorityHint(active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT);activeStates.put(s,active);}
+        if(changed||(run.armed&&s==current)){s.setActive(active);s.setPriorityHint(active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT);}
+        if(changed)activeStates.put(s,active);
       }
     }
     void shutdown(){

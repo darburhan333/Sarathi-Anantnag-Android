@@ -76,10 +76,11 @@ final class MonitorRun {
  private void finishWait(GeckoResult<Object> r,boolean ok){if(waits.remove(r)==null)return;delayed.remove(r);r.complete(ok?"{\"ok\":true}":"{\"ok\":false,\"cancelled\":true}");}
  void recover(String reason){
   if(!armed||recovering)return;
-  if(!engine.service.visible){engine.service.stopForBackground(reason);return;}
-  if(recoveryProgressValue==lastProgressValue){fail("No page progress after recovery — inspect Sarathi and press START");return;}
+  boolean tickGap=reason!=null&&reason.startsWith("Main-thread tick gap");
+  if(!engine.service.visible&&!tickGap){engine.service.stopForBackground(reason);return;}
+  if(recoveryProgressValue==lastProgressValue&&!tickGap){fail("No page progress after recovery — inspect Sarathi and press START");return;}
   recoveryProgressValue=lastProgressValue;recovering=true;recoveryAt=SystemClock.elapsedRealtime();recoveryId=generation+":"+recoveryAt;
-  lastReason="Checking session after delay";engine.service.record("Applicant "+engine.profile+" recovery: "+reason+"; "+engine.service.clockDiagnostics());
+  lastReason="Checking session after delay";engine.service.logStallDiagnostics("Applicant "+engine.profile+" "+reason);engine.service.record("Applicant "+engine.profile+" recovery: "+reason+"; "+engine.service.clockDiagnostics());
   engine.activate();engine.command("RECOVER_CHECK",recoveryId);engine.render();
  }
  void recovered(String id,boolean safe){
@@ -95,7 +96,7 @@ final class MonitorRun {
   if(!armed)return;long now=SystemClock.elapsedRealtime(),gap=now-lastTick;lastTick=now;longestGap=Math.max(longestGap,gap);
   if(recovering){if(now-recoveryAt>15000)fail("Session recovery timed out — inspect Sarathi and press START");}
   else if(engine.bridgeLostAt>0&&now-engine.bridgeLostAt>15000)fail("Monitor bridge did not reconnect — open app");
-  else if(gap>30000)recover("Main-thread tick gap "+gap+"ms");
+  else if(gap>30000){engine.service.logStallDiagnostics("main-thread tick gap "+gap+"ms; applicant="+engine.profile);recover("Main-thread tick gap "+gap+"ms");}
   else if(!sawRunning&&now-armedAt>25000)fail("Monitoring did not start — return to Sarathi and press START");
   else if(sawRunning&&now-lastBeat>60000)recover("No page heartbeat for 60 seconds");
   else if(engine.lastState.optBoolean("running")&&!engine.lastState.optBoolean("calendarLock")&&now-lastProgress>60000)recover("No page progress for 60 seconds");

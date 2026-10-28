@@ -10,7 +10,7 @@ public final class MonitorService extends Service {
  private volatile long clockBeat,clockUptime,longestClockGap,mainBeat;private final java.util.concurrent.atomic.AtomicBoolean tickQueued=new java.util.concurrent.atomic.AtomicBoolean();
  private volatile boolean needsCpu;
  final String processId=java.util.UUID.randomUUID().toString().substring(0,8);private volatile long renewAt;private long stopAfter,lastNotification;
- private PowerManager.WakeLock wake;private ConnectivityManager connectivity;private Network network;
+ private PowerManager.WakeLock wake;private android.net.wifi.WifiManager.WifiLock wifiLock;private ConnectivityManager connectivity;private Network network;
  private final IBinder binder=new LocalBinder();
  final class LocalBinder extends Binder{MonitorService getService(){return MonitorService.this;}}
  @Override public IBinder onBind(Intent intent){return binder;}
@@ -21,6 +21,8 @@ public final class MonitorService extends Service {
  @Override public void onCreate(){super.onCreate();clockThread.start();clock=new Handler(clockThread.getLooper());
   getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("sarathi-monitor","Background monitoring",NotificationManager.IMPORTANCE_LOW));
   wake=getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"MParivahan:monitor");wake.setReferenceCounted(false);
+  android.net.wifi.WifiManager wifi=(android.net.wifi.WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
+  if(wifi!=null){wifiLock=wifi.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,"MParivahan:monitor-wifi");wifiLock.setReferenceCounted(false);}
   connectivity=getSystemService(ConnectivityManager.class);network=connectivity.getActiveNetwork();connectivity.registerDefaultNetworkCallback(networks);
   for(int n=1;n<=PROFILE_COUNT;n++)getSystemService(NotificationManager.class).cancel(1100+n);
   engine=profile(1);record("Service created; process="+processId);
@@ -43,7 +45,8 @@ public final class MonitorService extends Service {
   if(power.isPowerSaveMode())throw new IllegalStateException("Turn off Battery Saver before background monitoring");
   activity.startForegroundService(new Intent(this,MonitorService.class).setAction("ARM"));
   if(Build.VERSION.SDK_INT>=34)startForeground(1002,notification(),ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);else startForeground(1002,notification());
-  promoted=true;stopAfter=0;needsCpu=true;synchronized(wake){if(!wake.isHeld()){wake.acquire(600000L);renewAt=SystemClock.elapsedRealtime()+300000L;}}
+  promoted=true;stopAfter=0;needsCpu=true;synchronized(wake){if(!wake.isHeld())wake.acquire();}
+  if(wifiLock!=null&&!wifiLock.isHeld())wifiLock.acquire();
  }
  private Notification notification(){
   PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
@@ -56,7 +59,7 @@ public final class MonitorService extends Service {
   if(activeCount()>0||alerting())stopAfter=0;else if(stopAfter==0)stopAfter=now+30000;
   if(immediate||now-lastNotification>=10000){getSystemService(NotificationManager.class).notify(1002,notification());lastNotification=now;}
   // Retain a bounded delivery grace period after monitoring stops.
-  if(activeCount()==0&&!alerting()&&stopAfter>0&&now>=stopAfter&&wake.isHeld())wake.release();
+  if(activeCount()==0&&!alerting()&&stopAfter>0&&now>=stopAfter){if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();}
  }
  private final java.util.Map<Integer,String> statusBots=new java.util.HashMap<>();
  private final java.util.Map<Integer,Long> statusClaims=new java.util.HashMap<>();
@@ -82,20 +85,26 @@ public final class MonitorService extends Service {
  private final Runnable clockTick=new Runnable(){public void run(){if(destroying)return;
   long now=SystemClock.elapsedRealtime(),up=SystemClock.uptimeMillis();
   if(clockBeat>0)longestClockGap=Math.max(longestClockGap,now-clockBeat);clockBeat=now;clockUptime=up;
-  synchronized(wake){if(needsCpu&&promoted&&(!wake.isHeld()||now>=renewAt)){wake.acquire(600000L);renewAt=now+300000L;}}
+  synchronized(wake){if(needsCpu&&promoted&&!wake.isHeld())wake.acquire();}
+  if(needsCpu&&promoted&&wifiLock!=null&&!wifiLock.isHeld())wifiLock.acquire();
   if(tickQueued.compareAndSet(false,true))handler.post(()->{tickQueued.set(false);if(destroying)return;mainBeat=SystemClock.elapsedRealtime();
    for(BrowserEngine e:profiles)if(e!=null)e.run.tick();
-   if(promoted){refreshForeground(false);if(stopAfter>0&&SystemClock.elapsedRealtime()>=stopAfter&&!alerting()&&activeCount()==0){promoted=false;needsCpu=false;synchronized(wake){if(wake.isHeld())wake.release();}stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}}
+   if(promoted){refreshForeground(false);if(stopAfter>0&&SystemClock.elapsedRealtime()>=stopAfter&&!alerting()&&activeCount()==0){promoted=false;needsCpu=false;synchronized(wake){if(wake.isHeld())wake.release();}if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}}
   });clock.postDelayed(this,2000);
  }};
- String clockDiagnostics(){long now=SystemClock.elapsedRealtime();return "clock gap max="+longestClockGap+"ms; main age="+(now-mainBeat)+"ms; elapsed="+now+"; uptime="+SystemClock.uptimeMillis()+"; clock uptime="+clockUptime+"; foreground="+promoted+"; wake="+wake.isHeld()+"; screen="+getSystemService(PowerManager.class).isInteractive();}
+ String clockDiagnostics(){long now=SystemClock.elapsedRealtime();return "clock gap max="+longestClockGap+"ms; main age="+(now-mainBeat)+"ms; elapsed="+now+"; uptime="+SystemClock.uptimeMillis()+"; clock uptime="+clockUptime+"; foreground="+promoted+"; wake="+wake.isHeld()+"; wifiLock="+(wifiLock!=null&&wifiLock.isHeld())+"; screen="+getSystemService(PowerManager.class).isInteractive();}
+ void logStallDiagnostics(String cause){
+  String bucket="unknown";if(Build.VERSION.SDK_INT>=28){try{bucket=String.valueOf(getSystemService(UsageStatsManager.class).getAppStandbyBucket());}catch(Exception ignored){}}
+  record("STALL cause="+cause+"; standbyBucket="+bucket+"; "+clockDiagnostics());
+  if(Build.VERSION.SDK_INT>=30){try{for(ApplicationExitInfo i:getSystemService(ActivityManager.class).getHistoricalProcessExitReasons(getPackageName(),0,5))record("STALL historicalExit reason="+i.getReason()+" pid="+i.getPid()+" process="+i.getProcessName()+" time="+i.getTimestamp()+" importance="+i.getImportance()+" detail="+i.getDescription());}catch(Exception e){record("STALL exitInfo unavailable="+e.getClass().getSimpleName());}}
+ }
  String summary(){StringBuilder out=new StringBuilder("MPARIVAHAN SLOT BOOKING -J&K\n");for(int i=0;i<PROFILE_COUNT;i++){BrowserEngine e=profiles[i];out.append("Applicant ").append(i+1).append(": ");if(e==null)out.append("Not opened");else out.append(e.run.armed?"Monitoring":"Stopped").append(" · checks ").append(e.lastState.optInt("sessionAttempts")).append(" · ").append(e.lastState.optString("bookingStage","Ready")).append(e.run.diagnostics());out.append('\n');}return out.toString();}
  public boolean isArmedForTest(){return engine.run.armed;}public int attemptsForTest(){return engine.lastState.optInt("sessionAttempts");}
  void arm(){engine.run.arm();}org.mozilla.geckoview.GeckoResult<Object> waitFor(long ms){return engine.run.waitFor(ms);}
- String diagnosticReport(){StringBuilder out=new StringBuilder("PID: "+android.os.Process.myPid()+" · service instance: "+processId+" · service promoted: "+promoted+" · wake lock: "+wake.isHeld()+"\n");out.append(clockDiagnostics()).append("\n");out.append(getSharedPreferences("diagnostics",0).getString("events",""));for(BrowserEngine e:profiles)if(e!=null)out.append("\nApplicant ").append(e.profile).append(e.run.diagnostics()).append("\n").append(String.join("\n",e.logs));return out.toString();}
+ String diagnosticReport(){StringBuilder out=new StringBuilder("PID: "+android.os.Process.myPid()+" · service instance: "+processId+" · service promoted: "+promoted+" · wake lock: "+wake.isHeld()+" · wifi lock: "+(wifiLock!=null&&wifiLock.isHeld())+"\n");out.append(clockDiagnostics()).append("\n");out.append(getSharedPreferences("diagnostics",0).getString("events",""));for(BrowserEngine e:profiles)if(e!=null)out.append("\nApplicant ").append(e.profile).append(e.run.diagnostics()).append("\n").append(String.join("\n",e.logs));return out.toString();}
  void record(String message){android.content.SharedPreferences p=getSharedPreferences("diagnostics",0);String old=p.getString("events","");String next=old+"\n"+new java.text.SimpleDateFormat("MM-dd HH:mm:ss",java.util.Locale.US).format(new java.util.Date())+" "+message;if(next.length()>12000)next=next.substring(next.length()-12000);p.edit().putString("events",next).apply();}
  @Override public void onTaskRemoved(Intent rootIntent){record("Task removed; active applicants="+activeCount()+"; monitoring retained");super.onTaskRemoved(rootIntent);}
- @Override public void onDestroy(){record("Service destroyed; active applicants="+activeCount());destroying=true;clock.removeCallbacksAndMessages(null);clockThread.quitSafely();connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();super.onDestroy();}
+ @Override public void onDestroy(){record("Service destroyed; active applicants="+activeCount());destroying=true;clock.removeCallbacksAndMessages(null);clockThread.quitSafely();connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();super.onDestroy();}
 }
 
 
