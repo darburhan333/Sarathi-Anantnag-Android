@@ -77,7 +77,8 @@ final class MonitorRun {
  void recover(String reason){
   if(!armed||recovering)return;
   boolean tickGap=reason!=null&&reason.startsWith("Main-thread tick gap");
-  if(!engine.service.visible&&!tickGap){engine.service.stopForBackground(reason);return;}
+  // Minimized state alone is not a failure: verify the existing session through the bridge.
+  // If verification fails or times out, fail closed without reloading or replaying actions.
   if(recoveryProgressValue==lastProgressValue&&!tickGap){fail("No page progress after recovery — inspect Sarathi and press START");return;}
   recoveryProgressValue=lastProgressValue;recovering=true;recoveryAt=SystemClock.elapsedRealtime();recoveryId=generation+":"+recoveryAt;
   lastReason="Checking session after delay";engine.service.logStallDiagnostics("Applicant "+engine.profile+" "+reason);engine.service.record("Applicant "+engine.profile+" recovery: "+reason+"; "+engine.service.clockDiagnostics());

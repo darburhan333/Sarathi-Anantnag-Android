@@ -25,7 +25,7 @@ public class GeckoIntegrationTest {
   assertTrue(label+": page did not make another HTTP request",requests.get()>beforeRequests);
   System.out.println("PASS "+label+": "+before+" -> "+s.attemptsForTest());
  }
- @Test public void backgroundStallStopsAllWithoutClosingPages()throws Exception{
+ @Test public void backgroundStallRecoversWithoutClosingPages()throws Exception{
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
   while(a.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
   MonitorService service=a.serviceForTest();assertNotNull(service);
@@ -35,19 +35,22 @@ public class GeckoIntegrationTest {
   main(()->{
    service.stopAll();BrowserEngine one=service.profile(1),two=service.profile(2);
    one.run.arm();two.run.arm();Object page=one.current;
-   for(BrowserEngine e:new BrowserEngine[]{one,two})e.run.waitFor(8000).accept(r->{if(r.toString().contains("\"cancelled\":true"))cancelled.incrementAndGet();completed.countDown();});
+   for(BrowserEngine e:new BrowserEngine[]{one,two})e.run.waitFor(8000).accept(r->{if(r.toString().contains("\\"cancelled\\":true"))cancelled.incrementAndGet();completed.countDown();});
    service.visible=false;
-   try{one.run.recover("Injected minimized stall");
-    assertEquals(0,service.activeCount());assertSame(page,one.current);
-    assertFalse(one.run.recovering);assertFalse(two.run.recovering);
+   try{
+    one.run.recover("Main-thread tick gap 45000ms");
+    two.run.recover("Main-thread tick gap 45000ms");
+    assertEquals("Minimizing must not stop active applicants",2,service.activeCount());
+    assertSame("Keep the existing page",page,one.current);
+    assertTrue("Applicant 1 should enter verification",one.run.recovering);
+    assertTrue("Applicant 2 should enter verification",two.run.recovering);
     assertFalse(one.alerts.isRepeating());assertFalse(two.alerts.isRepeating());
-    service.stopForBackground("Duplicate callback");assertEquals(0,service.activeCount());
+    service.stopAll();
+    assertEquals(0,service.activeCount());
    }finally{service.visible=true;}
   });
-  // GeckoResult listeners are dispatched asynchronously on the main looper.
-  // Wait from the instrumentation thread so that looper can deliver both callbacks.
   assertTrue("Both wait callbacks must arrive",completed.await(5,java.util.concurrent.TimeUnit.SECONDS));
-  assertEquals("All applicants native waits must be cancelled",2,cancelled.get());
+  assertEquals("Explicit STOP must cancel every pending native wait",2,cancelled.get());
  }
  @Test public void realExtensionLoop() throws Exception {
   ServerSocket server=new ServerSocket(8765);
