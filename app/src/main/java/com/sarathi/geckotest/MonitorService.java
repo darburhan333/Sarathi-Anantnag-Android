@@ -90,10 +90,28 @@ public final class MonitorService extends Service {
  String startBatch="";
  void cancelStartBatch(){startBatch="";}
  void startAllReady(){
-  if(!visible||activity==null)return;
+  if(!visible||activity==null){record("Start All ignored: app is not visible");return;}
+  // One tap creates one batch. Pages still initializing get a short retry window.
   startBatch=java.util.UUID.randomUUID().toString();
-  for(BrowserEngine e:profiles){if(e==null)continue;if(e.run.armed||!e.monitorReady||e.current==null||!e.current.isOpen()){record("Applicant "+e.profile+" Start All skipped: active or page unavailable");continue;}e.command("START_READY",startBatch);}
-  android.widget.Toast.makeText(this,"Starting ready applicants; results in Copy log",android.widget.Toast.LENGTH_LONG).show();
+  java.util.Set<Integer> requested=new java.util.HashSet<>();
+  record("Start All requested batch="+startBatch);
+  startAllAttempt(startBatch,0,requested);
+  android.widget.Toast.makeText(this,"Start All requested — preparing available applicants",android.widget.Toast.LENGTH_LONG).show();
+ }
+ private void startAllAttempt(String batch,int attempt,java.util.Set<Integer> requested){
+  if(!batch.equals(startBatch)||!visible||activity==null)return;
+  boolean waiting=false;
+  for(BrowserEngine e:profiles){
+   if(e==null||e.run.armed||requested.contains(e.profile))continue;
+   if(e.current==null||!e.current.isOpen())continue;
+   if(!e.monitorReady){waiting=true;continue;}
+   requested.add(e.profile);e.command("START_READY",batch);
+  }
+  if(waiting&&attempt<20){
+   handler.postDelayed(()->startAllAttempt(batch,attempt+1,requested),500);
+  }else if(waiting){
+   record("Start All initialization timeout after "+(attempt*500)+"ms; inspect applicants that were not ready");
+  }
  }
  void stopAll(){cancelStartBatch();for(BrowserEngine e:profiles)if(e!=null)e.run.stopByUser();}
  void recoverAll(String message){for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)e.run.recover(message);}
