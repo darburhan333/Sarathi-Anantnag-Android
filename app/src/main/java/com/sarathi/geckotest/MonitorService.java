@@ -8,13 +8,13 @@ public final class MonitorService extends Service {
  private volatile boolean promoted,destroying;
  private KeepAlive keepAlive;
  final HandlerThread clockThread=new HandlerThread("MonitoringClock",android.os.Process.THREAD_PRIORITY_DEFAULT);Handler clock;
- private volatile long clockBeat,clockUptime,longestClockGap,mainBeat;private final java.util.concurrent.atomic.AtomicBoolean tickQueued=new java.util.concurrent.atomic.AtomicBoolean();
+ private volatile long clockBeat,clockUptime,longestClockGap,mainBeat;volatile long screenOffAt,screenOnAt;private final java.util.concurrent.atomic.AtomicBoolean tickQueued=new java.util.concurrent.atomic.AtomicBoolean();
  private volatile boolean needsCpu;
  final String processId=java.util.UUID.randomUUID().toString().substring(0,8);private volatile long renewAt;private long stopAfter,lastNotification;
  private PowerManager.WakeLock wake;private android.net.wifi.WifiManager.WifiLock wifiLock;private ConnectivityManager connectivity;private Network network;
  private final IBinder binder=new LocalBinder();
  private boolean screenReceiverRegistered;
- private final BroadcastReceiver screenReceiver=new BroadcastReceiver(){@Override public void onReceive(Context context,Intent intent){if(Intent.ACTION_SCREEN_OFF.equals(intent.getAction()))record("Screen OFF; "+clockDiagnostics());else if(Intent.ACTION_SCREEN_ON.equals(intent.getAction()))record("Screen ON; "+clockDiagnostics());}};
+ private final BroadcastReceiver screenReceiver=new BroadcastReceiver(){@Override public void onReceive(Context context,Intent intent){long at=SystemClock.elapsedRealtime();if(Intent.ACTION_SCREEN_OFF.equals(intent.getAction())){screenOffAt=at;record("Screen OFF at elapsed="+at+"; "+clockDiagnostics());}else if(Intent.ACTION_SCREEN_ON.equals(intent.getAction())){screenOnAt=at;record("Screen ON at elapsed="+at+"; "+clockDiagnostics());}}};
  final class LocalBinder extends Binder{MonitorService getService(){return MonitorService.this;}}
  @Override public IBinder onBind(Intent intent){return binder;}
  private final ConnectivityManager.NetworkCallback networks=new ConnectivityManager.NetworkCallback(){
