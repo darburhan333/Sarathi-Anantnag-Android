@@ -142,7 +142,7 @@ final class BrowserEngine {
       render();activate();
       runtime.getWebExtensionController().setTabActive(showingMonitor?monitorSession:current,true);
     }
-    private String pageQuery="",pageUrl="";private boolean pageReady;
+    private String pageQuery="",pageUrl="";private boolean pageReady,pageLoading;
     private void receive(Object message){
       if(!(message instanceof JSONObject))return;
       JSONObject o=(JSONObject)message;
@@ -314,14 +314,15 @@ final class BrowserEngine {
             @Override public void onPageStart(GeckoSession session, String url) {
                 if(!sessions.contains(session)||!session.isOpen()||session==monitorSession)return;
                 if(session!=current&&!run.armed)showSession(session);
-                pageReady=false;pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
+                pageLoading=true;pageReady=false;pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
                 log("Loading " + safeLocation(url));
-                final String loadingId=pageQuery;service.handler.postDelayed(()->{if(!destroyed&&!pageReady&&loadingId.equals(pageQuery))log("Connection slow or page not verified · waiting for Sarathi");},15000);
+                final String loadingId=pageQuery;service.handler.postDelayed(()->{if(!destroyed&&pageLoading&&loadingId.equals(pageQuery))log("Connection slow · waiting for Sarathi");},15000);
             }
             @Override public void onPageStop(GeckoSession session, boolean success) {
                 if (session == current) {
-                    log(success?"Navigation finished · checking page readiness":"Page could not load — check connection or use Home");
-                    if(success)command("PAGE_QUERY",pageQuery);
+                    pageLoading=false;
+                    log(success?"Navigation finished · open the COV page to monitor":"Page could not load — check connection or use Home");
+                    if(success)command("PAGE_QUERY",pageQuery+"|"+pageUrl);
                     if(!firstPageRecorded){firstPageRecorded=true;logs.add("First page completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);service.handler.post(BrowserEngine.this::prepareMonitor);}
                 }
             }
@@ -352,6 +353,7 @@ final class BrowserEngine {
         return s;
     }
 }
+
 
 
 

@@ -24,8 +24,9 @@
    port?.postMessage({type:'START_RESULT',batch:m.reason,ok:result?.ok===true,reason:result?.reason||'Monitor page unavailable'});return;
   }
   if(m.type==='PAGE_QUERY'){
+   const separator=String(m.reason).indexOf('|'),queryId=String(m.reason).slice(0,separator),queryUrl=String(m.reason).slice(separator+1);
    const tabs=await chrome.tabs.query({url:'https://sarathi.parivahan.gov.in/*'});
-   for(const tab of tabs){try{const r=await tabRequest(tab.id,{type:'SARATHI_PROFILE_QUERY'});if(r?.ok&&r.ready){port?.postMessage({type:'PAGE_READY',id:m.reason,url:r.page,covReady:r.covReady});return;}}catch(_) {}}
+   for(const tab of tabs){try{const r=await tabRequest(tab.id,{type:'SARATHI_PROFILE_QUERY'});if(r?.ok&&r.ready&&r.page===queryUrl){port?.postMessage({type:'PAGE_READY',id:queryId,url:r.page,covReady:r.covReady});return;}}catch(_) {}}
    return;
   }
   if(m.type==='DISARMED'){await chrome.storage.local.set({androidServiceReady:false});const d=await chrome.storage.local.get({running:false,successWatch:false});if(d.running||d.successWatch)await stop('Background service stopped — press START to begin again');return;}
@@ -115,6 +116,7 @@
   bookingStage:'STOPPED',lastStatus:'App opened — navigate to COV and press START'});})()
   .then(connect);
 })();
+
 
 
 
