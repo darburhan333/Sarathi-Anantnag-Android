@@ -9,6 +9,9 @@ final class PhoneAlerts {
  private final Context activity;private final int profile;boolean isRepeating(){return repeating;}
  private final Handler handler=new Handler(Looper.getMainLooper());
  private ToneGenerator tone;
+ private String prefKey(){return "alertsEnabled"+profile;}
+ boolean isEnabled(){return activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).getBoolean(prefKey(),true);}
+ void setEnabled(boolean enabled){activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).edit().putBoolean(prefKey(),enabled).apply();if(!enabled)stop();}
  private final Vibrator vibrator;
  private boolean repeating;
  private int volume=85;
@@ -29,6 +32,7 @@ final class PhoneAlerts {
  }
  void audio(String action,boolean enabled,int requestedVolume){
   volume=Math.max(0,Math.min(100,requestedVolume));
+  if(!isEnabled() && !action.equals("STOP") && !action.equals("TEST") && !action.equals("ARM")){stop();return;}
   if(action.equals("STOP") || (!enabled && (action.equals("START")||action.equals("UPDATE")))){stop();return;}
   if(action.equals("UPDATE") && !repeating)return;
   if(tone!=null)tone.release();
@@ -40,6 +44,7 @@ final class PhoneAlerts {
  void stop(){repeating=false;handler.removeCallbacks(pulse);if(tone!=null){tone.release();tone=null;}if(vibrator!=null)vibrator.cancel();}
  void clearNotification(){activity.getSystemService(NotificationManager.class).cancel(1100+profile);}
  void notify(String title,String message){
+  if(!isEnabled())return;
   NotificationManager nm=activity.getSystemService(NotificationManager.class);
   if(!nm.areNotificationsEnabled())throw new IllegalStateException("Allow Sarathi notifications in Android Settings");
   PendingIntent open=PendingIntent.getActivity(activity,100+profile,new Intent(activity,MainActivity.class).putExtra("applicant",profile).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
