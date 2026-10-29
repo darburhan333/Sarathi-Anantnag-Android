@@ -101,9 +101,9 @@ public class MainActivity extends Activity {
       TextView hint=new TextView(this);hint.setText("Choose which applicants may send phone notifications and repeating emergency alarms. Settings are saved separately.");hint.setTextSize(12);hint.setPadding(0,0,0,dp(8));panel.addView(hint);
       android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(350)));
       for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){
-        final int number=n;BrowserEngine applicant=service.profile(n);
-        android.widget.Switch toggle=new android.widget.Switch(this);toggle.setText("Applicant "+n+" alerts");toggle.setTextSize(14);toggle.setMinHeight(dp(48));toggle.setChecked(applicant.alerts.isEnabled());
-        toggle.setOnCheckedChangeListener((v,enabled)->{applicant.alerts.setEnabled(enabled);if(!enabled)applicant.command("SILENCE");service.record("Applicant "+number+" alerts "+(enabled?"enabled":"disabled"));service.refreshForeground(true);});
+        final int number=n;boolean enabledByDefault=getSharedPreferences("monitor",MODE_PRIVATE).getBoolean("alertsEnabled"+n,true);
+        android.widget.Switch toggle=new android.widget.Switch(this);toggle.setText("Applicant "+n+" alerts");toggle.setTextSize(14);toggle.setMinHeight(dp(48));toggle.setChecked(enabledByDefault);
+        toggle.setOnCheckedChangeListener((v,enabled)->{getSharedPreferences("monitor",MODE_PRIVATE).edit().putBoolean("alertsEnabled"+number,enabled).apply();BrowserEngine applicant=service.profiles[number-1];if(applicant!=null){applicant.alerts.setEnabled(enabled);if(!enabled)applicant.command("SILENCE");}service.record("Applicant "+number+" alerts "+(enabled?"enabled":"disabled"));service.refreshForeground(true);});
         rows.addView(toggle);
       }
       new AlertDialog.Builder(this).setTitle("Applicant alert settings").setView(panel).setPositiveButton("Done",null).setNeutralButton("Silence all now",(d,w)->service.silenceAll()).show();
