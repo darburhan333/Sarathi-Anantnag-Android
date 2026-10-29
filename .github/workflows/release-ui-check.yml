@@ -2,7 +2,7 @@ name: Release UI verification
 on:
   push:
     branches: [build/mparivahan-v3.4-recovery]
-    paths: [scripts/emulator-test.sh, scripts/release-smoke.py, .github/workflows/release-ui-check.yml]
+    paths: [app/src/main/assets/extension/manifest.json, app/src/debug/assets/extension/manifest.json, app/build.gradle, scripts/emulator-test.sh, scripts/release-smoke.py, .github/workflows/release-ui-check.yml]
   workflow_dispatch:
 permissions:
   contents: read
