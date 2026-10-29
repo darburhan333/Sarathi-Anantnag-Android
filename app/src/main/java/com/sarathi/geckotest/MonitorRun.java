@@ -112,7 +112,7 @@ final class MonitorRun {
   if(!armed)return;long now=SystemClock.elapsedRealtime(),gap=now-lastTick;lastTick=now;longestGap=Math.max(longestGap,gap);
   // Track the largest observed monitoring-tick interval specifically while the display is off.
   android.os.PowerManager power=engine.service.getSystemService(android.os.PowerManager.class);
-  if(power!=null&&!power.isInteractive())longestScreenOffGap=Math.max(longestScreenOffGap,gap);
+  // Count the full tick interval if the display was off at the current tick or a screen transition occurred between ticks.\n  boolean screenTransitionDuringGap=engine.service.screenOffAt>lastTick||engine.service.screenOnAt>lastTick;\n  if(power!=null&&(!power.isInteractive()||screenTransitionDuringGap))longestScreenOffGap=Math.max(longestScreenOffGap,gap);
   if(recovering){if(recoveryRetryAt!=0){if(now>=recoveryRetryAt)attemptRecovery();}else if(now-recoveryAt>15000)retryRecovery("Verification reply timed out");}
   else if(engine.bridgeLostAt>0&&now-engine.bridgeLostAt>15000)recover("Monitor bridge disconnected");
   else if(gap>30000){engine.service.logStallDiagnostics("main-thread tick gap "+gap+"ms; applicant="+engine.profile);recover("Main-thread tick gap "+gap+"ms");}
