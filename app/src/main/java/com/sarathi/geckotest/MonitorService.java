@@ -13,6 +13,8 @@ public final class MonitorService extends Service {
  final String processId=java.util.UUID.randomUUID().toString().substring(0,8);private volatile long renewAt;private long stopAfter,lastNotification;
  private PowerManager.WakeLock wake;private android.net.wifi.WifiManager.WifiLock wifiLock;private ConnectivityManager connectivity;private Network network;
  private final IBinder binder=new LocalBinder();
+ private boolean screenReceiverRegistered;
+ private final BroadcastReceiver screenReceiver=new BroadcastReceiver(){@Override public void onReceive(Context context,Intent intent){if(Intent.ACTION_SCREEN_OFF.equals(intent.getAction()))record("Screen OFF; "+clockDiagnostics());else if(Intent.ACTION_SCREEN_ON.equals(intent.getAction()))record("Screen ON; "+clockDiagnostics());}};
  final class LocalBinder extends Binder{MonitorService getService(){return MonitorService.this;}}
  @Override public IBinder onBind(Intent intent){return binder;}
  private final ConnectivityManager.NetworkCallback networks=new ConnectivityManager.NetworkCallback(){
@@ -25,6 +27,8 @@ public final class MonitorService extends Service {
   android.net.wifi.WifiManager wifi=(android.net.wifi.WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
   if(wifi!=null){wifiLock=wifi.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,"MParivahan:monitor-wifi");wifiLock.setReferenceCounted(false);}
   connectivity=getSystemService(ConnectivityManager.class);network=connectivity.getActiveNetwork();connectivity.registerDefaultNetworkCallback(networks);
+  IntentFilter screenFilter=new IntentFilter();screenFilter.addAction(Intent.ACTION_SCREEN_OFF);screenFilter.addAction(Intent.ACTION_SCREEN_ON);
+  if(Build.VERSION.SDK_INT>=33)registerReceiver(screenReceiver,screenFilter,Context.RECEIVER_EXPORTED);else registerReceiver(screenReceiver,screenFilter);screenReceiverRegistered=true;
   for(int n=1;n<=PROFILE_COUNT;n++)getSystemService(NotificationManager.class).cancel(1100+n);
   engine=profile(1);record("Service created; process="+processId);
   if(Build.VERSION.SDK_INT>=30)for(ApplicationExitInfo i:getSystemService(ActivityManager.class).getHistoricalProcessExitReasons(getPackageName(),0,3))engine.log("Previous exit: reason="+i.getReason()+" pid="+i.getPid()+" process="+i.getProcessName()+" time="+i.getTimestamp()+" detail="+i.getDescription());
@@ -117,7 +121,7 @@ public final class MonitorService extends Service {
  String diagnosticReport(){StringBuilder out=new StringBuilder("KeepAlive: "+(keepAlive==null?"uninitialized":keepAlive.status())+"\n");out.append("PID: "+android.os.Process.myPid()+" · service instance: "+processId+" · service promoted: "+promoted+" · wake lock: "+wake.isHeld()+" · wifi lock: "+(wifiLock!=null&&wifiLock.isHeld())+"\n");out.append(clockDiagnostics()).append("\n");out.append(getSharedPreferences("diagnostics",0).getString("events",""));for(BrowserEngine e:profiles)if(e!=null)out.append("\nApplicant ").append(e.profile).append(e.run.diagnostics()).append("\n").append(String.join("\n",e.logs));return out.toString();}
  void record(String message){android.content.SharedPreferences p=getSharedPreferences("diagnostics",0);String old=p.getString("events","");String next=old+"\n"+new java.text.SimpleDateFormat("MM-dd HH:mm:ss",java.util.Locale.US).format(new java.util.Date())+" "+message;if(next.length()>12000)next=next.substring(next.length()-12000);p.edit().putString("events",next).apply();}
  @Override public void onTaskRemoved(Intent rootIntent){record("Task removed; active applicants="+activeCount()+"; monitoring retained");super.onTaskRemoved(rootIntent);}
- @Override public void onDestroy(){if(keepAlive!=null)keepAlive.stop();record("Service destroyed; active applicants="+activeCount());destroying=true;clock.removeCallbacksAndMessages(null);clockThread.quitSafely();connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();super.onDestroy();}
+ @Override public void onDestroy(){if(keepAlive!=null)keepAlive.stop();record("Service destroyed; active applicants="+activeCount());destroying=true;if(screenReceiverRegistered){unregisterReceiver(screenReceiver);screenReceiverRegistered=false;}clock.removeCallbacksAndMessages(null);clockThread.quitSafely();connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();super.onDestroy();}
 }
 
 
