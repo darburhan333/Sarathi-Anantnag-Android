@@ -52,7 +52,9 @@ final class MonitorRun {
   lastReason=message;engine.log(message);engine.service.record("Applicant "+engine.profile+" stopped: "+message);
   // Revoke first. FAILURE updates the dashboard; only native code delivers this failure alarm.
   disarm(false);engine.command("FAILURE",message);
-  try{engine.alerts.notify("Monitoring needs attention",message);engine.alerts.audio("TEST",true,85);}catch(Exception ignored){}
+  try{engine.alerts.notify("Monitoring needs attention",message);}catch(Exception e){engine.service.record("Applicant "+engine.profile+" notification failed: "+e.getClass().getSimpleName());}
+  try{engine.alerts.audio("START",true,85);}catch(Exception e){engine.service.record("Applicant "+engine.profile+" alarm failed: "+e.getClass().getSimpleName());}
+  engine.service.refreshForeground(true);
  }
  void onState(JSONObject state){
   long now=SystemClock.elapsedRealtime();long beat=state.optLong("heartbeatAt"),progress=state.optLong("monitorProgressAt");
