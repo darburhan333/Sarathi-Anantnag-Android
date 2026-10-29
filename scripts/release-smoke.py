@@ -5,12 +5,33 @@ def adb(*args):return subprocess.check_output(['adb',*args],text=True)
 def snapshot():
  adb('shell','uiautomator','dump','/sdcard/release-ui.xml')
  return ET.fromstring(adb('shell','cat','/sdcard/release-ui.xml'))
+def recover_system_anr(root):
+ # On a slow CI emulator, recover from the system ANR dialog without force-closing apps.
+ nodes=[n for n in root.iter('node') if n.get('text')=="Quickstep isn't responding"]
+ if not nodes:return False
+ wait=next((n for n in root.iter('node') if n.get('text')=='Wait'),None)
+ if wait is None:return False
+ bounds=list(map(int,re.findall(r'\d+',wait.get('bounds',''))))
+ if len(bounds)==4:
+  adb('shell','input','tap',str((bounds[0]+bounds[2])//2),str((bounds[1]+bounds[3])//2))
+  time.sleep(4)
+  return True
+ return False
 def wait_ready(number):
- end=time.monotonic()+50
+ end=time.monotonic()+120
+ texts=[]
  while time.monotonic()<end:
   root=snapshot();texts=[n.get('text','') for n in root.iter('node')]
   if any(t.startswith('Applicant '+str(number)+' · STOPPED') for t in texts):return root
-  time.sleep(1)
+  if recover_system_anr(root):continue
+  time.sleep(3)
+ try:
+  open('release-smoke-failure.txt','w').write(
+   'Applicant: '+str(number)+'\nUI texts: '+repr(texts)+'\n\n'+
+   adb('shell','dumpsys','activity','activities')+'\n\n'+
+   adb('logcat','-d','-t','2500'))
+ except Exception as exc:
+  open('release-smoke-failure.txt','w').write('Diagnostic capture failed: '+repr(exc)+'\nUI texts: '+repr(texts))
  raise AssertionError('Minified release bridge did not initialize for applicant '+str(number)+': '+str(texts))
 adb('shell','pm','grant',PACKAGE,'android.permission.POST_NOTIFICATIONS')
 adb('shell','am','force-stop',PACKAGE)

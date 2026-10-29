@@ -42,3 +42,4 @@ jobs:
             release-preview.png
             release-ui.xml
             emulator-logcat.txt
+            release-smoke-failure.txt
