@@ -3,7 +3,7 @@ import android.os.*;import org.json.JSONObject;import org.mozilla.geckoview.Geck
 /** Main-thread run ownership. The service clock schedules deadlines off the UI thread. */
 final class MonitorRun {
  final BrowserEngine engine;final Handler handler;boolean armed,sawRunning,recovering;
- private long armedAt,lastBeat,lastProgress,lastTick,longestGap,lastHeartbeatValue,lastProgressValue,recoveryAt;
+ private long armedAt,lastBeat,lastProgress,lastTick,longestGap,longestScreenOffGap,lastHeartbeatValue,lastProgressValue,recoveryAt;
  private long recoveryRetryAt,verifiedAt;
  private int recoveryAttempt;
  private static final long[] RETRY_DELAYS={5000,15000,30000};
@@ -27,7 +27,7 @@ final class MonitorRun {
   if(!engine.service.visible||engine.service.activity==null)throw new IllegalStateException("Open app before START");
   if(armed)return;engine.service.beginForeground();
   armed=true;sawRunning=false;recovering=false;generation++;lastReason="Running";
-  armedAt=lastBeat=lastProgress=lastTick=SystemClock.elapsedRealtime();longestGap=0;recoveryAttempt=0;verifiedAt=0;lastHeartbeatValue=lastProgressValue=0;
+  armedAt=lastBeat=lastProgress=lastTick=SystemClock.elapsedRealtime();longestGap=0;longestScreenOffGap=0;recoveryAttempt=0;verifiedAt=0;lastHeartbeatValue=lastProgressValue=0;
   engine.alerts.clearNotification();engine.service.record("Applicant "+engine.profile+" START run="+generation);
   engine.service.markRunning(engine.profile,true);engine.activate();engine.service.refreshForeground(true);
  }
@@ -110,6 +110,9 @@ final class MonitorRun {
  }
  void tick(){
   if(!armed)return;long now=SystemClock.elapsedRealtime(),gap=now-lastTick;lastTick=now;longestGap=Math.max(longestGap,gap);
+  // Track the largest observed monitoring-tick interval specifically while the display is off.
+  android.os.PowerManager power=engine.service.getSystemService(android.os.PowerManager.class);
+  if(power!=null&&!power.isInteractive())longestScreenOffGap=Math.max(longestScreenOffGap,gap);
   if(recovering){if(recoveryRetryAt!=0){if(now>=recoveryRetryAt)attemptRecovery();}else if(now-recoveryAt>15000)retryRecovery("Verification reply timed out");}
   else if(engine.bridgeLostAt>0&&now-engine.bridgeLostAt>15000)recover("Monitor bridge disconnected");
   else if(gap>30000){engine.service.logStallDiagnostics("main-thread tick gap "+gap+"ms; applicant="+engine.profile);recover("Main-thread tick gap "+gap+"ms");}
@@ -118,5 +121,5 @@ final class MonitorRun {
   else if(engine.lastState.optBoolean("running")&&!engine.lastState.optBoolean("calendarLock")&&now-Math.max(lastProgress,verifiedAt)>60000)recover("No page progress for 60 seconds");
   if(armed){engine.activate();engine.command("PING");if(engine.foreground)engine.render();}
  }
- String diagnostics(){return "\n"+(recovering?"RECOVERING":armed?(engine.foreground?"FOREGROUND":"BACKGROUND"):"IDLE")+" · run="+generation+" · recovery="+recoveryAttempt+" · longest tick gap "+longestGap/1000+"s"+(armed?" · last progress "+(SystemClock.elapsedRealtime()-lastProgress)/1000+"s ago · heartbeat "+(SystemClock.elapsedRealtime()-lastBeat)/1000+"s ago":" · "+lastReason);}
+ String diagnostics(){return "\n"+(recovering?"RECOVERING":armed?(engine.foreground?"FOREGROUND":"BACKGROUND"):"IDLE")+" · run="+generation+" · recovery="+recoveryAttempt+" · longest tick gap "+longestGap/1000+"s · screen-off max gap "+longestScreenOffGap/1000+"s"+(armed?" · last progress "+(SystemClock.elapsedRealtime()-lastProgress)/1000+"s ago · heartbeat "+(SystemClock.elapsedRealtime()-lastBeat)/1000+"s ago":" · "+lastReason);}
 }
