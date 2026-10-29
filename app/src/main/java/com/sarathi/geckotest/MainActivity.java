@@ -94,6 +94,20 @@ public class MainActivity extends Activity {
       }catch(android.content.ActivityNotFoundException e){Toast.makeText(this,"No calling app is available",Toast.LENGTH_LONG).show();}
       catch(Exception e){Toast.makeText(this,"Could not read phone number. Open Phone numbers to update it.",Toast.LENGTH_LONG).show();}
     }
+    private void manageApplicantAlerts(){
+      if(engine==null)return;
+      MonitorService service=engine.service;
+      LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(14),dp(8),dp(14),dp(8));
+      TextView hint=new TextView(this);hint.setText("Choose which applicants may send phone notifications and repeating emergency alarms. Settings are saved separately.");hint.setTextSize(12);hint.setPadding(0,0,0,dp(8));panel.addView(hint);
+      android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(350)));
+      for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){
+        final int number=n;BrowserEngine applicant=service.profile(n);
+        android.widget.Switch toggle=new android.widget.Switch(this);toggle.setText("Applicant "+n+" alerts");toggle.setTextSize(14);toggle.setMinHeight(dp(48));toggle.setChecked(applicant.alerts.isEnabled());
+        toggle.setOnCheckedChangeListener((v,enabled)->{applicant.alerts.setEnabled(enabled);if(!enabled)applicant.command("SILENCE");service.record("Applicant "+number+" alerts "+(enabled?"enabled":"disabled"));service.refreshForeground(true);});
+        rows.addView(toggle);
+      }
+      new AlertDialog.Builder(this).setTitle("Applicant alert settings").setView(panel).setPositiveButton("Done",null).setNeutralButton("Silence all now",(d,w)->service.silenceAll()).show();
+    }
     private void managePhones(){
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(12),dp(8),dp(12),dp(8));
       android.widget.Switch direct=new android.widget.Switch(this);direct.setText("Direct call on long-press");direct.setTextSize(14);direct.setMinHeight(dp(48));
@@ -200,6 +214,7 @@ public class MainActivity extends Activity {
         startHomeButton.setOnLongClickListener(v->{if(engine!=null)engine.home();Toast.makeText(this,"Home",Toast.LENGTH_SHORT).show();return true;});
         startHomeButton.setContentDescription("Short press: Start All. Long press: Home");
         Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.run.stopByUser();});
+        button(controls,"Alerts",Color.rgb(75,85,99),this::manageApplicantAlerts);
         Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});
         silenceButton.setOnLongClickListener(v->{if(engine!=null){engine.service.silenceAll();Toast.makeText(this,"All applicant alarms silenced",Toast.LENGTH_SHORT).show();}return true;});
         stopButton.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Stop all applicants?").setPositiveButton("Stop all",(d,w)->{if(engine!=null)engine.service.stopAll();}).setNegativeButton("Cancel",null).show();return true;});
