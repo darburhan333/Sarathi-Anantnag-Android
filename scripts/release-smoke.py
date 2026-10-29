@@ -27,3 +27,20 @@ print('PASS: minified release starts and all nine applicant bridges connect')
 
 
 
+
+
+# Rotation is handled without recreating the Activity; ensure the header yields space.
+adb('shell','settings','put','system','accelerometer_rotation','0')
+try:
+ adb('shell','settings','put','system','user_rotation','1');time.sleep(2)
+ landscape=snapshot()
+ displays=[list(map(int,re.findall(r'\d+',n.get('bounds','')))) for n in landscape.iter('node') if n.get('class')=='android.widget.ScrollView']
+ assert displays,'Scrollable native header missing after rotation'
+ width=max(int(re.findall(r'\d+',n.get('bounds','[0,0][0,0]'))[2]) for n in landscape.iter('node'))
+ height=max(int(re.findall(r'\d+',n.get('bounds','[0,0][0,0]'))[3]) for n in landscape.iter('node'))
+ assert width>height,'Emulator failed to rotate to landscape'
+ assert displays[0][3]-displays[0][1]<height*0.65,'Header consumes landscape page area'
+ print('PASS: landscape header leaves website space')
+finally:
+ adb('shell','settings','put','system','user_rotation','0')
+ adb('shell','settings','put','system','accelerometer_rotation','1')

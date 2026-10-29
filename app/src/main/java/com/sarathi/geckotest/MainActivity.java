@@ -47,6 +47,7 @@ public class MainActivity extends Activity {
     private GeckoView view,monitorView;
     private TextView status,monitorStatus;
     private Button monitorButton,batteryButton;
+    private android.widget.ScrollView headerScroll;
     private final android.content.ServiceConnection connection=new android.content.ServiceConnection(){
       public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
         engine=((MonitorService.LocalBinder)binder).getService().engine;
@@ -162,7 +163,7 @@ public class MainActivity extends Activity {
         getWindow().setNavigationBarColor(Color.rgb(11,20,38));
         LinearLayout header=new LinearLayout(this);header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(dp(9),dp(6),dp(9),dp(8));
-        android.widget.ScrollView headerScroll=new android.widget.ScrollView(this);headerScroll.setFillViewport(false);headerScroll.addView(header);
+        headerScroll=new android.widget.ScrollView(this);headerScroll.setFillViewport(false);headerScroll.addView(header);
         boolean landscape=getResources().getConfiguration().orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE;
         root.addView(headerScroll,new LinearLayout.LayoutParams(-1,landscape?Math.round(getResources().getDisplayMetrics().heightPixels*0.44f):-2));
         TextView heading = new TextView(this);
@@ -218,6 +219,13 @@ public class MainActivity extends Activity {
         if(android.os.Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
           requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},10);
     }
+    @Override public void onConfigurationChanged(android.content.res.Configuration config){
+      super.onConfigurationChanged(config);
+      if(headerScroll!=null){android.view.ViewGroup.LayoutParams params=headerScroll.getLayoutParams();
+       params.height=config.orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE?dp(Math.round(config.screenHeightDp*0.44f)):android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
+       headerScroll.setLayoutParams(params);
+      }
+    }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);notificationApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,intent.getIntExtra("applicant",1)));if(engine!=null&&intent.hasExtra("applicant"))selectApplicant(notificationApplicant);}
     @Override public void onBackPressed(){
       if(engine!=null&&engine.showingMonitor)toggleMonitor();
@@ -237,6 +245,7 @@ public class MainActivity extends Activity {
       super.onDestroy();
     }
 }
+
 
 
 
