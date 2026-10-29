@@ -194,14 +194,16 @@ public class MainActivity extends Activity {
         monitorStatus.setPadding(dp(4),0,dp(4),dp(5));
         monitorStatus.setText("Connecting monitor… website opens independently");
         LinearLayout controls=new LinearLayout(this);
-        button(controls,"Start All",Color.rgb(5,150,105),()->{if(engine!=null)engine.service.startAllReady();});
         monitorButton=button(controls,"Monitor",Color.rgb(37,99,235),this::toggleMonitor);
+        monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);monitorButton.setTextSize(12);
+        Button startHomeButton=button(controls,"Start All / Home",Color.rgb(5,150,105),()->{if(engine!=null)engine.service.startAllReady();});
+        startHomeButton.setOnLongClickListener(v->{if(engine!=null)engine.home();Toast.makeText(this,"Home",Toast.LENGTH_SHORT).show();return true;});
+        startHomeButton.setContentDescription("Short press: Start All. Long press: Home");
         Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.run.stopByUser();});
         Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});
         silenceButton.setOnLongClickListener(v->{if(engine!=null){engine.service.silenceAll();Toast.makeText(this,"All applicant alarms silenced",Toast.LENGTH_SHORT).show();}return true;});
-        monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);monitorButton.setTextSize(12);
         stopButton.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Stop all applicants?").setPositiveButton("Stop all",(d,w)->{if(engine!=null)engine.service.stopAll();}).setNegativeButton("Cancel",null).show();return true;});
-        button(controls,"Home",Color.rgb(4,120,87),()->{if(engine!=null)engine.home();});header.addView(controls);
+        header.addView(controls);
         button(utilities, "Copy log", Color.rgb(104,65,165), () -> {
             String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.5-keepalive\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
                     + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
