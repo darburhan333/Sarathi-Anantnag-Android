@@ -6,8 +6,9 @@ def snapshot():
  adb('shell','uiautomator','dump','/sdcard/release-ui.xml')
  return ET.fromstring(adb('shell','cat','/sdcard/release-ui.xml'))
 def recover_system_anr(root):
- # On a slow CI emulator, recover from the system ANR dialog without force-closing apps.
- nodes=[n for n in root.iter('node') if n.get('text')=="Quickstep isn't responding"]
+ # On a slow CI emulator, recover from either launcher or System UI ANR without force-closing apps.
+ anr_titles={"Quickstep isn't responding","System UI isn't responding"}
+ nodes=[n for n in root.iter('node') if n.get('text') in anr_titles]
  if not nodes:return False
  wait=next((n for n in root.iter('node') if n.get('text')=='Wait'),None)
  if wait is None:return False
