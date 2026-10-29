@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set +e
-gradle -PtestAbi=x86_64 connectedDebugAndroidTest --stacktrace
-result=$?
+result=0
+if [ "${1:-all}" != "release-only" ]; then
+  gradle -PtestAbi=x86_64 connectedDebugAndroidTest --stacktrace
+  result=$?
+fi
 adb pull /data/local/tmp/monitor-preview.png monitor-preview.png
 adb shell dumpsys activity services com.sarathi.anantnag.gecko.v33 > service-state.txt
 adb logcat -d > emulator-logcat.txt
@@ -12,7 +15,7 @@ if [ "$result" -eq 0 ]; then
   SMOKE_STORE_PASSWORD='smoke-store-pass'
   SMOKE_KEY_PASSWORD='smoke-key-pass'
   SMOKE_KEY_ALIAS='release-smoke'
-  keytool -genkeypair -noprompt \
+  keytool -genkeypair -noprompt -storetype JKS \
     -keystore "$SMOKE_KEYSTORE" \
     -storepass "$SMOKE_STORE_PASSWORD" \
     -keypass "$SMOKE_KEY_PASSWORD" \
@@ -39,9 +42,12 @@ if [ "$result" -eq 0 ]; then
   "$APKSIGNER" verify --verbose "$APK_PATH" || exit 1
   echo "Installing signed release smoke APK: $APK_PATH"
   # Clear only the disposable CI emulator so debug extensions cannot survive into release smoke.
-  adb uninstall com.sarathi.anantnag.gecko.v33 || exit 1
+  if adb shell pm path com.sarathi.anantnag.gecko.v33 | grep -q '^package:'; then
+    adb uninstall com.sarathi.anantnag.gecko.v33 || exit 1
+  fi
   adb install "$APK_PATH" || exit 1
   adb shell pm clear com.sarathi.anantnag.gecko.v33 || exit 1
   python3 scripts/release-smoke.py || exit 1
 fi
 exit "$result"
+
