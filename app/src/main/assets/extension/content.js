@@ -696,6 +696,7 @@
         // Count dispatched clicks, not reservations; navigation may still reject a submission.
         await chrome.storage.local.set({attempts:cycle,attemptDay:today,lastAttemptAt:lastProceedStartedAt,sessionCounterId:sessionId,sessionAttempts:(saved.sessionCounterId===sessionId?(Number(saved.sessionAttempts)||0):0)+1,averageCycleMs,lastCycleMs,covClassCount:lastSelectedCovCount,verificationRetries});
         setStatus(`Proceed dispatched · avg ${averageCycleMs}ms · last ${lastCycleMs}ms · COV ${lastSelectedCovCount} · verification retries ${verificationRetries}`);
+        chrome.runtime.sendMessage({type:'SARATHI_METRICS',sessionId:eventSession,averageCycleMs,lastCycleMs,covClassCount:lastSelectedCovCount,verificationRetries}).catch(()=>{});
         lastLoopProgress=Date.now();
 
         // Watch promptly for the server's popup; navigation may destroy this script,
