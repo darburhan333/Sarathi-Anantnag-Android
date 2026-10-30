@@ -56,6 +56,19 @@
     } catch (_) { ownsTab = false; return false; }
   }
   let cycle = 0;
+  const TARGET_PERIOD = 10000;
+  let lastProceedStartedAt = 0;
+  let cycleCount = 0, cycleTotalMs = 0, lastCycleMs = 0, verificationRetries = 0, lastSelectedCovCount = 0;
+  async function waitForSubmitDeadline(generation) {
+    const deadline = lastProceedStartedAt ? lastProceedStartedAt + TARGET_PERIOD : Date.now() + TARGET_PERIOD;
+    const earliest = lastProceedStartedAt ? lastProceedStartedAt + WAIT_MS : 0;
+    const target = Math.max(deadline, earliest);
+    while (Date.now() < target) {
+      if (!(await isRunning(generation))) return false;
+      await sleep(Math.min(1000, target - Date.now()));
+    }
+    return await isRunning(generation);
+  }
   // Read the persisted submission count so navigation does not reset it.
   // Daily attempts are counted only between 09:00 and 21:00 local time.
   const dayKey = () => {const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
@@ -628,8 +641,8 @@
           continue;
         }
 
-        setStatus(`COV page detected — waiting 8 seconds before next submission`);
-        if (!(await waitWhileRunning(WAIT_MS,generation))) break;
+        setStatus(`COV page detected — deadline scheduler target ${TARGET_PERIOD/1000}s; minimum gap 8s`);
+        if (!(await waitForSubmitDeadline(generation))) break;
         if (noSlotsTextPresent()) continue;
         if (calendarLocked || bookingPaused || realCalendar()) { await inspectBookingPage(); if(!await waitWhileRunning(500,generation))break; continue; }
         const current = getCovForm();
@@ -651,6 +664,7 @@
 
         await sleep(300);
         if (!current.selected.length || current.selected.some(el => !el.isConnected || !el.checked)) {
+          verificationRetries++;
           setStatus('Vehicle class verification failed — not submitting; retrying check');
           await waitWhileRunning(1000,generation);
           continue;
@@ -667,10 +681,21 @@
         if(now.getHours()>=9 && now.getHours()<21) cycle++;
         if(!await isRunning(generation) || !await actionAllowed('PROCEED_CONFIRM') || !await isRunning(generation))break;
         if(current.proceed.disabled || !current.proceed.isConnected || !visible(current.proceed) || current.selected.some(el=>!el.checked||el.disabled||!el.isConnected))continue;
+        const proceedStartedAt=Date.now();
+        const previousProceedStartedAt=lastProceedStartedAt;
+        if(previousProceedStartedAt && proceedStartedAt-previousProceedStartedAt<WAIT_MS){
+          // A late callback never bypasses the hard minimum click interval.
+          if(!await waitWhileRunning(WAIT_MS-(proceedStartedAt-previousProceedStartedAt),generation))break;
+          if(!await isRunning(generation)||!await actionAllowed('PROCEED_CONFIRM')||!current.proceed.isConnected||!visible(current.proceed))break;
+        }
         current.proceed.click();
+        lastProceedStartedAt=Date.now();
+        if(previousProceedStartedAt){lastCycleMs=lastProceedStartedAt-previousProceedStartedAt;cycleCount++;cycleTotalMs+=lastCycleMs;}
+        lastSelectedCovCount=current.selected.length;
+        const averageCycleMs=cycleCount?Math.round(cycleTotalMs/cycleCount):0;
         // Count dispatched clicks, not reservations; navigation may still reject a submission.
-        await chrome.storage.local.set({attempts:cycle,attemptDay:today,lastAttemptAt:Date.now(),sessionCounterId:sessionId,sessionAttempts:(saved.sessionCounterId===sessionId?(Number(saved.sessionAttempts)||0):0)+1});
-        setStatus(`Proceed click dispatched (attempt ${cycle})`);
+        await chrome.storage.local.set({attempts:cycle,attemptDay:today,lastAttemptAt:lastProceedStartedAt,sessionCounterId:sessionId,sessionAttempts:(saved.sessionCounterId===sessionId?(Number(saved.sessionAttempts)||0):0)+1,averageCycleMs,lastCycleMs,covClassCount:lastSelectedCovCount,verificationRetries});
+        setStatus(`Proceed dispatched · avg ${averageCycleMs}ms · last ${lastCycleMs}ms · COV ${lastSelectedCovCount} · verification retries ${verificationRetries}`);
         lastLoopProgress=Date.now();
 
         // Watch promptly for the server's popup; navigation may destroy this script,
