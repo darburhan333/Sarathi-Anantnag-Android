@@ -48,8 +48,13 @@ final class PhoneAlerts {
  }
  void stop(){repeating=false;handler.removeCallbacks(pulse);if(tone!=null){tone.release();tone=null;}if(vibrator!=null)vibrator.cancel();}
  void clearNotification(){activity.getSystemService(NotificationManager.class).cancel(1100+profile);}
+ private boolean isCritical(String title,String message){
+  String text=(String.valueOf(title)+" "+String.valueOf(message)).toLowerCase(java.util.Locale.ROOT);
+  return text.contains("green date")||text.contains("calendar")||text.contains("sms verification")||text.contains("sms ready")||text.contains("session expired")||text.contains("monitoring stopped")||text.contains("monitoring failed")||text.contains("protected page")||text.contains("booking")||text.contains("needs attention")||text.contains("failed")||text.contains("page lost");
+ }
  void notify(String title,String message){
-  if(!isEnabled())return;
+  boolean critical=isCritical(title,message);
+  if(!critical&&!"ALL".equals(mode()))return;
   NotificationManager nm=activity.getSystemService(NotificationManager.class);
   if(!nm.areNotificationsEnabled())throw new IllegalStateException("Allow Sarathi notifications in Android Settings");
   PendingIntent open=PendingIntent.getActivity(activity,100+profile,new Intent(activity,MainActivity.class).putExtra("applicant",profile).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
