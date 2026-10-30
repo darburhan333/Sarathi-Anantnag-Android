@@ -6,6 +6,7 @@ import android.content.Context;
 import android.service.notification.StatusBarNotification;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.rule.GrantPermissionRule;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.junit.Test;
@@ -15,6 +16,7 @@ import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
 public class PhoneAlertsTest {
+    @org.junit.Rule public GrantPermissionRule permission = GrantPermissionRule.grant(android.Manifest.permission.POST_NOTIFICATIONS);
     @Test public void applicantAlertPreferencesAndDeliveryAreIndependent() {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         PhoneAlerts first = new PhoneAlerts(context, 1);
