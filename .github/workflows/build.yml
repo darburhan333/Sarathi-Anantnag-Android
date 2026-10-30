@@ -1,4 +1,4 @@
-name: Build and test Sarathi Gecko V11.47 port (3.6 alpha1 evidence)
+name: Build and test MPARIVAHAN 3.6 safety
 on:
   push:
     branches:
@@ -89,7 +89,7 @@ jobs:
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: MParivahan-JK-3.6-alpha1-evidence-signed
+          name: MParivahan-JK-v3.6-SAFETY-signed
           path: |
             app/build/outputs/apk/release/*.apk
             apk-certificate.txt
