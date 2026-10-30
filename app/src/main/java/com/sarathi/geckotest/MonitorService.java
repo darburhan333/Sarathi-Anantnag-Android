@@ -139,15 +139,15 @@ public final class MonitorService extends Service {
   if(Build.VERSION.SDK_INT>=30){try{for(ApplicationExitInfo i:getSystemService(ActivityManager.class).getHistoricalProcessExitReasons(getPackageName(),0,5))record("STALL historicalExit reason="+i.getReason()+" pid="+i.getPid()+" process="+i.getProcessName()+" time="+i.getTimestamp()+" importance="+i.getImportance()+" detail="+i.getDescription());}catch(Exception e){record("STALL exitInfo unavailable="+e.getClass().getSimpleName());}}
  }
  String summary(){
-  StringBuilder out=new StringBuilder("MPARIVAHAN SLOT BOOKING -J&K\\n");
+  StringBuilder out=new StringBuilder("MPARIVAHAN SLOT BOOKING -J&K\n");
   for(int i=0;i<PROFILE_COUNT;i++){
    BrowserEngine e=profiles[i];out.append("Applicant ").append(i+1).append(": ");
    if(e==null)out.append("Not opened");
    else out.append(e.run.armed?"Monitoring":"Stopped").append(" · checks ").append(e.lastState.optInt("sessionAttempts")).append(" · ").append(e.lastState.optString("bookingStage","Ready")).append(e.run.diagnostics())
      .append(" · avgCycleMs=").append(e.lastState.optInt("averageCycleMs")).append(" · lastCycleMs=").append(e.lastState.optInt("lastCycleMs"))
      .append(" · COV classes=").append(e.lastState.optInt("covClassCount")).append(" · verificationRetries=").append(e.lastState.optInt("verificationRetries"))
-     .append("\\n").append(String.join("\\n",e.logs));
-   out.append('\\n');
+     .append("\n").append(String.join("\n",e.logs));
+   out.append('\n');
   }
   return out.toString();
  }
