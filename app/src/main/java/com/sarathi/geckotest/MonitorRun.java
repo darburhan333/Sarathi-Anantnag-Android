@@ -6,6 +6,7 @@ final class MonitorRun {
  private long armedAt,lastBeat,lastProgress,lastTick,longestGap,longestScreenOffGap,lastHeartbeatValue,lastProgressValue,recoveryAt;
  private long recoveryRetryAt,verifiedAt;
  private int recoveryAttempt;
+ private boolean recoveryAlerted;
  private static final long[] RETRY_DELAYS={5000,15000,30000};
  private int generation;private String recoveryId="",lastReason="Ready";
  private final Map<GeckoResult<Object>,Runnable> waits=new IdentityHashMap<>();
@@ -93,7 +94,7 @@ final class MonitorRun {
  private void finishWait(GeckoResult<Object> r,boolean ok){if(waits.remove(r)==null)return;delayed.remove(r);r.complete(ok?"{\"ok\":true}":"{\"ok\":false,\"cancelled\":true}");}
  void recover(String reason){
   if(!armed||recovering)return;
-  recovering=true;recoveryAttempt=0;recoveryRetryAt=0;
+  recovering=true;recoveryAttempt=0;recoveryRetryAt=0;recoveryAlerted=false;
   lastReason="Paused: "+reason;engine.service.logStallDiagnostics("Applicant "+engine.profile+" "+reason);
   engine.service.record("Applicant "+engine.profile+" recovery started: "+reason+diagnostics());
   attemptRecovery();
