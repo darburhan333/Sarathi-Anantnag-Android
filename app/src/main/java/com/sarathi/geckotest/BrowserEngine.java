@@ -206,6 +206,12 @@ final class BrowserEngine {
                 case "WAIT":return run.waitFor(m.optLong("ms"));
                 case "UI_READY":monitorReady=true;break;
                 case "SMOKE_RESULT":smokeResult=m.optString("result");break;
+                case "METRICS":
+                  lastState.put("averageCycleMs",m.optInt("averageCycleMs"));
+                  lastState.put("lastCycleMs",m.optInt("lastCycleMs"));
+                  lastState.put("covClassCount",m.optInt("covClassCount"));
+                  lastState.put("verificationRetries",m.optInt("verificationRetries"));
+                  service.refreshForeground(false);break;
                 case "AUDIO":
                   JSONObject settings=m.optJSONObject("settings");
                   alerts.audio(m.optString("action"),settings==null||settings.optBoolean("soundEnabled",true),settings==null?85:settings.optInt("volume",85));break;
