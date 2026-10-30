@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - build/mparivahan-v3.4-recovery
+  pull_request:
+    branches:
+      - build/mparivahan-v3.4-recovery
   workflow_dispatch:
 concurrency:
   group: sarathi-${{ github.ref }}
