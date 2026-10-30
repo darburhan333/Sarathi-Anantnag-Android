@@ -60,12 +60,14 @@
   let lastProceedStartedAt = 0;
   let cycleCount = 0, cycleTotalMs = 0, lastCycleMs = 0, verificationRetries = 0, lastSelectedCovCount = 0;
   async function waitForSubmitDeadline(generation) {
-    const deadline = lastProceedStartedAt ? lastProceedStartedAt + TARGET_PERIOD : Date.now() + TARGET_PERIOD;
-    const earliest = lastProceedStartedAt ? lastProceedStartedAt + WAIT_MS : 0;
-    const target = Math.max(deadline, earliest);
-    while (Date.now() < target) {
-      if (!(await isRunning(generation))) return false;
-      await sleep(Math.min(1000, target - Date.now()));
+    const persisted=await chrome.storage.local.get({lastProceedStartedAt:0});
+    lastProceedStartedAt=Math.max(lastProceedStartedAt,Number(persisted.lastProceedStartedAt)||0);
+    const deadline=lastProceedStartedAt?lastProceedStartedAt+TARGET_PERIOD:Date.now()+TARGET_PERIOD;
+    const earliest=lastProceedStartedAt?lastProceedStartedAt+WAIT_MS:0;
+    const target=Math.max(deadline,earliest);
+    while(Date.now()<target){
+      if(!(await isRunning(generation)))return false;
+      await sleep(Math.min(1000,target-Date.now()));
     }
     return await isRunning(generation);
   }
@@ -641,8 +643,7 @@
           continue;
         }
 
-        setStatus(`COV page detected — deadline scheduler target ${TARGET_PERIOD/1000}s; minimum gap 8s`);
-        if (!(await waitForSubmitDeadline(generation))) break;
+        setStatus(`COV page detected — preparing next deadline-based check (${TARGET_PERIOD/1000}s target)`);
         if (noSlotsTextPresent()) continue;
         if (calendarLocked || bookingPaused || realCalendar()) { await inspectBookingPage(); if(!await waitWhileRunning(500,generation))break; continue; }
         const current = getCovForm();
@@ -664,7 +665,9 @@
 
         await sleep(300);
         if (!current.selected.length || current.selected.some(el => !el.isConnected || !el.checked)) {
-          verificationRetries++;
+          const retryData=await chrome.storage.local.get({verificationRetries:0});
+          verificationRetries=Math.max(verificationRetries,Number(retryData.verificationRetries)||0)+1;
+          await chrome.storage.local.set({verificationRetries});
           setStatus('Vehicle class verification failed — not submitting; retrying check');
           await waitWhileRunning(1000,generation);
           continue;
@@ -672,6 +675,12 @@
         if (!(await isRunning(generation)) || bookingPaused || calendarLocked || realCalendar()) { await inspectBookingPage(); break; }
         if (current.proceed.form !== current.form || current.proceed.id !== 'prcdbook') continue;
 
+        // Prepare first, then wait immediately before the guarded submit so variable work
+        // does not add drift to the target interval. An overrun never creates catch-up clicks.
+        if(!(await waitForSubmitDeadline(generation)))break;
+        if(!(await isRunning(generation))||bookingPaused||calendarLocked||realCalendar()){await inspectPage();break;}
+        const readyCov=getCovForm();
+        if(!readyCov||readyCov.form!==current.form||readyCov.proceed!==current.proceed)continue;
         // Background verifies session/tab and gates the next PROCEED before counting.
         if(!await actionAllowed('PROCEED'))break;
         if(!(await isRunning(generation)) || !current.proceed.isConnected || !visible(current.proceed))break;
@@ -681,20 +690,23 @@
         if(now.getHours()>=9 && now.getHours()<21) cycle++;
         if(!await isRunning(generation) || !await actionAllowed('PROCEED_CONFIRM') || !await isRunning(generation))break;
         if(current.proceed.disabled || !current.proceed.isConnected || !visible(current.proceed) || current.selected.some(el=>!el.checked||el.disabled||!el.isConnected))continue;
-        const proceedStartedAt=Date.now();
         const previousProceedStartedAt=lastProceedStartedAt;
-        if(previousProceedStartedAt && proceedStartedAt-previousProceedStartedAt<WAIT_MS){
-          // A late callback never bypasses the hard minimum click interval.
-          if(!await waitWhileRunning(WAIT_MS-(proceedStartedAt-previousProceedStartedAt),generation))break;
+        if(previousProceedStartedAt && Date.now()-previousProceedStartedAt<WAIT_MS){
+          // Hard minimum remains enforced even if a worker callback arrives early.
+          if(!await waitWhileRunning(WAIT_MS-(Date.now()-previousProceedStartedAt),generation))break;
           if(!await isRunning(generation)||!await actionAllowed('PROCEED_CONFIRM')||!current.proceed.isConnected||!visible(current.proceed))break;
         }
+        const proceedStartedAt=Date.now();
         current.proceed.click();
-        lastProceedStartedAt=Date.now();
-        if(previousProceedStartedAt){lastCycleMs=lastProceedStartedAt-previousProceedStartedAt;cycleCount++;cycleTotalMs+=lastCycleMs;}
+        lastProceedStartedAt=proceedStartedAt;
+        const metricsSaved=await chrome.storage.local.get({cycleCount:0,cycleTotalMs:0,verificationRetries:0});
+        verificationRetries=Math.max(verificationRetries,Number(metricsSaved.verificationRetries)||0);
+        if(previousProceedStartedAt){lastCycleMs=proceedStartedAt-previousProceedStartedAt;cycleCount=(Number(metricsSaved.cycleCount)||0)+1;cycleTotalMs=(Number(metricsSaved.cycleTotalMs)||0)+lastCycleMs;}
+        else{cycleCount=Number(metricsSaved.cycleCount)||0;cycleTotalMs=Number(metricsSaved.cycleTotalMs)||0;}
         lastSelectedCovCount=current.selected.length;
         const averageCycleMs=cycleCount?Math.round(cycleTotalMs/cycleCount):0;
         // Count dispatched clicks, not reservations; navigation may still reject a submission.
-        await chrome.storage.local.set({attempts:cycle,attemptDay:today,lastAttemptAt:lastProceedStartedAt,sessionCounterId:sessionId,sessionAttempts:(saved.sessionCounterId===sessionId?(Number(saved.sessionAttempts)||0):0)+1,averageCycleMs,lastCycleMs,covClassCount:lastSelectedCovCount,verificationRetries});
+        await chrome.storage.local.set({attempts:cycle,attemptDay:today,lastAttemptAt:lastProceedStartedAt,lastProceedStartedAt,sessionCounterId:sessionId,sessionAttempts:(saved.sessionCounterId===sessionId?(Number(saved.sessionAttempts)||0):0)+1,averageCycleMs,lastCycleMs,covClassCount:lastSelectedCovCount,verificationRetries,cycleCount,cycleTotalMs});
         setStatus(`Proceed dispatched · avg ${averageCycleMs}ms · last ${lastCycleMs}ms · COV ${lastSelectedCovCount} · verification retries ${verificationRetries}`);
         chrome.runtime.sendMessage({type:'SARATHI_METRICS',sessionId:eventSession,averageCycleMs,lastCycleMs,covClassCount:lastSelectedCovCount,verificationRetries}).catch(()=>{});
         lastLoopProgress=Date.now();
