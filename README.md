@@ -61,3 +61,8 @@ These are emulator and offline-fixture tests. They do not prove uninterrupted mo
 Local JavaScript/adapter regression suites passed, including checkbox-row COV parsing, nine applicant credential isolation, per-recipient Telegram retry/deduplication and recovery gates. Android compilation, lint and runtime test results must be checked in the current Actions run before distribution. The fixture test now exercises ten minutes minimized with the screen on; another test injects a background stall and checks all runs/waits stop without closing the page. These tests do not establish success on the physical Infinix phone.
 
 Signing is performed outside the source tree with the existing release identity; CI exports an unsigned APK. No private key, password, applicant details or real Telegram credentials belong in commits.
+
+## Controls (3.6 safety)
+Rows 1–2: Applicants 1–8. Row 3: Applicant 9, Background setup, Phone numbers, Copy log.
+Row 4: Monitor/Website, Start All, Stop, Silence (equal-width 64dp controls).
+Hold Background setup for Home (protected-page confirmation); hold Copy log for applicant alert modes and Test alert. Hold Stop for Stop all confirmation; hold Silence to silence all current alarms. Critical alarms cannot be disabled by routine modes.
