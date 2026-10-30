@@ -9,6 +9,6 @@ for mode in ['main','debug']:
   shutil.copytree(assets/'extension',target)
   m=json.loads((target/'manifest.json').read_text());m['browser_specific_settings']['gecko']['id']=f'sarathi-applicant{number}@burhan.local'
   (target/'manifest.json').write_text(json.dumps(m,indent=2)+'\n')
-  (target/'profile-config.js').write_text(f'globalThis.PROFILE_MODE=true;globalThis.APPLICANT={number};\n')
+  (target/'profile-config.js').write_text(f'globalThis.PROFILE_MODE=true;globalThis.APPLICANT={number};globalThis.MANUAL_BOOKING_ONLY=true;\n')
 
 

@@ -7,6 +7,7 @@
 
   const documentNonce=globalThis.crypto?.randomUUID?.() || String(Date.now())+'-'+Math.random().toString(36).slice(2);
   const WAIT_MS = 8000;
+  const TARGET_PERIOD = 10000;
   let bookingPaused = false;
   let calendarLocked = false;
   let sessionLocked = false;
@@ -401,6 +402,7 @@
     chrome.runtime.sendMessage({type:'SARATHI_WARNING',sessionId:eventSession,kind:'BOOKING_REVIEW',message}).catch(()=>{});
   }
   async function assistBooking() {
+    if(globalThis.MANUAL_BOOKING_ONLY)return;
     const eventSession=sessionId;
     const gate=(action,extra={})=>actionAllowed(action,extra,eventSession);
     const stopAssist=message=>safeAssistStop(message,eventSession);
@@ -632,8 +634,9 @@
           continue;
         }
 
-        setStatus(`COV page detected — waiting 8 seconds before next submission`);
-        if (!(await waitWhileRunning(WAIT_MS,generation))) break;
+        const schedule=await chrome.storage.local.get({lastSubmitStart:0,monitorStartedAt:Date.now()});
+        const deadline=(schedule.lastSubmitStart||schedule.monitorStartedAt)+TARGET_PERIOD;
+        setStatus("COV page detected — next deadline scheduled");
         if (noSlotsTextPresent()) continue;
         if (calendarLocked || bookingPaused || realCalendar()) { await inspectBookingPage(); if(!await waitWhileRunning(500,generation))break; continue; }
         const current = getCovForm();
@@ -654,8 +657,10 @@
         }
 
         await sleep(300);
+        if (!(await waitWhileRunning(Math.max(0,deadline-Date.now()),generation))) break;
         if (!current.selected.length || current.selected.some(el => !el.isConnected || !el.checked)) {
           setStatus('Vehicle class verification failed — not submitting; retrying check');
+          const retries=await chrome.storage.local.get({verificationRetries:0});await chrome.storage.local.set({verificationRetries:retries.verificationRetries+1});
           await waitWhileRunning(1000,generation);
           continue;
         }
@@ -671,6 +676,13 @@
         if(now.getHours()>=9 && now.getHours()<21) cycle++;
         if(!await isRunning(generation) || !await actionAllowed('PROCEED_CONFIRM') || !await isRunning(generation))break;
         if(current.proceed.disabled || !current.proceed.isConnected || !visible(current.proceed) || current.selected.some(el=>!el.checked||el.disabled||!el.isConnected))continue;
+        const submittedAt=Date.now();
+        const timing=await chrome.storage.local.get({lastSubmitStart:0,cycleTotal:0,cycleCount:0});
+        const lastCycleMs=timing.lastSubmitStart?submittedAt-timing.lastSubmitStart:0;
+        if(lastCycleMs>0&&lastCycleMs<8000)continue;
+        if(!await isRunning(generation)||!current.proceed.isConnected||current.proceed.disabled)continue;
+        await chrome.storage.local.set({lastSubmitStart:submittedAt,lastCycleMs,cycleTotal:timing.cycleTotal+lastCycleMs,cycleCount:timing.cycleCount+(lastCycleMs>0?1:0),selectedCovCount:current.selected.length});
+        if(!await isRunning(generation))break;
         current.proceed.click();
         // Count dispatched clicks, not reservations; navigation may still reject a submission.
         await chrome.storage.local.set({attempts:cycle,attemptDay:today,lastAttemptAt:Date.now(),sessionCounterId:sessionId,sessionAttempts:(saved.sessionCounterId===sessionId?(Number(saved.sessionAttempts)||0):0)+1});

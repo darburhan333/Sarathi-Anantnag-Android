@@ -2,7 +2,7 @@
 (() => {
  let port=null, foreground=false, commandQueue=Promise.resolve();
  const defaults={running:false,successWatch:false,bookingStage:'STOPPED',lastStatus:'Ready',
-  attempts:0,sessionAttempts:0,alarmActive:false,bookingClickIssued:false,androidForeground:false,androidServiceReady:false,heartbeatAt:0,monitorProgressAt:0,lastCheck:0,calendarLock:false,protectPage:false,pageReason:"",url:""};
+  attempts:0,sessionAttempts:0,alarmActive:false,bookingClickIssued:false,androidForeground:false,androidServiceReady:false,heartbeatAt:0,monitorProgressAt:0,lastCheck:0,calendarLock:false,lastCycleMs:0,cycleTotal:0,cycleCount:0,selectedCovCount:0,verificationRetries:0,protectPage:false,pageReason:"",url:""};
  async function tabRequest(id,message){
   let timer;try{return await Promise.race([chrome.tabs.sendMessage(id,message),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Page reply timed out')),5000);})]);}finally{clearTimeout(timer);}
  }
