@@ -28,7 +28,7 @@ final class MonitorRun {
   if(armed)return;engine.service.beginForeground();
   armed=true;sawRunning=false;recovering=false;generation++;lastReason="Running";
   armedAt=lastBeat=lastProgress=lastTick=SystemClock.elapsedRealtime();longestGap=0;longestScreenOffGap=0;recoveryAttempt=0;verifiedAt=0;lastHeartbeatValue=lastProgressValue=0;
-  engine.alerts.clearNotification();engine.service.record("Applicant "+engine.profile+" START run="+generation);
+  engine.alerts.clearNotification();engine.alerts.newRun();engine.alerts.testOnce();engine.service.record("Applicant "+engine.profile+" START run="+generation);
   engine.service.markRunning(engine.profile,true);engine.activate();engine.service.refreshForeground(true);
  }
  void disarm(){disarm(true);}
@@ -52,8 +52,7 @@ final class MonitorRun {
   lastReason=message;engine.log(message);engine.service.record("Applicant "+engine.profile+" stopped: "+message);
   // Revoke first. FAILURE updates the dashboard; only native code delivers this failure alarm.
   disarm(false);engine.command("FAILURE",message);
-  try{engine.alerts.notify("Monitoring needs attention",message);}catch(Exception e){engine.service.record("Applicant "+engine.profile+" notification failed: "+e.getClass().getSimpleName());}
-  try{engine.alerts.audio("START",true,85);}catch(Exception e){engine.service.record("Applicant "+engine.profile+" alarm failed: "+e.getClass().getSimpleName());}
+  engine.alerts.critical("MONITOR_FAILED",message);
   engine.service.refreshForeground(true);
  }
  void onState(JSONObject state){

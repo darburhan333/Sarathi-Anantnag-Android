@@ -16,6 +16,7 @@ async function runAction(start,epoch,batch=""){
  if(start && !batch && !(await chrome.storage.local.get({androidForeground:false})).androidForeground){feedback('Return to the app before starting.');return;}
  const valid=()=>epoch===runEpoch;
  if(!start){
+   const stopped=await chrome.runtime.sendMessage({type:'ANDROID_STOP'});if(stopped?.ok===false){feedback(stopped.error||'Stop cancelled');return;}
    await chrome.storage.local.set({running:false,successWatch:false,autoBookingEnabled:false,nextRetryAt:0,bookingStage:'STOPPED',lastStatus:'Stopped by user'});
    const t=await target();
    if(valid()&&t)try{await chrome.tabs.sendMessage(t.id,{type:'SARATHI_STOP'});}catch(_){}

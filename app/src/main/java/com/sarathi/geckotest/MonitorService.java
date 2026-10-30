@@ -54,12 +54,13 @@ public final class MonitorService extends Service {
   if(wifiLock!=null&&!wifiLock.isHeld())wifiLock.acquire();
   keepAlive.start();
  }
+ String routineWarning(){StringBuilder ids=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&e.run.armed&&e.alerts.mode().equals("ROUTINE OFF")){if(ids.length()>0)ids.append(", ");ids.append("A").append(e.profile);}return ids.length()==0?"":"\nALERTS: ROUTINE OFF ("+ids+")";}
  private Notification notification(){
   PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
   PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,MonitorService.class).setAction("STOP"),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-  StringBuilder text=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&e.run.armed){if(text.length()>0)text.append(" · ");text.append("A").append(e.profile).append(" ").append(e.lastState.optInt("sessionAttempts"));}
+  StringBuilder text=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&e.run.armed){if(text.length()>0)text.append(" · ");text.append("A").append(e.profile).append(" ").append(e.lastState.optBoolean("calendarLock")?"CALENDAR, act now":e.lastState.optString("bookingStage").contains("SMS")?"SMS, waiting":String.valueOf(e.lastState.optInt("sessionAttempts"))).append(" [").append(e.alerts.mode()).append("]");}
   if(text.length()==0)text.append(alerting()?"Alert active — open app":"Finishing alerts");
-  String summary=text.toString();
+  String summary=text.toString()+routineWarning();
   return new Notification.Builder(this,"sarathi-monitor").setSmallIcon(R.drawable.ic_notification).setContentTitle("MPARIVAHAN SLOT BOOKING -J&K").setContentText(summary).setStyle(new Notification.BigTextStyle().bigText(summary)).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).addAction(new Notification.Action.Builder(null,"STOP ALL",stop).build()).build();
  }
  void refreshForeground(boolean immediate){needsCpu=activeCount()>0||alerting();if(destroying||!promoted)return;

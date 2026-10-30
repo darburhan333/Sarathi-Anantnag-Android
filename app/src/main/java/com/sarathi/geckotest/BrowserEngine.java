@@ -151,6 +151,8 @@ final class BrowserEngine {
           monitorUrl=o.optString("monitorUrl");ready=true;foregroundState();
           log("Monitor connected in "+(SystemClock.elapsedRealtime()-startupAt)+" ms");
           log("Monitor ready — open Sarathi, then MONITOR to start");prepareMonitor();break;
+        case "CRITICAL":alerts.critical(o.optString("kind"),o.optString("message"));break;
+        case "ALERT_DELIVERY":service.record("ALERT A"+profile+" kind="+o.optString("kind")+" Telegram="+o.optString("telegram"));break;
         case "STATE":
           monitoring=o.optBoolean("running")||o.optBoolean("successWatch");
           lastState=o;
@@ -160,7 +162,7 @@ final class BrowserEngine {
         case "ACK":
           finishNavigation(o.optString("id"));break;
         case "START_RESULT":if(o.optString("batch").equals(service.startBatch)){log("Start All: "+o.optString("reason"));service.record("Applicant "+profile+" Start All: "+o.optString("reason"));}break;
-        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;log(o.optBoolean("covReady")?"Page ready · COV selection":"Page ready · navigate to COV to start");}break;
+        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;log(o.optString("reason",o.optBoolean("covReady")?"COV selection":"COV form missing"));}break;
         case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"),o.optBoolean("terminal"),o.optString("reason","No verification details"));break;
         case "ERROR":log(o.optString("message"));break;
       }
@@ -202,7 +204,10 @@ final class BrowserEngine {
                 case "RESTORE":result.put("armed",run.armed);break;
                 case "AUTHORIZE":return run.authorization();
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;
-                case "DISARM":run.disarm();break;
+                case "DISARM":run.stopByUser();break;
+                case "CRITICAL":alerts.critical(m.optString("kind"),m.optString("message"));break;
+                case "ACK_ALERT":alerts.stop();alerts.clearNotification();service.refreshForeground(true);break;
+                case "ALERT_DELIVERY":service.record("ALERT A"+profile+" kind="+m.optString("kind")+" Telegram="+m.optString("telegram"));break;
                 case "WAIT":return run.waitFor(m.optLong("ms"));
                 case "UI_READY":monitorReady=true;break;
                 case "SMOKE_RESULT":smokeResult=m.optString("result");break;

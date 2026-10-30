@@ -90,6 +90,7 @@ async function drainTelegram(){return withTelegramQueue(async()=>{
   }
   job.done=job.pending.length===0;changed=true;
  }
+ if(changed && typeof nativeRequest==='function')await nativeRequest({type:'ALERT_DELIVERY',kind:'TELEGRAM_QUEUE',telegram:messages.join(' | ')||'disabled or expired'}).catch(()=>{});
  if(changed)await chrome.storage.local.set({telegramOutbox:jobs.filter(j=>!j.done&&j.pending.length).slice(-30),telegramDeliveryStatus:messages.join(' | '),telegramLastAttempt:Date.now()});
  return messages.join(' | ');
 });}
@@ -153,7 +154,7 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
     inGateQueue(()=>authorizeAction(msg,sender)).then(reply).catch(e=>reply({authorized:false,error:String(e.message||e)}));
     return true;
   }
-  if(msg?.type==='AUDIO_CONTROL'){(async()=>{if(msg.action==='ARM')await audioCommand('ARM');else if(msg.action==='TEST')await audioCommand('TEST');else if(msg.action==='STOP')await audioCommand('STOP');else throw Error('Unknown audio action');})().then(()=>reply({ok:true})).catch(e=>reply({ok:false,error:String(e.message||e)}));return true;}
+  if(msg?.type==='AUDIO_CONTROL'){(async()=>{if(msg.action==='ARM')await audioCommand('ARM');else if(msg.action==='TEST')await audioCommand('TEST');else if(msg.action==='STOP'){await nativeRequest({type:'ACK_ALERT'});await audioCommand('STOP');}else throw Error('Unknown audio action');})().then(()=>reply({ok:true})).catch(e=>reply({ok:false,error:String(e.message||e)}));return true;}
 
   if (!['SARATHI_ALERT','TEST_TELEGRAM','TEST_DESKTOP','SARATHI_BOOKED','SARATHI_WARNING','SARATHI_SMS_READY'].includes(msg?.type)) return;
   const processAlert=async()=>{
@@ -162,6 +163,8 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
     if (!sender.url?.startsWith('https://sarathi.parivahan.gov.in/')) return;
     const owner=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,successWatch:false});
     if(!msg.sessionId || msg.sessionId!==owner.monitorSessionId || sender.tab?.id!==owner.monitoredTabId || (!owner.running&&!owner.successWatch))return;
+    const criticalKind=msg.type==='SARATHI_SMS_READY'?'SMS_READY':msg.type==='SARATHI_WARNING'?(msg.kind||'SESSION'):msg.type==='SARATHI_BOOKED'?'BOOKED':(msg.kind||'CALENDAR');
+    await nativeRequest({type:'CRITICAL',kind:criticalKind,message:msg.message||({SMS_READY:'SMS verification ready — enter code manually',GREEN_DATE:'Green date detected — act now',CALENDAR:'Calendar detected — act now'}[criticalKind]||criticalKind)});
     if(msg.type==='SARATHI_SMS_READY') {
       const d=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',telegramEnabled:true,desktopEnabled:true,history:[],smsAlertKey:''});
       if(sender.tab?.id!==d.monitoredTabId)return;

@@ -584,11 +584,15 @@
     const bookingKey=[location.pathname,slotDate,slotTime,cov].join('|');
     try { chrome.runtime.sendMessage({type:'SARATHI_BOOKED',sessionId:eventSession,bookingKey,slotDate,slotTime,cov}).catch(()=>{}); } catch(_) {}
   }
+  let calendarWithoutGreenAt=0;
   let inspectionBusy=false;
   async function inspectPage(){
     if(inspectionBusy || !ownsTab)return;
     inspectionBusy=true;textCacheAt=-Infinity;
-    try{await inspectBookingPage();await observeSmsPage();await assistBooking();await inspectBookingSuccess();}
+    try{await inspectBookingPage();await observeSmsPage();await assistBooking();await inspectBookingSuccess();
+      const green=Array.from(document.querySelectorAll("#calview .cal_green,td.cal_green")).some(el=>visible(el)&&/^\d{1,2}$/.test(norm(el.textContent)));
+      if(realCalendar()&&!green){if(!calendarWithoutGreenAt)calendarWithoutGreenAt=Date.now();if(Date.now()-calendarWithoutGreenAt>=60000)setStatus("No green date, go back to COV and resume");}else calendarWithoutGreenAt=0;
+    }
     finally{inspectionBusy=false;}
   }
   setInterval(()=>inspectPage().catch(()=>{}),1100);
@@ -697,7 +701,7 @@
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if(message?.type==='SARATHI_PROFILE_QUERY'){sendResponse({ok:true,ready:document.readyState!=='loading',covReady:!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),page:location.href});return false;}
+    if(message?.type==='SARATHI_PROFILE_QUERY'){sendResponse({ok:true,ready:document.readyState!=='loading',covReady:!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),reason:isSmsVerificationPage()?'SMS verification ready':realCalendar()?'Calendar detected':EXPIRY_TEXT.test(pageText(true))?'Session expired':getCovForm()?'COV selection':'COV form missing',page:location.href});return false;}
     if (message?.type === 'SARATHI_HEALTH_PING') {
       (async()=>{
         const owner=await confirmOwnership();
