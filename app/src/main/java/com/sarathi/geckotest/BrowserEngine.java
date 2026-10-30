@@ -64,6 +64,7 @@ final class BrowserEngine {
     volatile String smokeResult="",smokePhase="";
     volatile boolean monitorReady;
     JSONObject lastState=new JSONObject();
+    volatile int averageCycleMs,lastCycleMs,covClassCount,verificationRetries;
     BrowserEngine(MonitorService owner,int number){
       service=owner;profile=number;run=new MonitorRun(this);alerts=new PhoneAlerts(owner,number);
       extensionId=number==1?"sarathi-android@burhan.local":"sarathi-applicant"+number+"@burhan.local";assetPath=number==1?"extension/":"extension"+number+"/";
@@ -207,10 +208,7 @@ final class BrowserEngine {
                 case "UI_READY":monitorReady=true;break;
                 case "SMOKE_RESULT":smokeResult=m.optString("result");break;
                 case "METRICS":
-                  lastState.put("averageCycleMs",m.optInt("averageCycleMs"));
-                  lastState.put("lastCycleMs",m.optInt("lastCycleMs"));
-                  lastState.put("covClassCount",m.optInt("covClassCount"));
-                  lastState.put("verificationRetries",m.optInt("verificationRetries"));
+                  averageCycleMs=m.optInt("averageCycleMs");lastCycleMs=m.optInt("lastCycleMs");covClassCount=m.optInt("covClassCount");verificationRetries=m.optInt("verificationRetries");
                   service.refreshForeground(false);break;
                 case "AUDIO":
                   JSONObject settings=m.optJSONObject("settings");
