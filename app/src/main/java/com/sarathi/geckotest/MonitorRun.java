@@ -12,6 +12,7 @@ final class MonitorRun {
  private final Set<GeckoResult<Object>> authorizations=Collections.newSetFromMap(new IdentityHashMap<>());
  private final Set<GeckoResult<Object>> delayed=Collections.newSetFromMap(new IdentityHashMap<>());
  MonitorRun(BrowserEngine e){engine=e;handler=e.service.handler;}
+ String lastReasonForTest(){return lastReason;}
  boolean authorize(){
   if(armed&&SystemClock.elapsedRealtime()-lastTick>30000)recover("Native action scheduler delayed");
   return armed&&!recovering;
