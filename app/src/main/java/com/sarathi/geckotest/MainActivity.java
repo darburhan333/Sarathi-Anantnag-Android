@@ -119,7 +119,7 @@ public class MainActivity extends Activity {
           View selected=group.findViewById(id);if(selected==null)return;String mode=String.valueOf(selected.getTag());
           getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("alertMode"+number,mode).apply();
           BrowserEngine applicant=service.profiles[number-1];if(applicant!=null)applicant.alerts.setMode(mode);
-          service.record("Applicant "+number+" alert mode="+mode);service.refreshForeground(true);
+          service.record("Applicant "+number+" alert mode="+mode);service.refreshForeground(true);render();
         });
         row.addView(choices);rows.addView(row);
       }
@@ -252,7 +252,7 @@ public class MainActivity extends Activity {
         Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.run.stopByUser();});
         Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null){engine.alerts.stop();command("SILENCE");}});
         monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        for(Button b:new Button[]{monitorButton,startAllButton,stopButton,silenceButton}){b.setTextSize(15);b.setMinHeight(dp(64));b.setMinimumHeight(dp(64));}
+        for(Button b:new Button[]{monitorButton,startAllButton,stopButton,silenceButton}){b.setTextSize(15);b.setMinHeight(dp(64));b.setMinimumHeight(dp(64));LinearLayout.LayoutParams lp=(LinearLayout.LayoutParams)b.getLayoutParams();lp.height=dp(64);b.setLayoutParams(lp);}
         silenceButton.setOnLongClickListener(v->{if(engine!=null){engine.service.silenceAll();Toast.makeText(this,"All applicant alarms silenced",Toast.LENGTH_SHORT).show();}return true;});
         stopButton.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Stop all applicants?").setPositiveButton("Stop all",(d,w)->{if(engine!=null)engine.service.stopAll();}).setNegativeButton("Cancel",null).show();return true;});
         header.addView(controls);
