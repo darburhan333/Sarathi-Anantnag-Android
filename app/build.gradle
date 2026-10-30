@@ -11,8 +11,8 @@ android {
   applicationId 'com.sarathi.anantnag.gecko.v33'
   minSdk 26
   targetSdk 34
-  versionCode 360
-  versionName '3.6-alpha1-gecko-lifecycle'
+  versionCode 361
+  versionName '3.6-safety'
   testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
   ndk { abiFilters(project.findProperty('testAbi') ?: 'arm64-v8a') }
  }

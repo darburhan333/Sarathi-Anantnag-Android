@@ -94,9 +94,12 @@ public class GeckoIntegrationTest {
      one.run.recovered(attempt,false,false,"Page reply timed out");
      if(i<3){assertTrue("Transient verification failure must retain run",one.run.armed);assertFalse(one.run.authorize());assertTrue(two.run.armed);retry.setLong(one.run,1);one.run.tick();}
     }
-    assertFalse("Exhausted recovery must revoke affected applicant",one.run.armed);
+    // A frozen page is not proof of an expired session: preserve the native run, but gate actions.
+    assertTrue("Unverified page must remain safely paused, not silently disarmed",one.run.armed);
+    assertTrue("Recovery must remain pending for screen-on retry",one.run.recovering);
+    assertFalse("Paused applicant must not authorize page actions",one.run.authorize());
     assertTrue("Other applicants must continue",two.run.armed);
-    assertTrue("Failure must alarm while minimized",one.alerts.isRepeating());
+    assertTrue("Paused applicant must alarm while minimized",one.alerts.isRepeating());
    }catch(IllegalAccessException e){throw new AssertionError(e);}finally{service.visible=true;service.stopAll();}
   });
  }
@@ -130,18 +133,29 @@ public class GeckoIntegrationTest {
    assertFalse("Verified COV recovery must finish",s.engine.run.recovering);
    shell("input keyevent KEYCODE_HOME");// Screen remains ON. Exercise the reported 50–60s boundary repeatedly.
    for(int minute=0;minute<10;minute++)progress(s,"minimized screen-on minute "+minute,60);
-   shell("input keyevent KEYCODE_SLEEP");progress(s,"screen locked for 10 minutes",600);
-   shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");progress(s,"forced Doze with exemption",22);
+    int requestsBeforeLock=requests.get();
+    shell("input keyevent KEYCODE_SLEEP");
+    Thread.sleep(600000);
+    assertTrue("Screen-off stall must not silently disarm native monitoring",s.isArmedForTest());
+    if(s.engine.run.recovering)assertFalse("Unverified page must not be authorized while screen is locked",s.engine.run.authorize());
+    shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");Thread.sleep(22000);
+    assertTrue("Forced Doze must not silently disarm native monitoring",s.isArmedForTest());
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");
-   main(a::finish);progress(s,"Activity destroyed; session retained",30);
+    main(a::finish);Thread.sleep(30000);
+    assertTrue("Activity destruction must retain the native monitoring session",s.isArmedForTest());
    shell("input keyevent KEYCODE_WAKEUP");shell("wm dismiss-keyguard");
    android.content.Context ctx=InstrumentationRegistry.getInstrumentation().getTargetContext();
    MainActivity reopened=(MainActivity)InstrumentationRegistry.getInstrumentation().startActivitySync(new android.content.Intent(ctx,MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
    end=System.currentTimeMillis()+10000;
    while(reopened.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
    assertSame("Must reuse same service and browser",s,reopened.serviceForTest());
-   end=System.currentTimeMillis()+100000;
-   while(s.engine.smokeResult.isEmpty()&&System.currentTimeMillis()<end)Thread.sleep(500);
+
+    end=System.currentTimeMillis()+120000;
+    while((s.engine.run.recovering||requests.get()<=requestsBeforeLock)&&System.currentTimeMillis()<end)Thread.sleep(500);
+    assertTrue("Screen-on must restore safe page monitoring; request count "+requests.get(),requests.get()>requestsBeforeLock);
+    assertFalse("Successful screen-on recovery must clear paused state",s.engine.run.recovering);
+    end=System.currentTimeMillis()+100000;
+    while(s.engine.smokeResult.isEmpty()&&System.currentTimeMillis()<end)Thread.sleep(500);
    assertTrue(s.engine.smokeResult,s.engine.smokeResult.startsWith("PASS:"));
    main(reopened::openMonitorForTest);
    end=System.currentTimeMillis()+20000;
@@ -206,7 +220,7 @@ public class GeckoIntegrationTest {
     for(int i=0;i<9;i++){assertTrue("Locked HTTP applicant "+i+" minute "+minute,counts.get(i)>before[i]);assertTrue("Run alive applicant "+i,service.profiles[i].run.armed);before[i]=counts.get(i);}
     System.out.println("PASS all nine applicants locked, minute "+minute+": "+counts);
    }
-   shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");Thread.sleep(120000);
+    shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");Thread.sleep(22000);
    for(int i=0;i<9;i++)assertTrue("Doze HTTP applicant "+i,counts.get(i)>before[i]);
    main(()->service.profiles[1].run.stopByUser());Thread.sleep(1500);int stopped=counts.get(1),first=counts.get(0),third=counts.get(2);Thread.sleep(22000);
    assertEquals("Applicant 2 must stop",stopped,counts.get(1));assertTrue("Applicant 1 continues",counts.get(0)>first);assertTrue("Applicant 3 continues",counts.get(2)>third);

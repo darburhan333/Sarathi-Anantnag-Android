@@ -6,6 +6,7 @@ final class MonitorRun {
  private long armedAt,lastBeat,lastProgress,lastTick,longestGap,longestScreenOffGap,lastHeartbeatValue,lastProgressValue,recoveryAt;
  private long recoveryRetryAt,verifiedAt;
  private int recoveryAttempt;
+ private boolean recoveryAlerted;
  private static final long[] RETRY_DELAYS={5000,15000,30000};
  private int generation;private String recoveryId="",lastReason="Ready";
  private final Map<GeckoResult<Object>,Runnable> waits=new IdentityHashMap<>();
@@ -93,7 +94,7 @@ final class MonitorRun {
  private void finishWait(GeckoResult<Object> r,boolean ok){if(waits.remove(r)==null)return;delayed.remove(r);r.complete(ok?"{\"ok\":true}":"{\"ok\":false,\"cancelled\":true}");}
  void recover(String reason){
   if(!armed||recovering)return;
-  recovering=true;recoveryAttempt=0;recoveryRetryAt=0;
+  recovering=true;recoveryAttempt=0;recoveryRetryAt=0;recoveryAlerted=false;
   lastReason="Paused: "+reason;engine.service.logStallDiagnostics("Applicant "+engine.profile+" "+reason);
   engine.service.record("Applicant "+engine.profile+" recovery started: "+reason+diagnostics());
   attemptRecovery();
@@ -109,7 +110,20 @@ final class MonitorRun {
   if(recoveryRetryAt!=0)return;
   lastReason="Paused: "+reason;
   engine.service.record("Applicant "+engine.profile+" verification failed attempt="+recoveryAttempt+" reason="+reason+diagnostics());
-  if(recoveryAttempt>RETRY_DELAYS.length){fail("Recovery exhausted: "+reason+" — inspect Sarathi and press START");return;}
+  if(recoveryAttempt>RETRY_DELAYS.length){
+    // A frozen Gecko page is not proof that the Sarathi session is unsafe or expired.
+    // Keep the native run alive but block all page actions until safe COV verification.
+    recoveryRetryAt=SystemClock.elapsedRealtime()+60000;
+    if(!recoveryAlerted){
+     recoveryAlerted=true;
+     String warning="Page is not responding. Monitoring is PAUSED; no booking actions will run until Sarathi is verified. Unlock and inspect the app.";
+     engine.service.record("Applicant "+engine.profile+" recovery remains paused and armed after "+recoveryAttempt+" failed checks");
+     try{engine.alerts.notify("Monitoring paused",warning);}catch(Exception e){engine.service.record("Applicant "+engine.profile+" pause notification failed: "+e.getClass().getSimpleName());}
+     try{engine.alerts.audio("START",true,85);}catch(Exception e){engine.service.record("Applicant "+engine.profile+" pause alarm failed: "+e.getClass().getSimpleName());}
+     engine.service.refreshForeground(true);
+    }
+    return;
+   }
   recoveryRetryAt=SystemClock.elapsedRealtime()+RETRY_DELAYS[recoveryAttempt-1];
  }
  void recovered(String id,boolean safe){recovered(id,safe,false,"Session not yet verified");}
@@ -117,6 +131,7 @@ final class MonitorRun {
   if(!armed||!recovering||recoveryRetryAt!=0||!recoveryId.equals(id))return;
   if(!safe){if(terminal)fail("Recovery requires manual attention: "+reason);else retryRecovery(reason);return;}
   recovering=false;lastTick=verifiedAt=SystemClock.elapsedRealtime();lastReason="Session verified after delay";
+   if(recoveryAlerted){engine.alerts.stop();engine.alerts.clearNotification();recoveryAlerted=false;}
   // Verification is not page progress. Preserve the real heartbeat/progress ages.
   engine.service.record("Applicant "+engine.profile+" recovery verified; no navigation or booking replay");
   for(GeckoResult<Object> r:new ArrayList<>(delayed))finishWait(r,true);
