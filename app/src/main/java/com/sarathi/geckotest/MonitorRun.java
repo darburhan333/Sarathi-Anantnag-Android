@@ -61,7 +61,21 @@ final class MonitorRun {
   if(beat>lastHeartbeatValue){lastHeartbeatValue=beat;lastBeat=now;}
   if(progress>lastProgressValue){lastProgressValue=progress;lastProgress=now;}
   boolean active=state.optBoolean("running")||state.optBoolean("successWatch");
-  if(armed){if(active)sawRunning=true;else if(sawRunning){lastReason="Extension stopped: "+state.optString("bookingStage")+" / "+state.optString("lastStatus");disarm();return;}engine.service.refreshForeground(false);}
+  String stage=state.optString("bookingStage","");
+  // The extension may temporarily publish running=false while it waits between
+  // COV-page retries. That is not a STOP command and must not revoke the native
+  // foreground run. Explicit DISARM/STOP messages own user-requested shutdown.
+  // Only terminal workflow states end the native run from a STATE update.
+  boolean terminal="APPOINTMENT CONFIRMED".equals(stage)||"MANUAL REVIEW REQUIRED".equals(stage);
+  if(armed){
+   if(active)sawRunning=true;
+   else if(sawRunning&&terminal){
+    lastReason="Extension reached terminal state: "+stage+" / "+state.optString("lastStatus");
+    disarm(false);
+    return;
+   }
+   engine.service.refreshForeground(false);
+  }
  }
  GeckoResult<Object> waitFor(long ms){
   GeckoResult<Object> result=new GeckoResult<>();
