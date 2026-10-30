@@ -105,7 +105,7 @@ public class GeckoIntegrationTest {
    assertFalse("Verified COV recovery must finish",s.engine.run.recovering);
    shell("input keyevent KEYCODE_HOME");// Screen remains ON. Exercise the reported 50–60s boundary repeatedly.
    for(int minute=0;minute<10;minute++)progress(s,"minimized screen-on minute "+minute,60);
-   shell("input keyevent KEYCODE_SLEEP");progress(s,"screen locked",45);
+   shell("input keyevent KEYCODE_SLEEP");progress(s,"screen locked for 10 minutes",600);
    shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");progress(s,"forced Doze with exemption",22);
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");
    main(a::finish);progress(s,"Activity destroyed; session retained",30);
