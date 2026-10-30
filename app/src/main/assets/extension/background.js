@@ -43,7 +43,7 @@ async function authorizeAction(msg,sender){
    return {authorized:true};
  }
  if(action==='PROCEED'){
-   if(Date.now()-d.lastProceedGateAt<6000)return {authorized:false,error:'Proceed already authorized recently'};
+   if(Date.now()-d.lastProceedGateAt<8000)return {authorized:false,error:'Proceed authorization is inside the 8-second minimum interval'};
    await chrome.storage.local.set({lastProceedGateAt:Date.now()});
    return {authorized:true};
  }
