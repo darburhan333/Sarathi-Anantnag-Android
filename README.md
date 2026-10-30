@@ -1,6 +1,6 @@
-# MPARIVAHAN SLOT BOOKING -J&K 3.4
+# MPARIVAHAN SLOT BOOKING -J&K 3.6
 
-This update keeps the v3.3 package (`com.sarathi.anantnag.gecko.v33`) and repository release signing secrets. Version code: 341. Version name: `3.4-v11.47-recovery2`. All nine embedded extensions use version `3.4.1`, ensuring GeckoView recognizes the upgrade from v3.3.
+This update keeps the v3.3 package (`com.sarathi.anantnag.gecko.v33`) and repository release signing secrets. Version code: 360. Version name: `3.6-v11.47-safety`. All nine embedded extensions use version `3.4.2`, ensuring GeckoView recognizes the upgrade from v3.3.
 
 - Timing stalls pause native action permission and verify the same applicant/session. Four attempts use 5/15/30-second backoff; unsuccessful recovery alerts and stops only that applicant. Booking/calendar locks still require manual review. No missed requests are replayed.
 - Start All uses the existing guarded start flow, skips unopened/active/unready applicants and preserves uncertain booking locks. Stop cancels pending batch starts. Results appear in Copy log.
