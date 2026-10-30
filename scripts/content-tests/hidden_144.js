@@ -23,8 +23,9 @@ const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('ass
  const context={window:{},document,chrome,location:{pathname:'/slots/proceeddlapmnt.do'},navigator:{onLine:true},Date:Clock,console:{info(){},warn(){},error(){}},getComputedStyle:()=>({display:'block',visibility:'visible'}),setInterval:()=>++intervals,setTimeout:()=>{throw Error('Hidden page timer must not be used')},MutationObserver:class{observe(){}},Promise};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..','booking-rules.js'),'utf8'),context);
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..','content.js'),'utf8'),context);
- // Drain microtasks long enough to complete 301 loops, with a finite limit.
- for(let i=0;i<250000&&clicks<301;i++)await Promise.resolve();
+ // The deadline scheduler also persists cadence metrics; allow its extra async turns.
+ // Keep the exact 301-click assertion below unchanged.
+ for(let i=0;i<500000&&clicks<301;i++)await Promise.resolve();
  assert.equal(clicks,301,'COV loop should continue beyond 300 clicks, then STOP');
  assert.equal(settings.attempts,301,'Attempt count should not reset at 200/300');
  assert.equal(settings.running,false);
