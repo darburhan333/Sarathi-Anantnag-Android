@@ -209,6 +209,8 @@ final class BrowserEngine {
               JSONObject m=(JSONObject)message;
               switch(m.optString("type")){
                 case "ARM":if(!m.optString("batch").isEmpty()&&!m.optString("batch").equals(service.startBatch))throw new IllegalStateException("Start All cancelled");run.arm();break;
+                case "SETTINGS_GET":result.put("values",SettingsBackup.options(service,profile));break;
+                case "SETTINGS_SET":if(!service.settingsBusy)SettingsBackup.saveOptions(service,profile,m.getJSONObject("values"));break;
                 case "SECURE_GET":result.put("values",SecureSettings.read(service,profile));break;
                 case "SECURE_SET":SecureSettings.write(service,profile,m.getJSONObject("values"));service.releaseStatus(profile);break;
                 case "SECURE_REMOVE":SecureSettings.remove(service,profile);service.releaseStatus(profile);break;

@@ -18,7 +18,9 @@
   const d=await chrome.storage.local.get({monitoredTabId:null});
   if(d.monitoredTabId!==null)chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_STOP'}).catch(()=>{});
  }
+ async function restoreSettings(){const r=await nativeRequest({type:"SETTINGS_GET"});if(r?.ok&&r.values)await chrome.storage.local.set({...r.values,autoBookingEnabled:false,telegramConfigRevision:Date.now()+"-import"});}
  async function command(m){
+  if(m.type==="SETTINGS_RESTORE"){await restoreSettings();return;}
   if(m.type==='START_READY'){
    const result=await chrome.runtime.sendMessage({type:'ANDROID_START_READY',batch:m.reason});
    port?.postMessage({type:'START_RESULT',batch:m.reason,ok:result?.ok===true,reason:result?.reason||'Monitor page unavailable'});return;
@@ -99,6 +101,8 @@
   await state();
  }
  chrome.storage.onChanged.addListener((changes,area)=>{
+  const optionKeys=['covSelection','assistedBookingPreference','telegramEnabled','telegramStatusEnabled','soundEnabled','desktopEnabled','volume'];
+  if(area==='local'&&optionKeys.some(k=>changes[k])){const values={};for(const k of optionKeys)if(changes[k])values[k]=changes[k].newValue;nativeRequest({type:'SETTINGS_SET',values}).catch(()=>{});}
   if(area==='local' && Object.keys(defaults).some(k=>changes[k])){if(changes.running||changes.successWatch)state().catch(()=>{});else scheduleState();}
  });
  chrome.runtime.onMessage.addListener((m,sender,reply)=>{
@@ -115,7 +119,7 @@
  (async()=>{const owner=await nativeRequest({type:'RESTORE'}).catch(()=>null);if(owner?.ok&&owner.armed){await chrome.storage.local.set({androidServiceReady:true});return;}await chrome.storage.local.set({running:false,successWatch:false,autoBookingEnabled:false,
   androidForeground:false,androidServiceReady:false,alarmActive:false,nextRetryAt:0,monitorLoopActive:false,
   bookingStage:'STOPPED',lastStatus:'App opened — navigate to COV and press START'});})()
-  .then(connect);
+  .then(restoreSettings).then(connect);
 })();
 
 

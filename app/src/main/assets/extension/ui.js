@@ -47,7 +47,7 @@ $('autoBookingEnabled').addEventListener('change',async()=>{await chrome.storage
 const dirtyTelegram=new Set();
 async function changeVault(type){
  if(!window.confirm(type==='SECURE_REMOVE'?'Remove Telegram credentials for this applicant?':'Import the previous version’s shared Telegram credentials into ONLY this applicant?'))return;
- try{await chrome.storage.local.set({telegramStatusEnabled:false,telegramEnabled:false});const r=await nativeRequest({type});if(!r?.ok)throw Error(r?.error||'Could not update settings');
+ try{const r=await nativeRequest({type});if(!r?.ok)throw Error(r?.error||'Could not update settings');await chrome.storage.local.set({telegramStatusEnabled:false,telegramEnabled:false});
   await chrome.storage.local.set({telegramConfigRevision:Date.now()+'-'+Math.random(),telegramStatusOffset:0,telegramStatusBot:'',telegramStatusSince:0,telegramOutbox:[],telegramDeliveryStatus:''});
   dirtyTelegram.clear();await refresh();feedback(type==='SECURE_REMOVE'?'This applicant’s Telegram settings removed.':'Imported into this applicant only. Enable alerts and test delivery.');
  }catch(e){feedback('Telegram settings: '+e.message);}

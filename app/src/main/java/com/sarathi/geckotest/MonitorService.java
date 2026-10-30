@@ -4,7 +4,7 @@ import android.app.*;import android.app.usage.UsageStatsManager;import android.c
 public final class MonitorService extends Service {
  final Handler handler=new Handler(Looper.getMainLooper());
  static final int PROFILE_COUNT=9;
- final BrowserEngine[] profiles=new BrowserEngine[PROFILE_COUNT];BrowserEngine engine;MainActivity activity;boolean visible;
+ final BrowserEngine[] profiles=new BrowserEngine[PROFILE_COUNT];BrowserEngine engine;MainActivity activity;boolean visible;volatile boolean settingsBusy;
  private volatile boolean promoted,destroying;
  private KeepAlive keepAlive;
  final HandlerThread clockThread=new HandlerThread("MonitoringClock",android.os.Process.THREAD_PRIORITY_DEFAULT);Handler clock;
@@ -47,6 +47,7 @@ public final class MonitorService extends Service {
  void confirmProtected(String action,java.util.List<BrowserEngine> targets,Runnable accepted){StringBuilder names=new StringBuilder();for(BrowserEngine e:targets)if(e!=null&&e.protectedPage){if(names.length()>0)names.append(", ");names.append("Applicant ").append(e.profile).append(" (").append(e.protectedStage).append(")");}if(names.length()==0){accepted.run();return;}if(activity==null||!visible){record(action+" requires confirmation for "+names);for(BrowserEngine e:targets)if(e!=null&&e.protectedPage)e.alerts.critical("CONFIRM_REQUIRED","Open app to confirm "+action);return;}new android.app.AlertDialog.Builder(activity).setTitle(action+" protected applicants?").setMessage(names+" — manual booking pages will remain protected. Home will discard the selected page.").setPositiveButton("Confirm",(d,w)->accepted.run()).setNegativeButton("Cancel",null).show();}
  private boolean alerting(){for(BrowserEngine e:profiles)if(e!=null&&e.alerts.isRepeating())return true;return false;}
  void beginForeground(){
+  if(settingsBusy)throw new IllegalStateException("Wait for settings transfer to finish");
   if(activity==null||!visible)throw new IllegalStateException("Open app before START");
   if(!getSystemService(NotificationManager.class).areNotificationsEnabled())throw new IllegalStateException("Allow notifications before START");
   PowerManager power=getSystemService(PowerManager.class);

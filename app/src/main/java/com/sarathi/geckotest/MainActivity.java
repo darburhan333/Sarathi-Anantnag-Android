@@ -94,6 +94,28 @@ public class MainActivity extends Activity {
       }catch(android.content.ActivityNotFoundException e){Toast.makeText(this,"No calling app is available",Toast.LENGTH_LONG).show();}
       catch(Exception e){Toast.makeText(this,"Could not read phone number. Open Phone numbers to update it.",Toast.LENGTH_LONG).show();}
     }
+    private char[] backupPassword;
+    private void transferSettings(boolean exporting){
+      if(engine==null)return;
+      if(engine.service.activeCount()>0||engine.service.protectedCount()>0){Toast.makeText(this,"Finish protected booking pages and stop monitoring before transferring settings",Toast.LENGTH_LONG).show();return;}
+      android.widget.EditText password=new android.widget.EditText(this);password.setInputType(129);password.setHint("Passphrase (10+ characters)");
+      new AlertDialog.Builder(this).setTitle(exporting?"Export encrypted settings":"Import encrypted settings").setView(password).setMessage("Includes all applicants’ Telegram credentials and phone numbers. Keep this file and passphrase private. Import replaces saved settings; no login sessions are transferred.").setPositiveButton("Choose file",(d,w)->{
+        backupPassword=password.getText().toString().toCharArray();password.setText("");if(backupPassword.length<10){java.util.Arrays.fill(backupPassword,'\0');backupPassword=null;Toast.makeText(this,"Use at least 10 characters",Toast.LENGTH_LONG).show();return;}
+        Intent intent=new Intent(exporting?Intent.ACTION_CREATE_DOCUMENT:Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(exporting?"application/octet-stream":"*/*");if(exporting)intent.putExtra(Intent.EXTRA_TITLE,"MParivahan-settings.enc");startActivityForResult(intent,exporting?81:82);
+      }).setNegativeButton("Cancel",null).show();
+    }
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request!=81&&request!=82)return;
+      final char[] password=backupPassword;backupPassword=null;if(password==null)return;
+      if(result!=RESULT_OK||data==null||data.getData()==null){java.util.Arrays.fill(password,'\0');return;}
+      final MonitorService service=engine==null?null:engine.service;if(service==null||service.activeCount()>0||service.protectedCount()>0){java.util.Arrays.fill(password,'\0');Toast.makeText(this,"Stop monitoring and finish protected pages first",Toast.LENGTH_LONG).show();return;}
+      service.settingsBusy=true;final Uri uri=data.getData();
+      new Thread(()->{String message;
+        try{if(request==81){byte[] encrypted=SettingsBackup.encrypt(SettingsBackup.snapshot(service),password);try(java.io.OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new java.io.IOException();out.write(encrypted);}message="Encrypted settings exported";}
+        else{java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();try(java.io.InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new java.io.IOException();byte[] block=new byte[4096];int count;while((count=in.read(block))!=-1){bytes.write(block,0,count);if(bytes.size()>SettingsBackup.MAX_BYTES)throw new java.io.IOException("File too large");}}SettingsBackup.apply(service,SettingsBackup.decrypt(bytes.toByteArray(),password));message="Settings imported; sessions remain stopped";}
+        }catch(Exception ex){message="Settings transfer failed: wrong passphrase, damaged file, or unavailable storage. Existing settings were not intentionally cleared.";}finally{java.util.Arrays.fill(password,'\0');}
+        final String feedback=message;service.handler.post(()->{service.settingsBusy=false;for(BrowserEngine profile:service.profiles)if(profile!=null)profile.command("SETTINGS_RESTORE");if(!isDestroyed())Toast.makeText(this,feedback,Toast.LENGTH_LONG).show();});
+      },"SettingsTransfer").start();
+    }
     private void manageApplicantAlerts(){
       if(engine==null)return;
       MonitorService service=engine.service;
@@ -108,6 +130,7 @@ public class MainActivity extends Activity {
         modes.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> v){}public void onItemSelected(android.widget.AdapterView<?> v,View child,int position,long id){getSharedPreferences("monitor",0).edit().putString("alertMode"+number,PhoneAlerts.MODES[position]).apply();service.refreshForeground(true);render();}});row.addView(modes);
         Button test=new Button(this);test.setText("Test alert");test.setOnClickListener(v->{BrowserEngine existing=service.profiles[number-1];PhoneAlerts alerts=existing==null?new PhoneAlerts(service,number):existing.alerts;alerts.testOnce();});row.addView(test);rows.addView(row);
       }
+      Button export=new Button(this);export.setText("Export encrypted settings");export.setOnClickListener(v->transferSettings(true));panel.addView(export);Button restore=new Button(this);restore.setText("Import encrypted settings");restore.setOnClickListener(v->transferSettings(false));panel.addView(restore);
       new AlertDialog.Builder(this).setTitle("Applicant alert settings").setView(panel).setPositiveButton("Done",null).setNeutralButton("Silence all now",(d,w)->service.silenceAll()).show();
     }
     private void managePhones(){
