@@ -138,7 +138,20 @@ public final class MonitorService extends Service {
   record("STALL cause="+cause+"; standbyBucket="+bucket+"; "+clockDiagnostics());
   if(Build.VERSION.SDK_INT>=30){try{for(ApplicationExitInfo i:getSystemService(ActivityManager.class).getHistoricalProcessExitReasons(getPackageName(),0,5))record("STALL historicalExit reason="+i.getReason()+" pid="+i.getPid()+" process="+i.getProcessName()+" time="+i.getTimestamp()+" importance="+i.getImportance()+" detail="+i.getDescription());}catch(Exception e){record("STALL exitInfo unavailable="+e.getClass().getSimpleName());}}
  }
- String summary(){StringBuilder out=new StringBuilder("MPARIVAHAN SLOT BOOKING -J&K\n");for(int i=0;i<PROFILE_COUNT;i++){BrowserEngine e=profiles[i];out.append("Applicant ").append(i+1).append(": ");if(e==null)out.append("Not opened");else out.append(e.run.armed?"Monitoring":"Stopped").append(" · checks ").append(e.lastState.optInt("sessionAttempts")).append(" · ").append(e.lastState.optString("bookingStage","Ready")).append(e.run.diagnostics()).append(" · avgCycleMs=").append(e.lastState.optInt("averageCycleMs")).append(" · lastCycleMs=").append(e.lastState.optInt("lastCycleMs")).append(" · COV classes=").append(e.lastState.optInt("covClassCount")).append(" · verificationRetries=").append(e.lastState.optInt("verificationRetries")).append("\n").append(String.join("\n",e.logs));return out.toString();}
+ String summary(){
+  StringBuilder out=new StringBuilder("MPARIVAHAN SLOT BOOKING -J&K\\n");
+  for(int i=0;i<PROFILE_COUNT;i++){
+   BrowserEngine e=profiles[i];out.append("Applicant ").append(i+1).append(": ");
+   if(e==null)out.append("Not opened");
+   else out.append(e.run.armed?"Monitoring":"Stopped").append(" · checks ").append(e.lastState.optInt("sessionAttempts")).append(" · ").append(e.lastState.optString("bookingStage","Ready")).append(e.run.diagnostics())
+     .append(" · avgCycleMs=").append(e.lastState.optInt("averageCycleMs")).append(" · lastCycleMs=").append(e.lastState.optInt("lastCycleMs"))
+     .append(" · COV classes=").append(e.lastState.optInt("covClassCount")).append(" · verificationRetries=").append(e.lastState.optInt("verificationRetries"))
+     .append("\\n").append(String.join("\\n",e.logs));
+   out.append('\\n');
+  }
+  return out.toString();
+ }
+ String diagnosticReport(){return summary();}
  void record(String message){android.content.SharedPreferences p=getSharedPreferences("diagnostics",0);String old=p.getString("events","");String next=old+"\n"+new java.text.SimpleDateFormat("MM-dd HH:mm:ss",java.util.Locale.US).format(new java.util.Date())+" "+message;if(next.length()>65536)next=next.substring(next.length()-65536);p.edit().putString("events",next).apply();}
  @Override public void onTaskRemoved(Intent rootIntent){record("Task removed; active applicants="+activeCount()+"; monitoring retained");super.onTaskRemoved(rootIntent);}
  @Override public void onDestroy(){if(keepAlive!=null)keepAlive.stop();record("Service destroyed; active applicants="+activeCount());destroying=true;if(screenReceiverRegistered){unregisterReceiver(screenReceiver);screenReceiverRegistered=false;}clock.removeCallbacksAndMessages(null);clockThread.quitSafely();connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();super.onDestroy();}
