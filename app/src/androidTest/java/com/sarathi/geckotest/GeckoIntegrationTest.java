@@ -20,7 +20,7 @@ public class GeckoIntegrationTest {
  private void main(Runnable r){InstrumentationRegistry.getInstrumentation().runOnMainSync(r);}
  private void progress(MonitorService s,String label,int seconds)throws Exception{
   int before=s.attemptsForTest(),beforeRequests=requests.get();Thread.sleep(seconds*1000L);
-  assertTrue(label+": foreground service stopped",s.isArmedForTest());
+  assertTrue(label+": monitoring run disarmed; "+s.integrationSnapshotForTest(),s.isArmedForTest());
   assertTrue(label+": no actual COV attempts: "+s.engine.lastState,s.attemptsForTest()>before);
   assertTrue(label+": page did not make another HTTP request",requests.get()>beforeRequests);
   System.out.println("PASS "+label+": "+before+" -> "+s.attemptsForTest());
