@@ -140,7 +140,7 @@ public class MainActivity extends Activity {
     }
     private void copyLog(){
       String report="App: MPARIVAHAN SLOT BOOKING -J&K 3.6-v11.47-safety\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
-        +android.os.Build.VERSION.SDK_INT+"\n"+(engine==null?"Connecting":engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
+        +android.os.Build.VERSION.SDK_INT+"\n"+(engine==null?"Connecting":engine.service.metricsSummary()+"\n"+engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
       ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics",report));
       Toast.makeText(this,"Log copied",Toast.LENGTH_SHORT).show();
     }
@@ -239,7 +239,7 @@ public class MainActivity extends Activity {
         header.addView(utilities);
         status = new TextView(this);
         status.setTextSize(12);
-        status.setMaxLines(2);status.setTextColor(Color.rgb(157,177,201));
+        status.setMaxLines(3);status.setTextColor(Color.rgb(157,177,201));
         status.setPadding(dp(4),0,dp(4),dp(3));
         status.setText("Opening Parivahan…");
         monitorStatus=new TextView(this);monitorStatus.setTextSize(12);monitorStatus.setMaxLines(3);
