@@ -10,15 +10,13 @@ This update keeps the v3.3 package (`com.sarathi.anantnag.gecko.v33`) and reposi
 
 A foreground service and wake lock cannot guarantee uninterrupted execution under all manufacturer power policies. Recovery handling is not proof of continuous background polling. Validate on the affected Infinix device using elapsed/uptime gaps and actual page progress. Do not uninstall v3.3 when installing a same-certificate update.
 
-## Verified release
+## v3.6 build verification
 
-- APK source commit: `d9a2bfb504fda52bf012c3aefc102675bcba651c`. Later commits change CI/documentation only.
-- Production signing certificate SHA-256: `c7404cb6be4325298d64a82d00f27ffa4fefaf182b0a569b4ed2d91fc072b145` (same as the newer v3.3 package).
-- APK SHA-256: `a7afb5dd7ffbeeee381d6ecc9704b09c7626090bd2a5a5759e1823a9ba9273a0`.
-- [Eleven Android behavioral tests and release UI passed](https://github.com/darburhan333/Sarathi-Anantnag-Android/actions/runs/40810534128) before the version-only upgrade correction; monitoring logic is unchanged.
-- [Final build 341 production APK and lint](https://github.com/darburhan333/Sarathi-Anantnag-Android/actions/runs/40836805433): APK job passed; the automatic full-suite repeat is tracked separately in that run.
-- [Final build 341 release UI passed](https://github.com/darburhan333/Sarathi-Anantnag-Android/actions/runs/40838444922): all nine applicant bridges and landscape space checked. Release compilation now happens before emulator boot to avoid test-machine CPU contention.
-- Physical Infinix X6870 background behavior remains to be verified on the user's device. Emulator fixtures do not guarantee manufacturer-specific behavior or live Sarathi availability.
+- Release versionCode: 360; versionName: `3.6-v11.47-safety`.
+- Embedded extension manifest version: `3.4.2`.
+- The v3.6 APK job passed baseline regression tests, Android adapter tests, browser DOM integration, release build, lint and APK signature verification in CI run [41095496144](https://github.com/darburhan333/Sarathi-Anantnag-Android/actions/runs/41095496144).
+- Gecko emulator integration is not yet verified. The first attempt failed while the runner downloaded the Android Emulator SDK package (`Error on ZipFile unknown archive`); a retry is in progress. Do not interpret that environment failure as a passed emulator test.
+- Physical Infinix X6870 background behavior and live Sarathi availability remain unverified on a real device.
 
 ## Previous documentation
 
