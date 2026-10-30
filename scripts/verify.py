@@ -10,6 +10,7 @@ subprocess.run(['node',str(root/'scripts/cov-row-tests.js')],check=True)
 subprocess.run(['node',str(root/'scripts/vault-tests.js')],check=True)
 subprocess.run(['node',str(root/'scripts/telegram-delivery-tests.js')],check=True)
 subprocess.run(['node',str(root/'scripts/adapter-tests.js')],check=True)
+subprocess.run(['node',str(root/'scripts/controls-cadence-tests.js')],check=True)
 subprocess.run(['node',str(root/'scripts/ui-native-stop.js')],check=True)
 subprocess.run(['node',str(root/'scripts/background-lifecycle.js')],check=True)
 with tempfile.TemporaryDirectory() as tmp:
