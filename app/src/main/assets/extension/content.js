@@ -59,9 +59,18 @@
   const TARGET_PERIOD = 10000;
   let lastProceedStartedAt = 0;
   let cycleCount = 0, cycleTotalMs = 0, lastCycleMs = 0, verificationRetries = 0, lastSelectedCovCount = 0;
+  let cadenceMetricsRestored=false;
+  async function restoreCadenceMetrics(){
+    if(cadenceMetricsRestored)return;
+    const savedMetrics=await chrome.storage.local.get({lastProceedStartedAt:0,cycleCount:0,cycleTotalMs:0,verificationRetries:0});
+    lastProceedStartedAt=Number(savedMetrics.lastProceedStartedAt)||0;
+    cycleCount=Number(savedMetrics.cycleCount)||0;
+    cycleTotalMs=Number(savedMetrics.cycleTotalMs)||0;
+    verificationRetries=Number(savedMetrics.verificationRetries)||0;
+    cadenceMetricsRestored=true;
+  }
   async function waitForSubmitDeadline(generation) {
-    const persisted=await chrome.storage.local.get({lastProceedStartedAt:0});
-    lastProceedStartedAt=Math.max(lastProceedStartedAt,Number(persisted.lastProceedStartedAt)||0);
+    await restoreCadenceMetrics();
     const deadline=lastProceedStartedAt?lastProceedStartedAt+TARGET_PERIOD:Date.now()+TARGET_PERIOD;
     const earliest=lastProceedStartedAt?lastProceedStartedAt+WAIT_MS:0;
     const target=Math.max(deadline,earliest);
@@ -665,8 +674,8 @@
 
         await sleep(300);
         if (!current.selected.length || current.selected.some(el => !el.isConnected || !el.checked)) {
-          const retryData=await chrome.storage.local.get({verificationRetries:0});
-          verificationRetries=Math.max(verificationRetries,Number(retryData.verificationRetries)||0)+1;
+          await restoreCadenceMetrics();
+          verificationRetries++;
           await chrome.storage.local.set({verificationRetries});
           setStatus('Vehicle class verification failed — not submitting; retrying check');
           await waitWhileRunning(1000,generation);
@@ -699,10 +708,8 @@
         const proceedStartedAt=Date.now();
         current.proceed.click();
         lastProceedStartedAt=proceedStartedAt;
-        const metricsSaved=await chrome.storage.local.get({cycleCount:0,cycleTotalMs:0,verificationRetries:0});
-        verificationRetries=Math.max(verificationRetries,Number(metricsSaved.verificationRetries)||0);
-        if(previousProceedStartedAt){lastCycleMs=proceedStartedAt-previousProceedStartedAt;cycleCount=(Number(metricsSaved.cycleCount)||0)+1;cycleTotalMs=(Number(metricsSaved.cycleTotalMs)||0)+lastCycleMs;}
-        else{cycleCount=Number(metricsSaved.cycleCount)||0;cycleTotalMs=Number(metricsSaved.cycleTotalMs)||0;}
+        if(previousProceedStartedAt){lastCycleMs=proceedStartedAt-previousProceedStartedAt;cycleCount++;cycleTotalMs+=lastCycleMs;}
+        else lastCycleMs=0;
         lastSelectedCovCount=current.selected.length;
         const averageCycleMs=cycleCount?Math.round(cycleTotalMs/cycleCount):0;
         // Count dispatched clicks, not reservations; navigation may still reject a submission.
