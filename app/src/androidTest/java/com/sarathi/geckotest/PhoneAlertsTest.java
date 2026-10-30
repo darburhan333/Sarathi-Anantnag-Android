@@ -32,7 +32,7 @@ public class PhoneAlertsTest {
         first.notify("Monitoring needs attention", "Applicant 1 warning");
         second.notify("Monitoring needs attention", "Applicant 2 warning");
         assertNull("Disabled applicant must not post a notification", find(manager, 1101));
-        StatusBarNotification delivered = find(manager, 1102);
+        StatusBarNotification delivered = awaitNotification(manager, 1102);
         assertNotNull("Enabled applicant should deliver its notification", delivered);
         Notification n = delivered.getNotification();
         assertEquals("Applicant 2 · Monitoring needs attention", n.extras.getString(Notification.EXTRA_TITLE));
@@ -40,7 +40,7 @@ public class PhoneAlertsTest {
 
         first.setEnabled(true);
         first.notify("Slot detected", "LMV quota 3 detected");
-        delivered = find(manager, 1101);
+        delivered = awaitNotification(manager, 1101);
         assertNotNull(delivered);
         assertEquals("Applicant 1 · Slot detected", delivered.getNotification().extras.getString(Notification.EXTRA_TITLE));
         assertEquals("LMV quota 3 detected", delivered.getNotification().extras.getString(Notification.EXTRA_TEXT));
@@ -67,7 +67,7 @@ public class PhoneAlertsTest {
         assertFalse(first.isRepeating());
     }
 
-    private static StatusBarNotification find(NotificationManager manager, int id) {
+    private static StatusBarNotification awaitNotification(NotificationManager manager, int id) {\n        long deadline = android.os.SystemClock.elapsedRealtime() + 3000;\n        StatusBarNotification item;\n        do {\n            item = find(manager, id);\n            if (item != null) return item;\n            try { Thread.sleep(50); } catch (InterruptedException e) {\n                Thread.currentThread().interrupt();\n                throw new AssertionError("Interrupted while waiting for notification delivery", e);\n            }\n        } while (android.os.SystemClock.elapsedRealtime() < deadline);\n        return find(manager, id);\n    }\n\n    private static StatusBarNotification find(NotificationManager manager, int id) {
         for (StatusBarNotification item : manager.getActiveNotifications())
             if (item.getId() == id) return item;
         return null;
