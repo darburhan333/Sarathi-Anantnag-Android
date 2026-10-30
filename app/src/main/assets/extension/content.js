@@ -67,7 +67,7 @@
     const target=Math.max(deadline,earliest);
     while(Date.now()<target){
       if(!(await isRunning(generation)))return false;
-      await sleep(Math.min(1000,target-Date.now()));
+      await sleep(Math.min(8000,target-Date.now()));
     }
     return await isRunning(generation);
   }
