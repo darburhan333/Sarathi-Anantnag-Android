@@ -94,6 +94,7 @@ public class GeckoIntegrationTest {
      one.run.recovered(attempt,false,false,"Page reply timed out");
      if(i<3){assertTrue("Transient verification failure must retain run",one.run.armed);assertFalse(one.run.authorize());assertTrue(two.run.armed);retry.setLong(one.run,1);one.run.tick();}
     }
+    // A frozen page is not proof of an expired session: preserve the native run, but gate actions.
     assertTrue("Unverified page must remain safely paused, not silently disarmed",one.run.armed);
     assertTrue("Recovery must remain pending for screen-on retry",one.run.recovering);
     assertFalse("Paused applicant must not authorize page actions",one.run.authorize());
