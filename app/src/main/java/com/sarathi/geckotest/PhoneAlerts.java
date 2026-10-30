@@ -10,8 +10,11 @@ final class PhoneAlerts {
  private final Handler handler=new Handler(Looper.getMainLooper());
  private ToneGenerator tone;
  private String prefKey(){return "alertsEnabled"+profile;}
- boolean isEnabled(){return activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).getBoolean(prefKey(),true);}
- void setEnabled(boolean enabled){activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).edit().putBoolean(prefKey(),enabled).apply();if(!enabled)stop();}
+ String mode(){return activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).getString("alertMode"+profile,"CRITICAL_ONLY");}
+ void setMode(String mode){if(!"ALL".equals(mode)&&!"CRITICAL_ONLY".equals(mode)&&!"ROUTINE_OFF".equals(mode))throw new IllegalArgumentException("Unknown alert mode");activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).edit().putString("alertMode"+profile,mode).apply();}
+ // Existing Android alarm actions are emitted only for critical events. They must ring in every mode.
+ boolean isEnabled(){return true;}
+ void setEnabled(boolean enabled){activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).edit().putBoolean(prefKey(),enabled).apply();}
  private final Vibrator vibrator;
  private boolean repeating;
  private int volume=85;
@@ -19,6 +22,8 @@ final class PhoneAlerts {
   if(!repeating)return;
   beep();handler.postDelayed(this,1800);
  }};
+ private final Runnable testStop=()->stop();
+ void testFullAlarm(){stop();audio("START",true,85);handler.removeCallbacks(testStop);handler.postDelayed(testStop,5600);}
  PhoneAlerts(Context a,int number){profile=number;
   activity=a;vibrator=(Vibrator)a.getSystemService(Context.VIBRATOR_SERVICE);
   NotificationChannel channel=new NotificationChannel("sarathi-alerts","Slot alerts",NotificationManager.IMPORTANCE_HIGH);
