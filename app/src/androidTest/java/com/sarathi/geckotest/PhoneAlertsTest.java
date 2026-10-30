@@ -67,7 +67,21 @@ public class PhoneAlertsTest {
         assertFalse(first.isRepeating());
     }
 
-    private static StatusBarNotification awaitNotification(NotificationManager manager, int id) {\n        long deadline = android.os.SystemClock.elapsedRealtime() + 3000;\n        StatusBarNotification item;\n        do {\n            item = find(manager, id);\n            if (item != null) return item;\n            try { Thread.sleep(50); } catch (InterruptedException e) {\n                Thread.currentThread().interrupt();\n                throw new AssertionError("Interrupted while waiting for notification delivery", e);\n            }\n        } while (android.os.SystemClock.elapsedRealtime() < deadline);\n        return find(manager, id);\n    }\n\n    private static StatusBarNotification find(NotificationManager manager, int id) {
+    private static StatusBarNotification awaitNotification(NotificationManager manager, int id) {
+        long deadline = android.os.SystemClock.elapsedRealtime() + 3000;
+        StatusBarNotification item;
+        do {
+            item = find(manager, id);
+            if (item != null) return item;
+            try { Thread.sleep(50); } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Interrupted while waiting for notification delivery", e);
+            }
+        } while (android.os.SystemClock.elapsedRealtime() < deadline);
+        return find(manager, id);
+    }
+
+    private static StatusBarNotification find(NotificationManager manager, int id) {
         for (StatusBarNotification item : manager.getActiveNotifications())
             if (item.getId() == id) return item;
         return null;
