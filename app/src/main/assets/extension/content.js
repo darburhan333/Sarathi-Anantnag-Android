@@ -702,7 +702,7 @@
       (async()=>{
         const owner=await confirmOwnership();
         return {ok:true,page:location.pathname,owner,loopActive,
-          safeToRestart:owner&&!loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
+          safeToRestart:owner&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true))&&(!loopActive||Date.now()-lastLoopProgress>90000),
           safeToResume:owner&&loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
           lastLoopProgress,loopStartedAt,covPresent:!!getCovForm(),calendar:realCalendar(),
           expired:EXPIRY_TEXT.test(pageText(true)),locked:sessionLocked||calendarLocked, busy:bookingActionBusy||inFlight, popup:noSlotsTextPresent(),sessionId};
@@ -720,7 +720,7 @@
         calendarLocked=!!d.calendarLock;sessionLocked=!!d.sessionLock;bookingPaused=calendarLocked;
         localStop=false;
         // If a loop has made no progress for 90s on the COV page, invalidate that generation.
-        if(!globalThis.PROFILE_MODE&&message.type==='SARATHI_RECOVER'&&loopActive&&Date.now()-lastLoopProgress>90000&&getCovForm()&&!calendarLocked){
+        if(message.type==='SARATHI_RECOVER'&&loopActive&&Date.now()-lastLoopProgress>90000&&getCovForm()&&!calendarLocked&&!sessionLocked&&!bookingActionBusy&&!inFlight){
           loopGeneration++;loopActive=false;
         }
         if(!loopActive&&!calendarLocked&&!sessionLocked){setStatus(message.type==='SARATHI_RECOVER'?'Monitor loop recovered — waiting for COV':'Start received; searching for COV form');processLoop();}
