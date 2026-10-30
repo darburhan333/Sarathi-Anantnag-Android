@@ -73,7 +73,9 @@ public class MainActivity extends Activity {
       monitorButton.setText(engine.showingMonitor?"Website":"Monitor");
       monitorButton.setBackgroundTintList(ColorStateList.valueOf(engine.showingMonitor?0xFF0F766E:0xFF2563EB));
       for(int i=0;i<MonitorService.PROFILE_COUNT;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];String label="Applicant "+(i+1)+(e!=null&&e.run.armed?" ●":"");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);applicantButtons[i].setAlpha(engine.profile==i+1?1f:0.65f);}
-      if(!status.getText().toString().equals(engine.status))status.setText(engine.status);
+      String routineOff=engine.service.routineOffSummary();
+      String displayStatus=engine.status+(routineOff.isEmpty()?"":"\\nALERTS: ROUTINE OFF ("+routineOff+")");
+      if(!status.getText().toString().equals(displayStatus))status.setText(displayStatus);
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
       if(batteryButton!=null)batteryButton.setText((exempt&&!power.isPowerSaveMode()&&getSystemService(android.app.NotificationManager.class).areNotificationsEnabled())?"Background\nsetup ✓":"Background\nsetup !");
