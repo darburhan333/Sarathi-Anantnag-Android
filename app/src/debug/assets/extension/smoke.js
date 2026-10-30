@@ -27,7 +27,8 @@ globalThis.runAndroidSmoke=async()=>{
   await start('android-smoke-1');
   stage='wait-loop';
   await nativeRequest({type:'SMOKE_PHASE',phase:'background-ready'});
-  await wait(750000);
+  // Instrumentation explicitly releases this phase AFTER all full-duration background checks.
+  await new Promise(resolve=>{globalThis.finishBackgroundSoak=resolve;});
   let d=await browser.storage.local.get({sessionAttempts:0});assert(d.sessionAttempts>=2,'COV loop did not repeat twice: '+d.sessionAttempts);
   assert(await evaluate(`[...document.querySelectorAll('input[name="iscov"]')].every(x=>x.checked)`),'COV selection failed');
   await browser.storage.local.set({running:false,successWatch:false});
@@ -38,7 +39,7 @@ globalThis.runAndroidSmoke=async()=>{
   await nativeRequest({type:'SMOKE_PHASE',phase:'resume-needed'});
   await wait(5000);
   stage='restart';
-  await start('android-smoke-2');await wait(10000);
+  await start('android-smoke-2');for(let n=0;n<40&&await evaluate('window.fixtureClicks')<=count;n++)await wait(500);
   assert(await evaluate('window.fixtureClicks')>count,'Restart failed');
   stage='calendar';
   await evaluate(`document.body.innerHTML='<div id="calview"><table><tr><th>December 2026</th></tr><tr><td class="cal_green">9</td></tr></table></div>';`);

@@ -39,13 +39,16 @@ public class GeckoIntegrationTest {
   try(java.io.FileOutputStream out=InstrumentationRegistry.getInstrumentation().getTargetContext().openFileOutput("monitor-copy-log.txt",android.content.Context.MODE_PRIVATE)){
    out.write(s.diagnosticReport().getBytes("UTF-8"));
   }
-  System.out.println("MONITOR_COPY_LOG\\n"+s.diagnosticReport());
+  System.out.println("MONITOR_COPY_LOG\n"+s.diagnosticReport());
   System.out.println("EVIDENCE_END "+label);
  }
  private void progress(MonitorService s,String label,int seconds)throws Exception{
   int before=s.attemptsForTest(),beforeRequests=requests.get();Thread.sleep(seconds*1000L);
-  if(!s.isArmedForTest())captureEvidence(s,label+" foreground service stopped");
-  assertTrue(label+": foreground service stopped; see captured dumpsys, logcat and monitor-copy-log.txt",s.isArmedForTest());
+  if(!s.isArmedForTest()||!s.isPromotedForTest())captureEvidence(s,label+" run/service failure");
+  String events=s.getSharedPreferences("diagnostics",0).getString("events","");String[] lines=events.split("\n");StringBuilder tail=new StringBuilder();String disarm="No DISARM recorded";for(String line:lines)if(line.contains("DISARM"))disarm=line;for(int i=Math.max(0,lines.length-40);i<lines.length;i++)tail.append(lines[i]).append('\n');
+  String detail="; "+disarm+"\n"+tail+"\n"+s.engine.run.rawState()+"\nengine.lastState="+s.engine.lastState;
+  assertTrue(label+": service not promoted"+detail,s.isPromotedForTest());
+  assertTrue(label+": run disarmed"+detail,s.isArmedForTest());
   assertTrue(label+": no actual COV attempts: "+s.engine.lastState,s.attemptsForTest()>before);
   assertTrue(label+": page did not make another HTTP request",requests.get()>beforeRequests);
   System.out.println("PASS "+label+": "+before+" -> "+s.attemptsForTest());
@@ -140,6 +143,7 @@ public class GeckoIntegrationTest {
    end=System.currentTimeMillis()+10000;
    while(reopened.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
    assertSame("Must reuse same service and browser",s,reopened.serviceForTest());
+   main(()->s.engine.command("SMOKE_CONTINUE"));
    end=System.currentTimeMillis()+100000;
    while(s.engine.smokeResult.isEmpty()&&System.currentTimeMillis()<end)Thread.sleep(500);
    assertTrue(s.engine.smokeResult,s.engine.smokeResult.startsWith("PASS:"));
