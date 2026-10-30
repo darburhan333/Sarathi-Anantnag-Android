@@ -254,7 +254,7 @@ public class MainActivity extends Activity {
       else super.onBackPressed();
     }
     @Override protected void onResume(){super.onResume();visible=true;if(engine!=null){engine.service.activity=this;if(!engine.service.visible)for(BrowserEngine e:engine.service.profiles)if(e!=null&&e.run.armed)e.run.tick();engine.service.visible=true;engine.service.record("Activity resumed; "+engine.service.clockDiagnostics());engine.foreground=true;engine.ensureUsable();engine.foregroundState();}}
-    @Override protected void onPause(){view.releaseSession();monitorView.releaseSession();visible=false;if(engine!=null){engine.service.visible=false;engine.service.record("Activity minimized; screen="+getSystemService(android.os.PowerManager.class).isInteractive()+"; active="+engine.service.activeCount());engine.foreground=false;engine.activeStates.clear();engine.foregroundState();}super.onPause();}
+    @Override protected void onPause(){visible=false;if(engine!=null){engine.service.visible=false;engine.service.record("Activity paused; retaining GeckoView sessions for armed background monitoring; screen="+getSystemService(android.os.PowerManager.class).isInteractive()+"; active="+engine.service.activeCount());engine.foreground=false;engine.activeStates.clear();engine.foregroundState();}super.onPause();}
     @Override protected void onStop(){
       super.onStop();
       if(engine!=null){BrowserEngine e=engine;e.service.handler.post(()->{e.activeStates.clear();e.activate();});}
