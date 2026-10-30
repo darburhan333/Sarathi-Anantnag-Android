@@ -1,4 +1,4 @@
-name: Build and test Sarathi Gecko V11.47 port (3.5 keepalive)
+name: Build and test Sarathi Gecko V11.47 port (3.6 safety)
 on:
   push:
     branches:
@@ -70,13 +70,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: steps.signing.outputs.available == 'true'
         with:
-          name: MParivahan-JK-3.5-arm64-signed-keepalive
+          name: MParivahan-JK-3.6-arm64-signed-keepalive
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: steps.signing.outputs.available != 'true'
         with:
-          name: MParivahan-JK-3.5-arm64-unsigned-keepalive
+          name: MParivahan-JK-3.6-arm64-unsigned-safety
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
   gecko-integration:
