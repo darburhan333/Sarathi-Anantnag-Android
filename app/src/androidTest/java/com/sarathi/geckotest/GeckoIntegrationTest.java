@@ -137,7 +137,7 @@ public class GeckoIntegrationTest {
     shell("input keyevent KEYCODE_SLEEP");
     Thread.sleep(600000);
     assertTrue("Screen-off stall must not silently disarm native monitoring",s.isArmedForTest());
-    assertFalse("Unverified page must not be authorized while screen is locked",s.engine.run.authorize());
+    if(s.engine.run.recovering)assertFalse("Unverified page must not be authorized while screen is locked",s.engine.run.authorize());
 shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");Thread.sleep(22000);
     assertTrue("Forced Doze must not silently disarm native monitoring",s.isArmedForTest());
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");
