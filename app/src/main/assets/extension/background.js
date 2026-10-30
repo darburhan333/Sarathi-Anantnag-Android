@@ -153,6 +153,18 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
     inGateQueue(()=>authorizeAction(msg,sender)).then(reply).catch(e=>reply({authorized:false,error:String(e.message||e)}));
     return true;
   }
+  if(msg?.type==='SARATHI_METRICS'){
+    (async()=>{
+      if(!sender.url?.startsWith('https://sarathi.parivahan.gov.in/'))return {ok:false};
+      const owner=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false});
+      if(sender.tab?.id!==owner.monitoredTabId||!owner.running||!msg.sessionId||msg.sessionId!==owner.monitorSessionId)return {ok:false};
+      const metric={averageCycleMs:Math.max(0,Math.min(120000,Number(msg.averageCycleMs)||0)),lastCycleMs:Math.max(0,Math.min(120000,Number(msg.lastCycleMs)||0)),covClassCount:Math.max(0,Math.min(20,Number(msg.covClassCount)||0)),verificationRetries:Math.max(0,Math.min(100000,Number(msg.verificationRetries)||0))};
+      const result=await nativeRequest({type:'METRICS',...metric});
+      if(!result?.ok)throw Error(result?.error||'Native metrics update failed');
+      return {ok:true};
+    })().then(reply).catch(e=>reply({ok:false,error:String(e.message||e)}));
+    return true;
+  }
   if(msg?.type==='AUDIO_CONTROL'){(async()=>{if(msg.action==='ARM')await audioCommand('ARM');else if(msg.action==='TEST')await audioCommand('TEST');else if(msg.action==='STOP')await audioCommand('STOP');else throw Error('Unknown audio action');})().then(()=>reply({ok:true})).catch(e=>reply({ok:false,error:String(e.message||e)}));return true;}
 
   if (!['SARATHI_ALERT','TEST_TELEGRAM','TEST_DESKTOP','SARATHI_BOOKED','SARATHI_WARNING','SARATHI_SMS_READY'].includes(msg?.type)) return;
