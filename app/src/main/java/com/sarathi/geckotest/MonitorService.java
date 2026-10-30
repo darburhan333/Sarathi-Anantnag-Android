@@ -155,6 +155,7 @@ public final class MonitorService extends Service {
  // Narrow test hooks used by GeckoIntegrationTest; production controls still use BrowserEngine.run directly.
  int attemptsForTest(){return engine==null?0:engine.lastState.optInt("sessionAttempts");}
  boolean isArmedForTest(){return engine!=null&&engine.run.armed;}
+ String integrationSnapshotForTest(){return "promoted="+promoted+" destroying="+destroying+" activeCount="+activeCount()+" keepAlive="+keepAlive.status()+" run="+(engine==null?"none":engine.run.lastReasonForTest()+engine.run.diagnostics())+" bridge="+(engine==null?"none":(engine.nativePort!=null))+" state="+(engine==null?"none":engine.lastState.toString());}
  void arm(){if(engine==null)throw new IllegalStateException("No selected applicant engine");engine.run.arm();}
  org.mozilla.geckoview.GeckoResult<Object> waitFor(int milliseconds){
   if(engine==null)throw new IllegalStateException("No selected applicant engine");
