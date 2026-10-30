@@ -97,16 +97,50 @@ public class MainActivity extends Activity {
     private void manageApplicantAlerts(){
       if(engine==null)return;
       MonitorService service=engine.service;
-      LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(14),dp(8),dp(14),dp(8));
-      TextView hint=new TextView(this);hint.setText("Choose which applicants may send phone notifications and repeating emergency alarms. Settings are saved separately.");hint.setTextSize(12);hint.setPadding(0,0,0,dp(8));panel.addView(hint);
-      android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(350)));
+      LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(12),dp(6),dp(12),dp(6));
+      TextView hint=new TextView(this);hint.setText("Choose an alert mode for each applicant. Critical events always ring in every mode.");hint.setTextSize(12);hint.setPadding(0,0,0,dp(8));panel.addView(hint);
+      android.widget.ScrollView scroll=new android.widget.ScrollView(this);
+      LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);
+      panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(350)));
       for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){
-        final int number=n;boolean enabledByDefault=getSharedPreferences("monitor",MODE_PRIVATE).getBoolean("alertsEnabled"+n,true);
-        android.widget.Switch toggle=new android.widget.Switch(this);toggle.setText("Applicant "+n+" alerts");toggle.setTextSize(14);toggle.setMinHeight(dp(48));toggle.setChecked(enabledByDefault);
-        toggle.setOnCheckedChangeListener((v,enabled)->{getSharedPreferences("monitor",MODE_PRIVATE).edit().putBoolean("alertsEnabled"+number,enabled).apply();BrowserEngine applicant=service.profiles[number-1];if(applicant!=null){applicant.alerts.setEnabled(enabled);if(!enabled)applicant.command("SILENCE");}service.record("Applicant "+number+" alerts "+(enabled?"enabled":"disabled"));service.refreshForeground(true);});
-        rows.addView(toggle);
+        final int number=n;
+        String saved=getSharedPreferences("monitor",MODE_PRIVATE).getString("alertMode"+n,"CRITICAL_ONLY");
+        LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.VERTICAL);row.setPadding(0,dp(5),0,dp(5));
+        TextView label=new TextView(this);label.setText("Applicant "+n);label.setTextSize(14);label.setTypeface(Typeface.DEFAULT,Typeface.BOLD);row.addView(label);
+        android.widget.RadioGroup choices=new android.widget.RadioGroup(this);choices.setOrientation(android.widget.RadioGroup.HORIZONTAL);
+        String[] modes={"ALL","CRITICAL_ONLY","ROUTINE_OFF"};String[] labels={"ALL","CRITICAL ONLY","ROUTINE OFF"};
+        for(int k=0;k<modes.length;k++){
+          android.widget.RadioButton option=new android.widget.RadioButton(this);option.setText(labels[k]);option.setTextSize(10);option.setTag(modes[k]);option.setId(View.generateViewId());choices.addView(option,new android.widget.RadioGroup.LayoutParams(0,-2,1));
+          if(modes[k].equals(saved))choices.check(option.getId());
+        }
+        choices.setOnCheckedChangeListener((group,id)->{
+          View selected=group.findViewById(id);if(selected==null)return;String mode=String.valueOf(selected.getTag());
+          getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("alertMode"+number,mode).apply();
+          BrowserEngine applicant=service.profiles[number-1];if(applicant!=null)applicant.alerts.setMode(mode);
+          service.record("Applicant "+number+" alert mode="+mode);service.refreshForeground(true);
+        });
+        row.addView(choices);rows.addView(row);
       }
-      new AlertDialog.Builder(this).setTitle("Applicant alert settings").setView(panel).setPositiveButton("Done",null).setNeutralButton("Silence all now",(d,w)->service.silenceAll()).show();
+      Button test=new Button(this);test.setAllCaps(false);test.setText("Test alert");test.setOnClickListener(v->{if(engine!=null){engine.alerts.testFullAlarm();service.record("Applicant "+engine.profile+" full test alarm requested");}});
+      panel.addView(test,new LinearLayout.LayoutParams(-1,dp(48)));
+      new AlertDialog.Builder(this).setTitle("Applicant alert modes").setView(panel).setPositiveButton("Done",null).show();
+    }
+    private void homeSelectedApplicant(){
+      if(engine==null)return;
+      String stage=engine.lastState.optString("bookingStage","").trim();
+      boolean protectedStage=engine.lastState.optBoolean("calendarLock",false)||(!stage.isEmpty()&&!stage.equalsIgnoreCase("MONITORING")&&!stage.equalsIgnoreCase("STANDBY")&&!stage.equalsIgnoreCase("READY"));
+      Runnable goHome=()->{if(engine!=null)engine.home();};
+      if(engine.run.armed&&protectedStage){
+        new AlertDialog.Builder(this).setTitle("Leave protected booking page?")
+          .setMessage("Applicant "+engine.profile+" is armed and currently at "+stage+". Going Home will leave this page. Continue?")
+          .setPositiveButton("Go Home",(d,w)->goHome.run()).setNegativeButton("Cancel",null).show();
+      }else goHome.run();
+    }
+    private void copyLog(){
+      String report="App: MPARIVAHAN SLOT BOOKING -J&K 3.5-keepalive\\nEngine: GeckoView 158.0.20261021001945\\nAndroid API: "
+        +android.os.Build.VERSION.SDK_INT+"\\n"+(engine==null?"Connecting":engine.service.diagnosticReport()+"\\nManufacturer: "+android.os.Build.MANUFACTURER+"\\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\\nActive applicants: "+engine.service.activeCount());
+      ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics",report));
+      Toast.makeText(this,"Log copied",Toast.LENGTH_SHORT).show();
     }
     private void managePhones(){
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(12),dp(8),dp(12),dp(8));
@@ -142,7 +176,7 @@ public class MainActivity extends Activity {
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
       boolean overlayAllowed=android.provider.Settings.canDrawOverlays(this);
-      String message="Android Doze exemption: "+(exempt?"ALLOWED":"REQUIRED")+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+(power.isPowerSaveMode()?"ON — turn it off":"OFF")+"\nDisplay over other apps: "+(overlayAllowed?"ALLOWED":"REQUIRED — keeps monitoring running while minimized")+"\n\nAllow background activity and autostart in your "+android.os.Build.MANUFACTURER+" phone settings. Manufacturer battery managers can still stop the app. Keep the ongoing monitoring notification visible. Force-stop or reboot ends monitoring; START again manually.";
+      String message="Android Doze exemption: "+(exempt?"ALLOWED":"REQUIRED")+"\\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\\nBattery Saver: "+(power.isPowerSaveMode()?"ON — turn it off":"OFF")+"\\nDisplay over other apps: "+(overlayAllowed?"ALLOWED":"REQUIRED — keeps monitoring running while minimized")+"\\n\\nThe \\"displaying over other apps\\" notification is generated by Android and can be hidden in Android notification settings. The overlay permission itself must remain enabled.\\n\\nAllow background activity and autostart in your "+android.os.Build.MANUFACTURER+" phone settings. Manufacturer battery managers can still stop the app. Keep the ongoing monitoring notification visible. Force-stop or reboot ends monitoring; START again manually.";
       new AlertDialog.Builder(this).setTitle("Locked-screen monitoring setup").setMessage(message)
        .setPositiveButton(exempt?"App settings":"Allow exemption",(d,w)->{
          try{startActivity(new Intent(exempt?android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS:android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,Uri.parse("package:"+getPackageName())));}
@@ -195,8 +229,11 @@ public class MainActivity extends Activity {
         LinearLayout utilities=new LinearLayout(this);
         applicantButtons[8]=button(utilities,"Applicant 9",Color.rgb(37,65,103),()->selectApplicant(9));
         applicantButtons[8].setOnLongClickListener(v->{applicantPhone(9);return true;});
-        batteryButton=button(utilities,"Background\nsetup",Color.rgb(35,53,76),this::batterySettings);
-        button(utilities,"Phone\nnumbers",Color.rgb(14,116,144),this::managePhones);
+        batteryButton=button(utilities,"Background setup · hold: Home",Color.rgb(35,53,76),this::batterySettings);
+        batteryButton.setTextSize(10);batteryButton.setOnLongClickListener(v->{homeSelectedApplicant();return true;});
+        button(utilities,"Phone numbers",Color.rgb(14,116,144),this::managePhones);
+        Button copyLog=button(utilities,"Copy log · hold: Alerts",Color.rgb(104,65,165),this::copyLog);
+        copyLog.setTextSize(10);copyLog.setOnLongClickListener(v->{manageApplicantAlerts();return true;});
         header.addView(utilities);
         status = new TextView(this);
         status.setTextSize(12);
@@ -209,23 +246,14 @@ public class MainActivity extends Activity {
         monitorStatus.setText("Connecting monitor… website opens independently");
         LinearLayout controls=new LinearLayout(this);
         monitorButton=button(controls,"Monitor",Color.rgb(37,99,235),this::toggleMonitor);
-        monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);monitorButton.setTextSize(12);
-        Button startHomeButton=button(controls,"Start All / Home",Color.rgb(5,150,105),()->{if(engine!=null)engine.service.startAllReady();});
-        startHomeButton.setOnLongClickListener(v->{if(engine!=null)engine.home();Toast.makeText(this,"Home",Toast.LENGTH_SHORT).show();return true;});
-        startHomeButton.setContentDescription("Short press: Start All. Long press: Home");
+        Button startAllButton=button(controls,"Start All",Color.rgb(5,150,105),()->{if(engine!=null)engine.service.startAllReady();});
         Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.run.stopByUser();});
-        button(controls,"Alerts",Color.rgb(75,85,99),this::manageApplicantAlerts);
-        Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});
+        Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null){engine.alerts.stop();command("SILENCE");}});
+        monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        for(Button b:new Button[]{monitorButton,startAllButton,stopButton,silenceButton}){b.setTextSize(15);b.setMinHeight(dp(64));b.setMinimumHeight(dp(64));}
         silenceButton.setOnLongClickListener(v->{if(engine!=null){engine.service.silenceAll();Toast.makeText(this,"All applicant alarms silenced",Toast.LENGTH_SHORT).show();}return true;});
         stopButton.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Stop all applicants?").setPositiveButton("Stop all",(d,w)->{if(engine!=null)engine.service.stopAll();}).setNegativeButton("Cancel",null).show();return true;});
         header.addView(controls);
-        button(utilities, "Copy log", Color.rgb(104,65,165), () -> {
-            String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.5-keepalive\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
-                    + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
-            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics", report));
-            Toast.makeText(this, "Log copied", Toast.LENGTH_SHORT).show();
-        });
         LinearLayout details=new LinearLayout(this);details.setOrientation(LinearLayout.VERTICAL);details.setPadding(dp(9),dp(6),dp(9),dp(6));
         GradientDrawable card=new GradientDrawable();card.setColor(Color.rgb(21,43,66));card.setCornerRadius(dp(10));details.setBackground(card);
         status.setTextColor(Color.rgb(125,211,252));monitorStatus.setTextColor(Color.rgb(110,231,183));details.addView(status);details.addView(monitorStatus);header.addView(details);
