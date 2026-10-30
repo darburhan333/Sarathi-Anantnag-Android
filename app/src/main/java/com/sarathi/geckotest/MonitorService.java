@@ -151,7 +151,7 @@ public final class MonitorService extends Service {
   }
   return out.toString();
  }
- String diagnosticReport(){return summary();}
+ String diagnosticReport(){return "KeepAlive: "+keepAlive.status()+"\n"+clockDiagnostics()+"\n"+summary();}
  // Narrow test hooks used by GeckoIntegrationTest; production controls still use BrowserEngine.run directly.
  int attemptsForTest(){return engine==null?0:engine.lastState.optInt("sessionAttempts");}
  boolean isArmedForTest(){return engine!=null&&engine.run.armed;}
