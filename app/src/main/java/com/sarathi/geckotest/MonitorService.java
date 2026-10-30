@@ -152,6 +152,14 @@ public final class MonitorService extends Service {
   return out.toString();
  }
  String diagnosticReport(){return summary();}
+ // Narrow test hooks used by GeckoIntegrationTest; production controls still use BrowserEngine.run directly.
+ int attemptsForTest(){return engine==null?0:engine.lastState.optInt("sessionAttempts");}
+ boolean isArmedForTest(){return engine!=null&&engine.run.armed;}
+ void arm(){if(engine==null)throw new IllegalStateException("No selected applicant engine");engine.run.arm();}
+ org.mozilla.geckoview.GeckoResult<Object> waitFor(int milliseconds){
+  if(engine==null)throw new IllegalStateException("No selected applicant engine");
+  return engine.run.waitFor(milliseconds);
+ }
  void record(String message){android.content.SharedPreferences p=getSharedPreferences("diagnostics",0);String old=p.getString("events","");String next=old+"\n"+new java.text.SimpleDateFormat("MM-dd HH:mm:ss",java.util.Locale.US).format(new java.util.Date())+" "+message;if(next.length()>65536)next=next.substring(next.length()-65536);p.edit().putString("events",next).apply();}
  @Override public void onTaskRemoved(Intent rootIntent){record("Task removed; active applicants="+activeCount()+"; monitoring retained");super.onTaskRemoved(rootIntent);}
  @Override public void onDestroy(){if(keepAlive!=null)keepAlive.stop();record("Service destroyed; active applicants="+activeCount());destroying=true;if(screenReceiverRegistered){unregisterReceiver(screenReceiver);screenReceiverRegistered=false;}clock.removeCallbacksAndMessages(null);clockThread.quitSafely();connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();super.onDestroy();}
