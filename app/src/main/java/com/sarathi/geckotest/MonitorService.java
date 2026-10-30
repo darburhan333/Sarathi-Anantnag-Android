@@ -41,6 +41,10 @@ public final class MonitorService extends Service {
  }
  void markRunning(int n,boolean value){getSharedPreferences("monitor",0).edit().putBoolean("wasRunning"+n,value).apply();}
  int activeCount(){int n=0;for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)n++;return n;}
+ int protectedCount(){int n=0;for(BrowserEngine e:profiles)if(e!=null&&e.protectedPage)n++;return n;}
+ int sessionCount(){int n=0;for(BrowserEngine e:profiles)if(e!=null)n+=e.sessions.size();return n;}
+ void trimIdle(){long now=SystemClock.elapsedRealtime();for(BrowserEngine e:profiles)if(e!=null)e.unloadIdle(now,sessionCount()>=36);}
+ void confirmProtected(String action,java.util.List<BrowserEngine> targets,Runnable accepted){StringBuilder names=new StringBuilder();for(BrowserEngine e:targets)if(e!=null&&e.protectedPage){if(names.length()>0)names.append(", ");names.append("Applicant ").append(e.profile).append(" (").append(e.protectedStage).append(")");}if(names.length()==0){accepted.run();return;}if(activity==null||!visible){record(action+" requires confirmation for "+names);for(BrowserEngine e:targets)if(e!=null&&e.protectedPage)e.alerts.critical("CONFIRM_REQUIRED","Open app to confirm "+action);return;}new android.app.AlertDialog.Builder(activity).setTitle(action+" protected applicants?").setMessage(names+" — manual booking pages will remain protected. Home will discard the selected page.").setPositiveButton("Confirm",(d,w)->accepted.run()).setNegativeButton("Cancel",null).show();}
  private boolean alerting(){for(BrowserEngine e:profiles)if(e!=null&&e.alerts.isRepeating())return true;return false;}
  void beginForeground(){
   if(activity==null||!visible)throw new IllegalStateException("Open app before START");
@@ -58,18 +62,18 @@ public final class MonitorService extends Service {
  private Notification notification(){
   PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
   PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,MonitorService.class).setAction("STOP"),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-  StringBuilder text=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&e.run.armed){if(text.length()>0)text.append(" · ");text.append("A").append(e.profile).append(" ").append(e.lastState.optBoolean("calendarLock")?"CALENDAR, act now":e.lastState.optString("bookingStage").contains("SMS")?"SMS, waiting":String.valueOf(e.lastState.optInt("sessionAttempts"))).append(" [").append(e.alerts.mode()).append("]");}
+  StringBuilder text=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&(e.run.armed||e.protectedPage)){if(text.length()>0)text.append(" · ");text.append("A").append(e.profile).append(" ").append(e.lastState.optBoolean("calendarLock")?"CALENDAR, act now":e.lastState.optString("bookingStage").contains("SMS")?"SMS, waiting":String.valueOf(e.lastState.optInt("sessionAttempts"))).append(" [").append(e.alerts.mode()).append("]");}
   if(text.length()==0)text.append(alerting()?"Alert active — open app":"Finishing alerts");
   String summary=text.toString()+routineWarning();
   return new Notification.Builder(this,"sarathi-monitor").setSmallIcon(R.drawable.ic_notification).setContentTitle("MPARIVAHAN SLOT BOOKING -J&K").setContentText(summary).setStyle(new Notification.BigTextStyle().bigText(summary)).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).addAction(new Notification.Action.Builder(null,"STOP ALL",stop).build()).build();
  }
- void refreshForeground(boolean immediate){needsCpu=activeCount()>0||alerting();if(destroying||!promoted)return;
-  if(activeCount()>0)keepAlive.start();else keepAlive.stop();
+ void refreshForeground(boolean immediate){needsCpu=activeCount()>0||protectedCount()>0||alerting();if(destroying||!promoted)return;
+  if(activeCount()>0||protectedCount()>0)keepAlive.start();else keepAlive.stop();
   long now=SystemClock.elapsedRealtime();
-  if(activeCount()>0||alerting())stopAfter=0;else if(stopAfter==0)stopAfter=now+30000;
+  if(activeCount()>0||protectedCount()>0||alerting())stopAfter=0;else if(stopAfter==0)stopAfter=now+30000;
   if(immediate||now-lastNotification>=10000){getSystemService(NotificationManager.class).notify(1002,notification());lastNotification=now;}
   // Retain a bounded delivery grace period after monitoring stops.
-  if(activeCount()==0&&!alerting()&&stopAfter>0&&now>=stopAfter){if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();}
+  if(activeCount()==0&&protectedCount()==0&&!alerting()&&stopAfter>0&&now>=stopAfter){if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();}
  }
  private final java.util.Map<Integer,String> statusBots=new java.util.HashMap<>();
  private final java.util.Map<Integer,Long> statusClaims=new java.util.HashMap<>();
@@ -118,15 +122,16 @@ public final class MonitorService extends Service {
  void stopAll(){cancelStartBatch();for(BrowserEngine e:profiles)if(e!=null)e.run.stopByUser();}
  void recoverAll(String message){for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)e.run.recover(message);}
  void failAll(String message){for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)e.run.fail(message);}
- @Override public int onStartCommand(Intent intent,int flags,int id){if(intent!=null&&"STOP".equals(intent.getAction()))stopAll();else if(intent==null)stopSelf();return START_NOT_STICKY;}
+ @Override public int onStartCommand(Intent intent,int flags,int id){if(intent!=null&&"STOP".equals(intent.getAction()))confirmProtected("Stop all",java.util.Arrays.asList(profiles),this::stopAll);else if(intent==null)stopSelf();return START_NOT_STICKY;}
  private final Runnable clockTick=new Runnable(){public void run(){if(destroying)return;
   long now=SystemClock.elapsedRealtime(),up=SystemClock.uptimeMillis();
   if(clockBeat>0)longestClockGap=Math.max(longestClockGap,now-clockBeat);clockBeat=now;clockUptime=up;
   synchronized(wake){if(needsCpu&&promoted&&!wake.isHeld())wake.acquire();}
   if(needsCpu&&promoted&&wifiLock!=null&&!wifiLock.isHeld())wifiLock.acquire();
   if(tickQueued.compareAndSet(false,true))handler.post(()->{tickQueued.set(false);if(destroying)return;mainBeat=SystemClock.elapsedRealtime();
-   for(BrowserEngine e:profiles)if(e!=null)e.run.tick();
-   if(promoted){refreshForeground(false);if(stopAfter>0&&SystemClock.elapsedRealtime()>=stopAfter&&!alerting()&&activeCount()==0){promoted=false;needsCpu=false;synchronized(wake){if(wake.isHeld())wake.release();}if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}}
+   for(BrowserEngine e:profiles)if(e!=null){e.run.tick();if(e.protectedPage)e.activate();}
+   trimIdle();
+   if(promoted){refreshForeground(false);if(stopAfter>0&&SystemClock.elapsedRealtime()>=stopAfter&&!alerting()&&activeCount()==0&&protectedCount()==0){promoted=false;needsCpu=false;synchronized(wake){if(wake.isHeld())wake.release();}if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}}
   });clock.postDelayed(this,2000);
  }};
  String clockDiagnostics(){long now=SystemClock.elapsedRealtime();return "clock gap max="+longestClockGap+"ms; main age="+(now-mainBeat)+"ms; elapsed="+now+"; uptime="+SystemClock.uptimeMillis()+"; clock uptime="+clockUptime+"; foreground="+promoted+"; wake="+wake.isHeld()+"; wifiLock="+(wifiLock!=null&&wifiLock.isHeld())+"; screen="+getSystemService(PowerManager.class).isInteractive();}

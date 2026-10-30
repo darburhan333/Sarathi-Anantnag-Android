@@ -213,11 +213,11 @@ public class MainActivity extends Activity {
         Button startHomeButton=button(controls,"Start All / Home",Color.rgb(5,150,105),()->{if(engine!=null)engine.service.startAllReady();});
         startHomeButton.setOnLongClickListener(v->{if(engine!=null)engine.home();Toast.makeText(this,"Home",Toast.LENGTH_SHORT).show();return true;});
         startHomeButton.setContentDescription("Short press: Start All. Long press: Home");
-        Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.run.stopByUser();});
+        Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.service.confirmProtected("Stop",java.util.Collections.singletonList(engine),engine.run::stopByUser);});
         button(controls,"Alerts",Color.rgb(75,85,99),this::manageApplicantAlerts);
         Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});
         silenceButton.setOnLongClickListener(v->{if(engine!=null){engine.service.silenceAll();Toast.makeText(this,"All applicant alarms silenced",Toast.LENGTH_SHORT).show();}return true;});
-        stopButton.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Stop all applicants?").setPositiveButton("Stop all",(d,w)->{if(engine!=null)engine.service.stopAll();}).setNegativeButton("Cancel",null).show();return true;});
+        stopButton.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Stop all applicants?").setPositiveButton("Stop all",(d,w)->{if(engine!=null)engine.service.confirmProtected("Stop all",java.util.Arrays.asList(engine.service.profiles),engine.service::stopAll);}).setNegativeButton("Cancel",null).show();return true;});
         header.addView(controls);
         button(utilities, "Copy log", Color.rgb(104,65,165), () -> {
             String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.5-keepalive\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "

@@ -53,6 +53,7 @@ final class BrowserEngine {
     final ArrayList<String> logs=new ArrayList<>();
     String status="Opening Parivahan…", monitorStatus="Connecting monitor…", monitorUrl;
     boolean canGoBack, foreground, showingMonitor, ready, monitoring, destroyed;
+    boolean protectedPage,pageLostProtected;String protectedStage="",protectedUrl="",lastPageReason="COV form missing";long lastVisibleAt=SystemClock.elapsedRealtime();
     boolean firstPageRecorded;int installAttempts;
     long bridgeLostAt;
     final long startupAt=SystemClock.elapsedRealtime();
@@ -77,18 +78,32 @@ final class BrowserEngine {
     void attach(MainActivity a){activity=a;ensureUsable();render();}
     void detach(MainActivity a){if(activity==a)activity=null;}
     void foregroundState(){
+      if(foreground)lastVisibleAt=SystemClock.elapsedRealtime();
       if(nativePort!=null){JSONObject o=json("FOREGROUND");try{o.put("active",foreground);}catch(Exception ignored){}nativePort.postMessage(o);}
       render();activate();
     }
     void activate(){
       for(GeckoSession s:sessions)if(s.isOpen()){
-        boolean active=(run.armed&&s==current)||(foreground&&(s==current||(s==monitorSession&&showingMonitor)));
+        boolean active=((run.armed||protectedPage)&&s==current)||(foreground&&(s==current||(s==monitorSession&&showingMonitor)));
         boolean changed=!java.util.Objects.equals(activeStates.get(s),active);
         // GeckoView may deactivate a detached/hidden session independently of our cache.
         // Reassert active browser sessions while monitoring, including an older selected tab.
-        if(changed||(run.armed&&s==current)){s.setActive(active);s.setPriorityHint(active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT);}
+        if(changed||((run.armed||protectedPage)&&s==current)){s.setActive(active);s.setPriorityHint(active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT);}
         if(changed)activeStates.put(s,active);
       }
+    }
+    void updateProtection(JSONObject state){
+      String stage=state.optString("bookingStage",state.optString("reason",protectedStage));
+      if(state.optBoolean("protectPage")||state.optBoolean("calendarLock")||state.optBoolean("successWatch")||stage.contains("SMS")||stage.contains("CALENDAR")||stage.contains("BOOK SLOT")||stage.equals("APPOINTMENT CONFIRMED")){
+        protectedPage=true;protectedStage=stage;protectedUrl=safeLocation(state.optString("url",pageUrl));
+      }
+      if(state.has("reason"))lastPageReason=state.optString("reason");
+      activate();service.refreshForeground(false);
+    }
+    void unloadIdle(long now,boolean pressure){
+      if(protectedPage||pageLostProtected||run.armed||foreground||now-lastVisibleAt<600000)return;
+      for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);if(s.isOpen())s.close();if(s==current)current=null;}
+      service.record("Applicant "+profile+" unprotected idle pages unloaded; sessions="+service.sessionCount());
     }
     void shutdown(){
       destroyed=true;
@@ -111,12 +126,12 @@ final class BrowserEngine {
       service.handler.postDelayed(()->finishNavigation(id),nativePort==null?0:1200);
     }
     void finishNavigation(String id){if(!destroyed&&id.equals(pendingId)&&afterStop!=null){Runnable r=afterStop;afterStop=null;pendingId=null;r.run();}}
-    void home(){navigate(()->{ensureUsable();showingMonitor=false;current.loadUri(HOME);render();activate();});}
+    void home(){service.confirmProtected("Go Home",java.util.Collections.singletonList(this),()->{protectedPage=false;pageLostProtected=false;protectedStage="";navigate(()->{ensureUsable();showingMonitor=false;if(current!=null)current.loadUri(HOME);render();activate();});});}
     void ensureUsable(){
-      if(destroyed)return;
+      if(destroyed||pageLostProtected)return;
       if(current==null||!current.isOpen()){
         if(current!=null)pageLost(current,"Browser session unavailable");
-        if(current==null){GeckoSession fresh=newSession();fresh.open(runtime);showSession(fresh);fresh.loadUri(HOME);}
+        if(current==null&&!pageLostProtected){GeckoSession fresh=newSession();fresh.open(runtime);showSession(fresh);fresh.loadUri(HOME);}
       }
       if(showingMonitor)prepareMonitor();
     }
@@ -124,7 +139,7 @@ final class BrowserEngine {
       if(destroyed||!sessions.remove(session))return;
       boolean website=session==current,monitor=session==monitorSession;
       activeStates.remove(session);
-      if(website){current=null;run.fail(reason+" — inspect Sarathi and press START");}
+      if(website){current=null;if(protectedPage){pageLostProtected=true;lastPageReason="A"+profile+": page lost during "+protectedStage+", restart the booking flow";status=lastPageReason;service.record(lastPageReason+" url="+protectedUrl);alerts.critical("PROTECTED_PAGE_LOST",lastPageReason);run.stopForBackground(lastPageReason);}else run.fail(reason+" — inspect Sarathi and press START");}
       if(monitor){monitorSession=null;monitorReady=false;}
       if(session.isOpen())session.close();
       service.record("Applicant "+profile+" "+(website?"website":monitor?"dashboard":"unused page")+" closed; active="+run.armed);
@@ -155,14 +170,14 @@ final class BrowserEngine {
         case "ALERT_DELIVERY":service.record("ALERT A"+profile+" kind="+o.optString("kind")+" Telegram="+o.optString("telegram"));break;
         case "STATE":
           monitoring=o.optBoolean("running")||o.optBoolean("successWatch");
-          lastState=o;
+          lastState=o;updateProtection(o);
           monitorStatus=(monitoring?(foreground?"RUNNING · FOREGROUND":"RUNNING · BACKGROUND"):"STOPPED")+" · Session clicks "+o.optInt("sessionAttempts")+"\n"+o.optString("lastStatus");
           run.onState(o);render();
           break;
         case "ACK":
           finishNavigation(o.optString("id"));break;
         case "START_RESULT":if(o.optString("batch").equals(service.startBatch)){log("Start All: "+o.optString("reason"));service.record("Applicant "+profile+" Start All: "+o.optString("reason"));}break;
-        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;log(o.optString("reason",o.optBoolean("covReady")?"COV selection":"COV form missing"));}break;
+        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;updateProtection(o);log(o.optString("reason",o.optBoolean("covReady")?"COV selection":"COV form missing"));}break;
         case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"),o.optBoolean("terminal"),o.optString("reason","No verification details"));break;
         case "ERROR":log(o.optString("message"));break;
       }
@@ -204,7 +219,7 @@ final class BrowserEngine {
                 case "RESTORE":result.put("armed",run.armed);break;
                 case "AUTHORIZE":return run.authorization();
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;
-                case "DISARM":run.stopByUser();break;
+                case "DISARM":if(protectedPage){service.confirmProtected("Stop",java.util.Collections.singletonList(this),run::stopByUser);throw new IllegalStateException("Confirm Stop in the app");}run.stopByUser();break;
                 case "CRITICAL":alerts.critical(m.optString("kind"),m.optString("message"));break;
                 case "ACK_ALERT":alerts.stop();alerts.clearNotification();service.refreshForeground(true);break;
                 case "ALERT_DELIVERY":service.record("ALERT A"+profile+" kind="+m.optString("kind")+" Telegram="+m.optString("telegram"));break;
@@ -260,6 +275,7 @@ final class BrowserEngine {
       },"profile");
     }
     private GeckoSession newSession() {
+        service.trimIdle();if(service.sessionCount()>=36)throw new IllegalStateException("Live page limit reached; close an unprotected applicant page first");
         GeckoSession s = new GeckoSession(new org.mozilla.geckoview.GeckoSessionSettings.Builder().contextId("applicant-"+profile).build());
         sessions.add(s);if(extension!=null)bindProfileGuard(s);
         s.setPromptDelegate(new PromptDelegate() {

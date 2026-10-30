@@ -701,14 +701,14 @@
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if(message?.type==='SARATHI_PROFILE_QUERY'){sendResponse({ok:true,ready:document.readyState!=='loading',covReady:!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),reason:isSmsVerificationPage()?'SMS verification ready':realCalendar()?'Calendar detected':EXPIRY_TEXT.test(pageText(true))?'Session expired':getCovForm()?'COV selection':'COV form missing',page:location.href});return false;}
+    if(message?.type==='SARATHI_PROFILE_QUERY'){sendResponse({ok:true,ready:document.readyState!=='loading',covReady:!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),protectPage:isSmsVerificationPage()||realCalendar(),reason:isSmsVerificationPage()?'SMS verification ready':realCalendar()?'Calendar detected':EXPIRY_TEXT.test(pageText(true))?'Session expired':getCovForm()?'COV selection':'COV form missing',page:location.href});return false;}
     if (message?.type === 'SARATHI_HEALTH_PING') {
       (async()=>{
         const owner=await confirmOwnership();
         return {ok:true,page:location.pathname,owner,loopActive,
           safeToRestart:owner&&!loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
           safeToResume:owner&&loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
-          lastLoopProgress,loopStartedAt,covPresent:!!getCovForm(),calendar:realCalendar(),
+          protectPage:isSmsVerificationPage()||realCalendar(),pageReason:isSmsVerificationPage()?"SMS verification ready":realCalendar()?"Calendar detected":EXPIRY_TEXT.test(pageText(true))?"Session expired":getCovForm()?"COV selection":"COV form missing",lastLoopProgress,loopStartedAt,covPresent:!!getCovForm(),calendar:realCalendar(),
           expired:EXPIRY_TEXT.test(pageText(true)),locked:sessionLocked||calendarLocked, busy:bookingActionBusy||inFlight, popup:noSlotsTextPresent(),sessionId};
       })().then(sendResponse).catch(()=>sendResponse({ok:false}));return true;
     }
