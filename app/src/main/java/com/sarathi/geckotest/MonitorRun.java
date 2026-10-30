@@ -4,7 +4,7 @@ import android.os.*;import org.json.JSONObject;import org.mozilla.geckoview.Geck
 final class MonitorRun {
  final BrowserEngine engine;final Handler handler;boolean armed,sawRunning,recovering;
  private long armedAt,lastBeat,lastProgress,lastTick,longestGap,longestScreenOffGap,lastHeartbeatValue,lastProgressValue,recoveryAt;
- private long recoveryRetryAt,verifiedAt;
+ private long recoveryRetryAt,verifiedAt;long resumeGraceUntil;
  private int recoveryAttempt;
  private static final long[] RETRY_DELAYS={5000,15000,30000};
  private int generation;private String recoveryId="",lastReason="Ready";
@@ -125,14 +125,17 @@ final class MonitorRun {
   if(!armed)return;long now=SystemClock.elapsedRealtime(),previousTick=lastTick,gap=now-previousTick;lastTick=now;longestGap=Math.max(longestGap,gap);
   // Track the largest observed monitoring-tick interval specifically while the display is off.
   android.os.PowerManager power=engine.service.getSystemService(android.os.PowerManager.class);
-  // Count the full tick interval if the display was off at the current tick or a screen transition occurred between ticks.\n  boolean screenTransitionDuringGap=engine.service.screenOffAt>previousTick||engine.service.screenOnAt>previousTick;\n  if(power!=null&&(!power.isInteractive()||screenTransitionDuringGap))longestScreenOffGap=Math.max(longestScreenOffGap,gap);
+  // Count intervals overlapping screen-off, including the first tick after wake.
+  boolean screenTransitionDuringGap=engine.service.screenOffAt>previousTick||engine.service.screenOnAt>previousTick;
+  if(power!=null&&(!power.isInteractive()||screenTransitionDuringGap))longestScreenOffGap=Math.max(longestScreenOffGap,gap);
   if(recovering){if(recoveryRetryAt!=0){if(now>=recoveryRetryAt)attemptRecovery();}else if(now-recoveryAt>15000)retryRecovery("Verification reply timed out");}
   else if(engine.bridgeLostAt>0&&now-engine.bridgeLostAt>15000)recover("Monitor bridge disconnected");
   else if(gap>30000){engine.service.logStallDiagnostics("main-thread tick gap "+gap+"ms; applicant="+engine.profile);recover("Main-thread tick gap "+gap+"ms");}
   else if(!sawRunning&&now-armedAt>25000)fail("Monitoring did not start — return to Sarathi and press START");
   else if(sawRunning&&now-Math.max(lastBeat,verifiedAt)>60000)recover("No page heartbeat for 60 seconds");
-  else if(engine.lastState.optBoolean("running")&&!engine.lastState.optBoolean("calendarLock")&&now-Math.max(lastProgress,verifiedAt)>60000)recover("No page progress for 60 seconds");
+  else if(now>=resumeGraceUntil&&engine.lastState.optBoolean("running")&&!engine.lastState.optBoolean("calendarLock")&&now-Math.max(lastProgress,verifiedAt)>60000)recover("No page progress for 60 seconds");
   if(armed){engine.activate();engine.command("PING");if(engine.foreground)engine.render();}
  }
- String diagnostics(){return "\n"+(recovering?"RECOVERING":armed?(engine.foreground?"FOREGROUND":"BACKGROUND"):"IDLE")+" · avg cycle="+(engine.lastState.optLong("cycleTotal")/Math.max(1,engine.lastState.optLong("cycleCount")))+"ms · last cycle="+engine.lastState.optLong("lastCycleMs")+"ms · COVs="+engine.lastState.optInt("selectedCovCount")+" · verification retries="+engine.lastState.optInt("verificationRetries")+" · run="+generation+" · recovery="+recoveryAttempt+" · longest tick gap "+longestGap/1000+"s · screen-off max gap "+longestScreenOffGap/1000+"s"+(armed?" · last progress "+(SystemClock.elapsedRealtime()-lastProgress)/1000+"s ago · heartbeat "+(SystemClock.elapsedRealtime()-lastBeat)/1000+"s ago":" · "+lastReason);}
+ String rawState(){return "armed="+armed+" recovering="+recovering+" lastTick="+lastTick+" lastBeat="+lastBeat+" lastProgress="+lastProgress;}
+ String diagnostics(){return "\n"+(recovering?"RECOVERING":armed?(engine.foreground?"FOREGROUND":"BACKGROUND"):"IDLE")+" · mode="+engine.alerts.mode()+" · state="+(engine.pageLostProtected?"PAUSED":engine.protectedStage.contains("SMS")?"SMS":engine.lastState.optBoolean("calendarLock")?"CALENDAR":armed?"COV":"PAUSED")+" · reason="+engine.lastPageReason+" · avg cycle="+(engine.lastState.optLong("cycleTotal")/Math.max(1,engine.lastState.optLong("cycleCount")))+"ms · last cycle="+engine.lastState.optLong("lastCycleMs")+"ms · COVs="+engine.lastState.optInt("selectedCovCount")+" · verification retries="+engine.lastState.optInt("verificationRetries")+" · run="+generation+" · recovery="+recoveryAttempt+" · longest tick gap "+longestGap/1000+"s · screen-off max gap "+longestScreenOffGap/1000+"s"+(armed?" · last progress "+(SystemClock.elapsedRealtime()-lastProgress)/1000+"s ago · heartbeat "+(SystemClock.elapsedRealtime()-lastBeat)/1000+"s ago":" · "+lastReason);}
 }

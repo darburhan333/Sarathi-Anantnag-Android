@@ -107,7 +107,7 @@
  });
  chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   if(!sender.url?.startsWith(browser.runtime.getURL('')))return;
-  if(m?.type==='ANDROID_STOP'){nativeRequest({type:'DISARM'}).then(reply);return true;}
+  if(m?.type==='ANDROID_STOP'){nativeRequest({type:'UI_STOP'}).then(reply);return true;}
   if(m?.type==='ANDROID_ARM'){nativeRequest({type:'ARM',batch:m.batch||''}).then(async r=>{if(r?.ok)await chrome.storage.local.set({androidServiceReady:true});reply(r);}).catch(e=>reply({ok:false,error:String(e.message||e)}));return true;}
   if(m?.type==='ANDROID_UI_READY'){nativeRequest({type:'UI_READY'}).then(reply);return true;}
   if(m?.type!=='ANDROID_EXPORT')return;

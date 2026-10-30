@@ -81,7 +81,7 @@ public class MainActivity extends Activity {
       if(visible&&engine.monitoring)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
       else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
-    void selectApplicant(int number){if(engine==null||engine.profile==number)return;MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
+    void selectApplicant(int number){if(engine==null||engine.profile==number)return;MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
     private boolean directCalls(){return getSharedPreferences("calling",0).getBoolean("direct",false);}
     private void openDialer(String phone){startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));}
     private void applicantPhone(int number){
@@ -167,7 +167,7 @@ public class MainActivity extends Activity {
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
       boolean overlayAllowed=android.provider.Settings.canDrawOverlays(this);
-      String message="Android Doze exemption: "+(exempt?"ALLOWED":"REQUIRED")+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+(power.isPowerSaveMode()?"ON — turn it off":"OFF")+"\nDisplay over other apps: "+(overlayAllowed?"ALLOWED":"REQUIRED — keeps monitoring running while minimized")+"\n\nAllow background activity and autostart in your "+android.os.Build.MANUFACTURER+" phone settings. Manufacturer battery managers can still stop the app. Keep the ongoing monitoring notification visible. Force-stop or reboot ends monitoring; START again manually.";
+      String message="Android Doze exemption: "+(exempt?"ALLOWED":"REQUIRED")+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+(power.isPowerSaveMode()?"ON — turn it off":"OFF")+"\nDisplay over other apps: "+(overlayAllowed?"ALLOWED":"REQUIRED — keeps monitoring running while minimized")+"\n\nAllow background activity and autostart in your "+android.os.Build.MANUFACTURER+" phone settings. Manufacturer battery managers can still stop the app. Android supplies the displaying-over-other-apps notification; its visibility may be adjustable in Android notification settings. Keep overlay permission ON. Keep the ongoing monitoring notification visible. Force-stop or reboot ends monitoring; START again manually.";
       new AlertDialog.Builder(this).setTitle("Locked-screen monitoring setup").setMessage(message)
        .setPositiveButton(exempt?"App settings":"Allow exemption",(d,w)->{
          try{startActivity(new Intent(exempt?android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS:android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,Uri.parse("package:"+getPackageName())));}
@@ -279,7 +279,7 @@ public class MainActivity extends Activity {
       else if(engine!=null&&engine.current!=null&&engine.canGoBack)engine.navigate(()->engine.current.goBack());
       else super.onBackPressed();
     }
-    @Override protected void onResume(){super.onResume();visible=true;if(engine!=null){engine.service.activity=this;if(!engine.service.visible)for(BrowserEngine e:engine.service.profiles)if(e!=null&&e.run.armed)e.run.tick();engine.service.visible=true;engine.service.record("Activity resumed; "+engine.service.clockDiagnostics());engine.foreground=true;engine.ensureUsable();engine.foregroundState();}}
+    @Override protected void onResume(){super.onResume();visible=true;if(engine!=null){engine.service.activity=this;for(BrowserEngine profile:engine.service.profiles)if(profile!=null)profile.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;if(!engine.service.visible)for(BrowserEngine e:engine.service.profiles)if(e!=null&&e.run.armed)e.run.tick();engine.service.visible=true;engine.service.record("Activity resumed; "+engine.service.clockDiagnostics());engine.foreground=true;engine.ensureUsable();engine.foregroundState();}}
     @Override protected void onPause(){visible=false;if(engine!=null){engine.service.visible=false;engine.service.record("Activity paused; retaining GeckoView sessions for armed background monitoring; screen="+getSystemService(android.os.PowerManager.class).isInteractive()+"; active="+engine.service.activeCount());engine.foreground=false;engine.activeStates.clear();engine.foregroundState();}super.onPause();}
     @Override protected void onStop(){
       super.onStop();

@@ -30,6 +30,7 @@ final class KeepAlive {
   private View overlay;
   private volatile boolean audioRunning;
   private Thread audioThread;
+  private final java.util.concurrent.atomic.AtomicInteger audioGeneration=new java.util.concurrent.atomic.AtomicInteger();
   private String lastStatus = "";
 
   KeepAlive(MonitorService service) {
@@ -56,8 +57,9 @@ final class KeepAlive {
     }
   }
 
-  void stop() {
-    audioRunning = false;
+  synchronized void stop() {
+    audioGeneration.incrementAndGet();audioRunning = false;
+    if(audioThread!=null)audioThread.interrupt();
     main.post(this::hideOverlay);
     if (!lastStatus.isEmpty()) {
       lastStatus = "";
@@ -99,13 +101,14 @@ final class KeepAlive {
     if (v == null) return;
     try {
       context.getSystemService(WindowManager.class).removeView(v);
-    } catch (Exception ignored) {
+    } catch (Exception error) {service.record("Keep-alive overlay removal failed: "+error.getClass().getSimpleName());
     }
   }
 
   private synchronized void startAudio() {
     if (audioRunning && audioThread != null && audioThread.isAlive()) return;
     try {
+      final int generation=audioGeneration.incrementAndGet();
       final int rate = 8000;
       int min = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
       final AudioTrack track = new AudioTrack.Builder()
@@ -126,12 +129,12 @@ final class KeepAlive {
       audioThread = new Thread(() -> {
         short[] silence = new short[rate / 2];
         try {
-          while (audioRunning) {
-            if (track.write(silence, 0, silence.length) < 0) break;
+          while (audioRunning&&audioGeneration.get()==generation) {
+            if (track.write(silence, 0, silence.length) < 0){service.record("Keep-alive audio write failed");break;}
           }
-        } catch (Exception ignored) {
+        } catch (Exception error) {service.record("Keep-alive audio error: "+error.getClass().getSimpleName());
         } finally {
-          audioRunning = false;
+          if(audioGeneration.get()==generation)audioRunning = false;
           try { track.stop(); } catch (Exception ignored) { }
           try { track.release(); } catch (Exception ignored) { }
         }
