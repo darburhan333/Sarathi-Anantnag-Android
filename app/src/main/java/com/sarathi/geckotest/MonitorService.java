@@ -144,8 +144,8 @@ public final class MonitorService extends Service {
    BrowserEngine e=profiles[i];out.append("Applicant ").append(i+1).append(": ");
    if(e==null)out.append("Not opened");
    else out.append(e.run.armed?"Monitoring":"Stopped").append(" · checks ").append(e.lastState.optInt("sessionAttempts")).append(" · ").append(e.lastState.optString("bookingStage","Ready")).append(e.run.diagnostics())
-     .append(" · avgCycleMs=").append(e.lastState.optInt("averageCycleMs")).append(" · lastCycleMs=").append(e.lastState.optInt("lastCycleMs"))
-     .append(" · COV classes=").append(e.lastState.optInt("covClassCount")).append(" · verificationRetries=").append(e.lastState.optInt("verificationRetries"))
+     .append(" · avgCycleMs=").append(e.averageCycleMs).append(" · lastCycleMs=").append(e.lastCycleMs)
+     .append(" · COV classes=").append(e.covClassCount).append(" · verificationRetries=").append(e.verificationRetries)
      .append("\n").append(String.join("\n",e.logs));
    out.append('\n');
   }
