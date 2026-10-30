@@ -13,7 +13,7 @@ final class PhoneAlerts {
  String mode(){return activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).getString("alertMode"+profile,"CRITICAL_ONLY");}
  void setMode(String mode){if(!"ALL".equals(mode)&&!"CRITICAL_ONLY".equals(mode)&&!"ROUTINE_OFF".equals(mode))throw new IllegalArgumentException("Unknown alert mode");activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).edit().putString("alertMode"+profile,mode).apply();}
  // Existing Android alarm actions are emitted only for critical events. They must ring in every mode.
- boolean isEnabled(){return true;}
+ boolean isEnabled(){return activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).getBoolean(prefKey(),true);}
  void setEnabled(boolean enabled){activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).edit().putBoolean(prefKey(),enabled).apply();}
  private final Vibrator vibrator;
  private boolean repeating;
@@ -53,6 +53,7 @@ final class PhoneAlerts {
   return text.contains("green date")||text.contains("calendar")||text.contains("sms verification")||text.contains("sms ready")||text.contains("session expired")||text.contains("monitoring stopped")||text.contains("monitoring failed")||text.contains("protected page")||text.contains("booking")||text.contains("needs attention")||text.contains("failed")||text.contains("page lost");
  }
  void notify(String title,String message){
+  if(!isEnabled())return;
   boolean critical=isCritical(title,message);
   if(!critical&&!"ALL".equals(mode()))return;
   NotificationManager nm=activity.getSystemService(NotificationManager.class);
