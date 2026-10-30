@@ -18,9 +18,34 @@ public class GeckoIntegrationTest {
       InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){while(in.read()!=-1){}}
  }
  private void main(Runnable r){InstrumentationRegistry.getInstrumentation().runOnMainSync(r);}
+ private String shellText(String command)throws Exception{
+  try(android.os.ParcelFileDescriptor fd=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
+      InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd);
+      ByteArrayOutputStream out=new ByteArrayOutputStream()){
+   byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);
+   return out.toString("UTF-8");
+  }
+ }
+ private void captureEvidence(MonitorService s,String label)throws Exception{
+  System.out.println("EVIDENCE_BEGIN "+label);
+  for(String command:new String[]{
+   "dumpsys activity services com.sarathi.anantnag.gecko.v33",
+   "dumpsys power",
+   "dumpsys deviceidle",
+   "dumpsys battery",
+   "dumpsys notification --noredact",
+   "logcat -d -t 1200"
+  })try{System.out.println("COMMAND "+command+"\\n"+shellText(command));}catch(Exception e){System.out.println("EVIDENCE_COMMAND_FAILED "+command+" "+e);}
+  try(java.io.FileOutputStream out=InstrumentationRegistry.getInstrumentation().getTargetContext().openFileOutput("monitor-copy-log.txt",android.content.Context.MODE_PRIVATE)){
+   out.write(s.diagnosticReport().getBytes("UTF-8"));
+  }
+  System.out.println("MONITOR_COPY_LOG\\n"+s.diagnosticReport());
+  System.out.println("EVIDENCE_END "+label);
+ }
  private void progress(MonitorService s,String label,int seconds)throws Exception{
   int before=s.attemptsForTest(),beforeRequests=requests.get();Thread.sleep(seconds*1000L);
-  assertTrue(label+": foreground service stopped",s.isArmedForTest());
+  if(!s.isArmedForTest())captureEvidence(s,label+" foreground service stopped");
+  assertTrue(label+": foreground service stopped; see captured dumpsys, logcat and monitor-copy-log.txt",s.isArmedForTest());
   assertTrue(label+": no actual COV attempts: "+s.engine.lastState,s.attemptsForTest()>before);
   assertTrue(label+": page did not make another HTTP request",requests.get()>beforeRequests);
   System.out.println("PASS "+label+": "+before+" -> "+s.attemptsForTest());

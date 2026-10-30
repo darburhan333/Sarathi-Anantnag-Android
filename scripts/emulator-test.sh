@@ -5,9 +5,16 @@ if [ "${1:-all}" != "release-only" ]; then
   gradle -PtestAbi=x86_64 connectedDebugAndroidTest --stacktrace
   result=$?
 fi
-adb pull /data/local/tmp/monitor-preview.png monitor-preview.png
-adb shell dumpsys activity services com.sarathi.anantnag.gecko.v33 > service-state.txt
-adb logcat -d > emulator-logcat.txt
+mkdir -p ci-evidence
+: > emulator-diagnostic-capture-status.txt
+adb pull /data/local/tmp/monitor-preview.png monitor-preview.png >> emulator-diagnostic-capture-status.txt 2>&1 || echo "monitor-preview.png unavailable (non-fatal; test may have failed before capture)" >> emulator-diagnostic-capture-status.txt
+adb shell dumpsys activity services com.sarathi.anantnag.gecko.v33 > service-state.txt 2>&1 || echo "dumpsys activity services failed" >> emulator-diagnostic-capture-status.txt
+adb shell dumpsys power > emulator-power.txt 2>&1 || echo "dumpsys power failed" >> emulator-diagnostic-capture-status.txt
+adb shell dumpsys deviceidle > emulator-deviceidle.txt 2>&1 || echo "dumpsys deviceidle failed" >> emulator-diagnostic-capture-status.txt
+adb shell dumpsys battery > ci-evidence/emulator-battery.txt 2>&1 || echo "dumpsys battery failed" >> emulator-diagnostic-capture-status.txt
+adb shell dumpsys notification --noredact > ci-evidence/emulator-notifications.txt 2>&1 || echo "dumpsys notification failed" >> emulator-diagnostic-capture-status.txt
+adb logcat -d > emulator-logcat.txt 2>&1 || echo "logcat capture failed" >> emulator-diagnostic-capture-status.txt
+adb shell run-as com.sarathi.anantnag.gecko.v33 cat files/monitor-copy-log.txt > monitor-copy-log.txt 2>> emulator-diagnostic-capture-status.txt || echo "monitor Copy-log not produced (non-fatal if test failed before diagnostic capture)" >> emulator-diagnostic-capture-status.txt
 if [ "$result" -eq 0 ]; then
   # The emulator job intentionally has no production signing secrets. Create a disposable
   # CI-only key so the minified release APK can be installed and exercised by the smoke test.
