@@ -72,6 +72,33 @@ public class PhoneAlertsTest {
     }
 
 
+    @Test public void repeatedAlertsAndSilenceSerializeToneLifecycle() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        PhoneAlerts alerts = new PhoneAlerts(context, 6);
+        alerts.clearNotification();
+        try {
+            for (int i = 0; i < 30; i++) {
+                alerts.newRun();
+                alerts.critical("CALENDAR", "Audio lifecycle stress " + i);
+                assertTrue("Critical alarm should be active at iteration " + i, alerts.isRepeating());
+                alerts.stop();
+                assertFalse("Silence should stop at iteration " + i, alerts.isRepeating());
+                alerts.audio("START", true, 85);
+                assertTrue("Routine alarm should start at iteration " + i, alerts.isRepeating());
+                alerts.audio("STOP", false, 85);
+                assertFalse("Routine STOP should finish at iteration " + i, alerts.isRepeating());
+                alerts.newRun();
+                alerts.critical("GREEN_DATE", "Repeated critical " + i);
+                alerts.stop();
+            }
+            Thread.sleep(2100);
+            assertFalse("No delayed pulse may restart after Silence", alerts.isRepeating());
+        } finally {
+            alerts.stop();
+            alerts.clearNotification();
+        }
+    }
+
     private void assertCriticalKind(String kind) {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         PhoneAlerts alerts = new PhoneAlerts(context, 5);
