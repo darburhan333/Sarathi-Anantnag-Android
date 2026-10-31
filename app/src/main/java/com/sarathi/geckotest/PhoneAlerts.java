@@ -17,14 +17,21 @@ final class PhoneAlerts {
   synchronized(criticalKeys){if(!criticalKeys.add(kind))return;}
   String notification="failed";
   try{postNotification(kind,message,"sarathi-critical-v36",criticalNotificationId(kind));notification="posted";}catch(Exception ex){notification="failed:"+ex.getClass().getSimpleName();}
-  handler.post(()->{criticalActive=true;volume=85;startAudio(true);});
+  runAudioSync(()->{criticalActive=true;volume=85;startAudio(true);});
   if(activity instanceof MonitorService){MonitorService s=(MonitorService)activity;s.record("ALERT A"+profile+" kind="+kind+" notification="+notification+" audio=queued on main thread Telegram=not requested by native; see extension delivery log");s.refreshForeground(true);}
  }
- void testOnce(){handler.post(()->{if(tone==null)tone=new ToneGenerator(AudioManager.STREAM_ALARM,85);beep();});}
+ void testOnce(){runAudioSync(()->{if(tone==null)tone=new ToneGenerator(AudioManager.STREAM_ALARM,85);beep();});}
 
  private final Handler handler=new Handler(Looper.getMainLooper());
  private ToneGenerator tone;
  private Runnable pulse;
+ private void runAudioSync(Runnable action){
+  if(Looper.myLooper()==Looper.getMainLooper()){action.run();return;}
+  java.util.concurrent.CountDownLatch done=new java.util.concurrent.CountDownLatch(1);
+  handler.post(()->{try{action.run();}finally{done.countDown();}});
+  try{if(!done.await(5,java.util.concurrent.TimeUnit.SECONDS))throw new IllegalStateException("Timed out waiting for alert audio thread");}
+  catch(InterruptedException ex){Thread.currentThread().interrupt();throw new IllegalStateException("Interrupted waiting for alert audio thread",ex);}
+ }
  private int audioGeneration;
  private String prefKey(){return "alertsEnabled"+profile;}
  boolean isEnabled(){return activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).getBoolean(prefKey(),true) && !mode().equals("ROUTINE OFF");}
@@ -61,7 +68,7 @@ final class PhoneAlerts {
  }
  }
  void audio(String action,boolean enabled,int requestedVolume){
-  handler.post(()->{
+  runAudioSync(()->{
    if(criticalActive)return;
    volume=Math.max(0,Math.min(100,requestedVolume));
    if(!isEnabled() && !action.equals("STOP") && !action.equals("TEST") && !action.equals("ARM")){stopOnMain();return;}
@@ -80,7 +87,7 @@ final class PhoneAlerts {
   if(tone!=null){ToneGenerator old=tone;tone=null;old.release();}
   if(vibrator!=null)vibrator.cancel();
  }
- void stop(){handler.post(this::stopOnMain);}
+ void stop(){runAudioSync(this::stopOnMain);}
  static final String[] CRITICAL_KINDS={"SMS_READY","GREEN_DATE","CALENDAR","SESSION_EXPIRED","MONITOR_FAILED","PROTECTED_PAGE_LOST","BOOKED","LMV_AVAILABLE","MCWG_AVAILABLE","BOTH_AVAILABLE","SESSION","BOOKING_REVIEW","CONFIRM_REQUIRED"};
  int criticalNotificationId(String kind){
   for(int i=0;i<CRITICAL_KINDS.length;i++)if(CRITICAL_KINDS[i].equals(kind))return 3000+profile*20+i;
