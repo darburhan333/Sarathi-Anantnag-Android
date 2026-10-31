@@ -221,7 +221,7 @@ final class BrowserEngine {
                 case "RESTORE":result.put("armed",run.armed);break;
                 case "AUTHORIZE":return run.authorization();
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;
-                case "UI_STOP":if(protectedPage){service.confirmProtected("Stop",java.util.Collections.singletonList(this),run::stopByUser);throw new IllegalStateException("Confirm Stop in the app");}run.stopByUser();break;
+                case "UI_STOP":if(protectedPage){service.confirmProtected("Stop",java.util.Collections.singletonList(BrowserEngine.this),run::stopByUser);throw new IllegalStateException("Confirm Stop in the app");}run.stopByUser();break;
                 case "CRITICAL":alerts.critical(m.optString("kind"),m.optString("message"));break;
                 case "DISARM":run.disarm();break;
                 case "ACK_ALERT":alerts.stop();alerts.clearNotification();service.refreshForeground(true);break;
