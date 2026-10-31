@@ -18,6 +18,13 @@ public class GeckoIntegrationTest {
       InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){while(in.read()!=-1){}}
  }
  private void main(Runnable r){InstrumentationRegistry.getInstrumentation().runOnMainSync(r);}
+ private static org.json.JSONObject json(Object... pairs){
+  if(pairs.length%2!=0)throw new IllegalArgumentException("JSON helper requires key/value pairs");
+  org.json.JSONObject value=new org.json.JSONObject();
+  try{for(int i=0;i<pairs.length;i+=2)value.put(String.valueOf(pairs[i]),pairs[i+1]);}
+  catch(org.json.JSONException e){throw new AssertionError("Unable to construct test JSON",e);}
+  return value;
+ }
  private String shellText(String command)throws Exception{
   try(android.os.ParcelFileDescriptor fd=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
       InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd);
@@ -269,7 +276,7 @@ public class GeckoIntegrationTest {
   java.util.concurrent.atomic.AtomicBoolean accepted=new java.util.concurrent.atomic.AtomicBoolean();
   main(()->{
    service.visible=false;service.stopAll();
-   e.updateProtection(new org.json.JSONObject().put("running",true).put("bookingStage","MONITORING").put("successWatch",true));
+   e.updateProtection(json("running",true,"bookingStage","MONITORING","successWatch",true));
    assertFalse("Normal START must not protect COV: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage,e.protectedPage);
    e.run.arm();
    service.confirmProtected("Stop",java.util.Collections.singletonList(e),()->{e.run.stopByUser();accepted.set(true);});
@@ -286,7 +293,7 @@ public class GeckoIntegrationTest {
   java.util.concurrent.atomic.AtomicBoolean accepted=new java.util.concurrent.atomic.AtomicBoolean();
   main(()->{
    service.visible=false;service.stopAll();
-   e.updateProtection(new org.json.JSONObject().put("running",true).put("bookingStage","AWAITING MANUAL SMS VERIFICATION"));
+   e.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION"));
    assertTrue("SMS verification stage must be protected: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage,e.protectedPage);
    service.confirmProtected("Stop",java.util.Collections.singletonList(e),()->accepted.set(true));
   });
@@ -301,7 +308,7 @@ public class GeckoIntegrationTest {
   android.app.NotificationManager nm=service.getSystemService(android.app.NotificationManager.class);
   main(()->{
    service.stopAll();e.alerts.clearNotification();service.visible=true;e.foreground=true;
-   e.updateProtection(new org.json.JSONObject().put("running",true).put("bookingStage","MONITORING").put("successWatch",true));
+   e.updateProtection(json("running",true,"bookingStage","MONITORING","successWatch",true));
    org.mozilla.geckoview.GeckoSession normal=e.current;
    normal.close();e.pageLost(normal,"Injected normal COV page loss");e.ensureUsable();
   });
@@ -313,7 +320,7 @@ public class GeckoIntegrationTest {
   for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())
    assertNotEquals("Normal page loss must not raise protected-page alert",e.alerts.criticalNotificationId("PROTECTED_PAGE_LOST"),n.getId());
   main(()->{
-   e.updateProtection(new org.json.JSONObject().put("running",true).put("bookingStage","AWAITING MANUAL SMS VERIFICATION"));
+   e.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION"));
    org.mozilla.geckoview.GeckoSession protectedSession=e.current;
    protectedSession.close();e.pageLost(protectedSession,"Injected protected SMS page loss");e.ensureUsable();
   });
