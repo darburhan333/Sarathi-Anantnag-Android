@@ -45,7 +45,7 @@ final class PhoneAlerts {
   if(tone!=null){ToneGenerator old=tone;tone=null;old.release();}
   volume=critical?85:volume;
   tone=new ToneGenerator(AudioManager.STREAM_ALARM,volume);
-  repeating=true;schedulePulse(audioGeneration);
+  repeating=true;beep();schedulePulse(audioGeneration);
  PhoneAlerts(Context a,int number){profile=number;
   activity=a;vibrator=(Vibrator)a.getSystemService(Context.VIBRATOR_SERVICE);
   NotificationChannel channel=new NotificationChannel("sarathi-alerts","Slot alerts",NotificationManager.IMPORTANCE_HIGH);
