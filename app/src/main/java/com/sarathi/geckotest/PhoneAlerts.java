@@ -53,6 +53,7 @@ final class PhoneAlerts {
   volume=critical?85:volume;
   tone=new ToneGenerator(AudioManager.STREAM_ALARM,volume);
   repeating=true;beep();schedulePulse(audioGeneration);
+ }
  PhoneAlerts(Context a,int number){profile=number;
   activity=a;vibrator=(Vibrator)a.getSystemService(Context.VIBRATOR_SERVICE);
   NotificationChannel channel=new NotificationChannel("sarathi-alerts","Slot alerts",NotificationManager.IMPORTANCE_HIGH);
@@ -65,7 +66,6 @@ final class PhoneAlerts {
  private void beep(){
   if(tone!=null)tone.startTone(ToneGenerator.TONE_PROP_BEEP2,650);
   if(vibrator!=null && vibrator.hasVibrator())vibrator.vibrate(VibrationEffect.createOneShot(500,VibrationEffect.DEFAULT_AMPLITUDE));
- }
  }
  void audio(String action,boolean enabled,int requestedVolume){
   runAudioSync(()->{
