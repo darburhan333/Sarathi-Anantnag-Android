@@ -16,7 +16,7 @@ final class PhoneAlerts {
  void critical(String kind,String message){
   if(!criticalKeys.add(kind))return;
   String notification="failed",audio="failed";
-  try{postNotification(kind,message,"sarathi-critical-v36");notification="posted";}catch(Exception ex){notification="failed:"+ex.getClass().getSimpleName();}
+  try{postNotification(kind,message,"sarathi-critical-v36",criticalNotificationId(kind));notification="posted";}catch(Exception ex){notification="failed:"+ex.getClass().getSimpleName();}
   try{criticalActive=true;volume=85;if(tone!=null)tone.release();tone=new ToneGenerator(AudioManager.STREAM_ALARM,volume);repeating=true;handler.removeCallbacks(pulse);handler.post(pulse);audio="started (audibility depends on device)";}catch(Exception ex){audio="failed:"+ex.getClass().getSimpleName();}
   if(activity instanceof MonitorService){MonitorService s=(MonitorService)activity;s.record("ALERT A"+profile+" kind="+kind+" notification="+notification+" audio="+audio+" Telegram=not requested by native; see extension delivery log");s.refreshForeground(true);}
  }
@@ -60,19 +60,28 @@ final class PhoneAlerts {
   }else if(action.equals("TEST")||action.equals("ARM"))beep();
  }
  void stop(){criticalActive=false;repeating=false;handler.removeCallbacks(pulse);if(tone!=null){tone.release();tone=null;}if(vibrator!=null)vibrator.cancel();}
- void clearNotification(){activity.getSystemService(NotificationManager.class).cancel(1100+profile);}
+ int criticalNotificationId(String kind){
+  String[] kinds={"SMS_READY","GREEN_DATE","CALENDAR","SESSION_EXPIRED","MONITOR_FAILED","PROTECTED_PAGE_LOST"};
+  for(int i=0;i<kinds.length;i++)if(kinds[i].equals(kind))return 2000+profile*10+i;
+  throw new IllegalArgumentException("Unknown critical alert kind: "+kind);
+ }
+ void clearNotification(){
+  NotificationManager nm=activity.getSystemService(NotificationManager.class);
+  nm.cancel(1100+profile);
+  for(String kind:new String[]{"SMS_READY","GREEN_DATE","CALENDAR","SESSION_EXPIRED","MONITOR_FAILED","PROTECTED_PAGE_LOST"})nm.cancel(criticalNotificationId(kind));
+ }
  void notify(String title,String message){
   if(!isEnabled())return;
-  postNotification(title,message,"sarathi-alerts");
+  postNotification(title,message,"sarathi-alerts",1100+profile);
  }
- private void postNotification(String title,String message,String channel){
+ private void postNotification(String title,String message,String channel,int notificationId){
   NotificationManager nm=activity.getSystemService(NotificationManager.class);
   if(!nm.areNotificationsEnabled())throw new IllegalStateException("Allow Sarathi notifications in Android Settings");
   PendingIntent open=PendingIntent.getActivity(activity,100+profile,new Intent(activity,MainActivity.class).putExtra("applicant",profile).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
   Notification n=new Notification.Builder(activity,channel).setSmallIcon(R.drawable.ic_notification)
    .setContentTitle("Applicant "+profile+" · "+title).setContentText(message).setStyle(new Notification.BigTextStyle().bigText(message))
    .setCategory(Notification.CATEGORY_ALARM).setContentIntent(open).setAutoCancel(true).build();
-  nm.notify(1100+profile,n);
+  nm.notify(notificationId,n);
  }
 }
 

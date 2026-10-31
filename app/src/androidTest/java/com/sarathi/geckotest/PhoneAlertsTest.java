@@ -72,7 +72,7 @@ public class PhoneAlertsTest {
     }
 
 
-    @Test public void allCriticalKindsOverrideRoutineOffAndSilenceStopsAlarm() {
+    private void assertCriticalKind(String kind) {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         PhoneAlerts alerts = new PhoneAlerts(context, 5);
         NotificationManager manager = context.getSystemService(NotificationManager.class);
@@ -80,31 +80,62 @@ public class PhoneAlertsTest {
         alerts.stop();
         alerts.clearNotification();
         alerts.setMode("ROUTINE OFF");
+        int id = alerts.criticalNotificationId(kind);
         try {
             alerts.notify("Routine", "This must remain muted");
             alerts.audio("START", true, 85);
             assertFalse("ROUTINE OFF must mute routine audio", alerts.isRepeating());
             assertNull("ROUTINE OFF must mute routine notifications", find(manager, 1105));
 
-            String[] kinds = {"SMS_READY", "GREEN_DATE", "CALENDAR", "SESSION_EXPIRED", "MONITOR_FAILED", "PROTECTED_PAGE_LOST"};
-            for (String kind : kinds) {
-                alerts.stop();
-                alerts.clearNotification();
-                alerts.newRun();
-                alerts.critical(kind, "Critical test: " + kind);
-                assertTrue(kind + " must start a repeating critical alarm", alerts.isRepeating());
-                StatusBarNotification delivered = awaitNotification(manager, 1105);
-                assertNotNull(kind + " must post a notification", delivered);
-                assertEquals("sarathi-critical-v36", delivered.getNotification().getChannelId());
-                assertEquals("Applicant 5 · " + kind, delivered.getNotification().extras.getString(Notification.EXTRA_TITLE));
-                assertEquals("Critical test: " + kind, delivered.getNotification().extras.getString(Notification.EXTRA_TEXT));
+            alerts.newRun();
+            alerts.critical(kind, "Critical test: " + kind);
+            assertTrue(kind + " must start a repeating critical alarm", alerts.isRepeating());
+            StatusBarNotification delivered = awaitNotification(manager, id);
+            assertNotNull(kind + " must post a notification", delivered);
+            assertEquals("sarathi-critical-v36", delivered.getNotification().getChannelId());
+            assertEquals("Applicant 5 · " + kind, delivered.getNotification().extras.getString(Notification.EXTRA_TITLE));
+            assertEquals("Critical test: " + kind, delivered.getNotification().extras.getString(Notification.EXTRA_TEXT));
 
-                // Mirrors the native Silence acknowledgement: stop audio and clear the alert.
-                alerts.stop();
-                alerts.clearNotification();
-                assertFalse(kind + " must stop after Silence", alerts.isRepeating());
-                assertNull(kind + " notification must clear after Silence", find(manager, 1105));
+            alerts.stop();
+            alerts.clearNotification();
+            assertFalse(kind + " must stop after Silence", alerts.isRepeating());
+            assertNull(kind + " notification must clear after Silence", find(manager, id));
+        } finally {
+            alerts.stop();
+            alerts.clearNotification();
+            alerts.setMode(originalMode);
+        }
+    }
+
+    @Test public void criticalSmsReadyOverridesRoutineOffAndSilences() { assertCriticalKind("SMS_READY"); }
+    @Test public void criticalGreenDateOverridesRoutineOffAndSilences() { assertCriticalKind("GREEN_DATE"); }
+    @Test public void criticalCalendarOverridesRoutineOffAndSilences() { assertCriticalKind("CALENDAR"); }
+    @Test public void criticalSessionExpiredOverridesRoutineOffAndSilences() { assertCriticalKind("SESSION_EXPIRED"); }
+    @Test public void criticalMonitorFailedOverridesRoutineOffAndSilences() { assertCriticalKind("MONITOR_FAILED"); }
+    @Test public void criticalProtectedPageLostOverridesRoutineOffAndSilences() { assertCriticalKind("PROTECTED_PAGE_LOST"); }
+
+    @Test public void allCriticalKindsKeepSeparateNotificationsUntilSilenced() {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        PhoneAlerts alerts = new PhoneAlerts(context, 5);
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        String originalMode = alerts.mode();
+        String[] kinds = {"SMS_READY", "GREEN_DATE", "CALENDAR", "SESSION_EXPIRED", "MONITOR_FAILED", "PROTECTED_PAGE_LOST"};
+        alerts.stop();
+        alerts.clearNotification();
+        alerts.setMode("ROUTINE OFF");
+        try {
+            alerts.newRun();
+            for (String kind : kinds) alerts.critical(kind, "Critical test: " + kind);
+            for (String kind : kinds) {
+                int id = alerts.criticalNotificationId(kind);
+                StatusBarNotification delivered = awaitNotification(manager, id);
+                assertNotNull(kind + " notification must remain active beside other critical kinds", delivered);
+                assertEquals("Applicant 5 · " + kind, delivered.getNotification().extras.getString(Notification.EXTRA_TITLE));
             }
+            alerts.stop();
+            alerts.clearNotification();
+            for (String kind : kinds)
+                assertNull(kind + " notification must clear after Silence", find(manager, alerts.criticalNotificationId(kind)));
         } finally {
             alerts.stop();
             alerts.clearNotification();
@@ -138,7 +169,7 @@ public class PhoneAlertsTest {
             });
             assertTrue("Extension CRITICAL must reach PhoneAlerts.critical()", alerts.isRepeating());
             StatusBarNotification delivered = awaitNotification(
-                service.getSystemService(NotificationManager.class), 1101);
+                service.getSystemService(NotificationManager.class), alerts.criticalNotificationId("GREEN_DATE"));
             assertNotNull("Extension CRITICAL must post the native notification", delivered);
             assertEquals("sarathi-critical-v36", delivered.getNotification().getChannelId());
             assertEquals("Applicant 1 · GREEN_DATE", delivered.getNotification().extras.getString(Notification.EXTRA_TITLE));
