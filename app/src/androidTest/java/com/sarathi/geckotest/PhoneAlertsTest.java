@@ -73,6 +73,7 @@ public class PhoneAlertsTest {
 
 
     @Test public void criticalNotificationIdsAreUniqueAcrossProfilesAndKinds() {
+        // Audit the full registered critical-kind set across all nine applicant profiles.
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         java.util.Set<Integer> ids = new java.util.HashSet<>();
         for (int profile = 1; profile <= 9; profile++) {
