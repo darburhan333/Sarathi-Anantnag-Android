@@ -99,7 +99,7 @@ public class PhoneAlertsTest {
             alerts.stop();
             alerts.clearNotification();
             assertFalse(kind + " must stop after Silence", alerts.isRepeating());
-            assertNull(kind + " notification must clear after Silence", find(manager, id));
+            assertTrue(kind + " notification must clear after Silence", awaitNotificationGone(manager, id));
         } finally {
             alerts.stop();
             alerts.clearNotification();
@@ -119,7 +119,7 @@ public class PhoneAlertsTest {
         PhoneAlerts alerts = new PhoneAlerts(context, 5);
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         String originalMode = alerts.mode();
-        String[] kinds = {"SMS_READY", "GREEN_DATE", "CALENDAR", "SESSION_EXPIRED", "MONITOR_FAILED", "PROTECTED_PAGE_LOST"};
+        String[] kinds = PhoneAlerts.CRITICAL_KINDS.clone();
         alerts.stop();
         alerts.clearNotification();
         alerts.setMode("ROUTINE OFF");
@@ -135,7 +135,7 @@ public class PhoneAlertsTest {
             alerts.stop();
             alerts.clearNotification();
             for (String kind : kinds)
-                assertNull(kind + " notification must clear after Silence", find(manager, alerts.criticalNotificationId(kind)));
+                assertTrue(kind + " notification must clear after Silence", awaitNotificationGone(manager, alerts.criticalNotificationId(kind)));
         } finally {
             alerts.stop();
             alerts.clearNotification();
@@ -178,6 +178,18 @@ public class PhoneAlertsTest {
             alerts.clearNotification();
             alerts.setMode(originalMode);
         }
+    }
+
+    private static boolean awaitNotificationGone(NotificationManager manager, int id) {
+        long deadline = android.os.SystemClock.elapsedRealtime() + 5000;
+        do {
+            if (find(manager, id) == null) return true;
+            try { Thread.sleep(50); } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Interrupted while waiting for notification cancellation", e);
+            }
+        } while (android.os.SystemClock.elapsedRealtime() < deadline);
+        return find(manager, id) == null;
     }
 
     private static StatusBarNotification awaitNotification(NotificationManager manager, int id) {

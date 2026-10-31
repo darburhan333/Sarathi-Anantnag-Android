@@ -60,15 +60,15 @@ final class PhoneAlerts {
   }else if(action.equals("TEST")||action.equals("ARM"))beep();
  }
  void stop(){criticalActive=false;repeating=false;handler.removeCallbacks(pulse);if(tone!=null){tone.release();tone=null;}if(vibrator!=null)vibrator.cancel();}
+ static final String[] CRITICAL_KINDS={"SMS_READY","GREEN_DATE","CALENDAR","SESSION_EXPIRED","MONITOR_FAILED","PROTECTED_PAGE_LOST","BOOKED","LMV_AVAILABLE","MCWG_AVAILABLE","BOTH_AVAILABLE","SESSION","BOOKING_REVIEW","CONFIRM_REQUIRED"};
  int criticalNotificationId(String kind){
-  String[] kinds={"SMS_READY","GREEN_DATE","CALENDAR","SESSION_EXPIRED","MONITOR_FAILED","PROTECTED_PAGE_LOST"};
-  for(int i=0;i<kinds.length;i++)if(kinds[i].equals(kind))return 2000+profile*10+i;
+  for(int i=0;i<CRITICAL_KINDS.length;i++)if(CRITICAL_KINDS[i].equals(kind))return 3000+profile*20+i;
   throw new IllegalArgumentException("Unknown critical alert kind: "+kind);
  }
  void clearNotification(){
   NotificationManager nm=activity.getSystemService(NotificationManager.class);
   nm.cancel(1100+profile);
-  for(String kind:new String[]{"SMS_READY","GREEN_DATE","CALENDAR","SESSION_EXPIRED","MONITOR_FAILED","PROTECTED_PAGE_LOST"})nm.cancel(criticalNotificationId(kind));
+  for(String kind:CRITICAL_KINDS)nm.cancel(criticalNotificationId(kind));
  }
  void notify(String title,String message){
   if(!isEnabled())return;
