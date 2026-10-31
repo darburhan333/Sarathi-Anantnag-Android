@@ -14,26 +14,38 @@ final class PhoneAlerts {
  private final java.util.Set<String> criticalKeys=new java.util.HashSet<>();
  void newRun(){criticalKeys.clear();}
  void critical(String kind,String message){
-  if(!criticalKeys.add(kind))return;
-  String notification="failed",audio="failed";
+  synchronized(criticalKeys){if(!criticalKeys.add(kind))return;}
+  String notification="failed";
   try{postNotification(kind,message,"sarathi-critical-v36",criticalNotificationId(kind));notification="posted";}catch(Exception ex){notification="failed:"+ex.getClass().getSimpleName();}
-  try{criticalActive=true;volume=85;if(tone!=null)tone.release();tone=new ToneGenerator(AudioManager.STREAM_ALARM,volume);repeating=true;handler.removeCallbacks(pulse);handler.post(pulse);audio="started (audibility depends on device)";}catch(Exception ex){audio="failed:"+ex.getClass().getSimpleName();}
-  if(activity instanceof MonitorService){MonitorService s=(MonitorService)activity;s.record("ALERT A"+profile+" kind="+kind+" notification="+notification+" audio="+audio+" Telegram=not requested by native; see extension delivery log");s.refreshForeground(true);}
+  handler.post(()->{criticalActive=true;volume=85;startAudio(true);});
+  if(activity instanceof MonitorService){MonitorService s=(MonitorService)activity;s.record("ALERT A"+profile+" kind="+kind+" notification="+notification+" audio=queued on main thread Telegram=not requested by native; see extension delivery log");s.refreshForeground(true);}
  }
- void testOnce(){if(tone==null)tone=new ToneGenerator(AudioManager.STREAM_ALARM,85);beep();}
+ void testOnce(){handler.post(()->{if(tone==null)tone=new ToneGenerator(AudioManager.STREAM_ALARM,85);beep();});}
 
  private final Handler handler=new Handler(Looper.getMainLooper());
  private ToneGenerator tone;
+ private Runnable pulse;
+ private int audioGeneration;
  private String prefKey(){return "alertsEnabled"+profile;}
  boolean isEnabled(){return activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).getBoolean(prefKey(),true) && !mode().equals("ROUTINE OFF");}
  void setEnabled(boolean enabled){activity.getSharedPreferences("monitor",Context.MODE_PRIVATE).edit().putBoolean(prefKey(),enabled).apply();if(!enabled && !criticalActive)stop();}
  private final Vibrator vibrator;
  private boolean repeating;
  private int volume=85;
- private final Runnable pulse=new Runnable(){public void run(){
-  if(!repeating)return;
-  beep();handler.postDelayed(this,criticalActive?30000:1800);
- }};
+ private void schedulePulse(int generation){
+  Runnable next=new Runnable(){public void run(){
+   if(generation!=audioGeneration||!repeating||tone==null)return;
+   beep();
+   schedulePulse(generation);
+  }};
+  pulse=next;handler.postDelayed(next,criticalActive?30000:1800);
+ }
+ private void startAudio(boolean critical){
+  audioGeneration++;handler.removeCallbacks(pulse);pulse=null;
+  if(tone!=null){ToneGenerator old=tone;tone=null;old.release();}
+  volume=critical?85:volume;
+  tone=new ToneGenerator(AudioManager.STREAM_ALARM,volume);
+  repeating=true;schedulePulse(audioGeneration);
  PhoneAlerts(Context a,int number){profile=number;
   activity=a;vibrator=(Vibrator)a.getSystemService(Context.VIBRATOR_SERVICE);
   NotificationChannel channel=new NotificationChannel("sarathi-alerts","Slot alerts",NotificationManager.IMPORTANCE_HIGH);
@@ -47,19 +59,28 @@ final class PhoneAlerts {
   if(tone!=null)tone.startTone(ToneGenerator.TONE_PROP_BEEP2,650);
   if(vibrator!=null && vibrator.hasVibrator())vibrator.vibrate(VibrationEffect.createOneShot(500,VibrationEffect.DEFAULT_AMPLITUDE));
  }
- void audio(String action,boolean enabled,int requestedVolume){
-  if(criticalActive)return;
-  volume=Math.max(0,Math.min(100,requestedVolume));
-  if(!isEnabled() && !action.equals("STOP") && !action.equals("TEST") && !action.equals("ARM")){stop();return;}
-  if(action.equals("STOP") || (!enabled && (action.equals("START")||action.equals("UPDATE")))){stop();return;}
-  if(action.equals("UPDATE") && !repeating)return;
-  if(tone!=null)tone.release();
-  tone=new ToneGenerator(AudioManager.STREAM_ALARM,volume);
-  if(action.equals("START")||action.equals("UPDATE")){
-   repeating=true;handler.removeCallbacks(pulse);handler.post(pulse);
-  }else if(action.equals("TEST")||action.equals("ARM"))beep();
  }
- void stop(){criticalActive=false;repeating=false;handler.removeCallbacks(pulse);if(tone!=null){tone.release();tone=null;}if(vibrator!=null)vibrator.cancel();}
+ void audio(String action,boolean enabled,int requestedVolume){
+  handler.post(()->{
+   if(criticalActive)return;
+   volume=Math.max(0,Math.min(100,requestedVolume));
+   if(!isEnabled() && !action.equals("STOP") && !action.equals("TEST") && !action.equals("ARM")){stopOnMain();return;}
+   if(action.equals("STOP") || (!enabled && (action.equals("START")||action.equals("UPDATE")))){stopOnMain();return;}
+   if(action.equals("UPDATE") && !repeating)return;
+   if(action.equals("START")||action.equals("UPDATE"))startAudio(false);
+   else if(action.equals("TEST")||action.equals("ARM")){
+    audioGeneration++;handler.removeCallbacks(pulse);pulse=null;
+    if(tone!=null){ToneGenerator old=tone;tone=null;old.release();}
+    tone=new ToneGenerator(AudioManager.STREAM_ALARM,volume);beep();
+   }
+  });
+ }
+ private void stopOnMain(){
+  audioGeneration++;handler.removeCallbacks(pulse);pulse=null;repeating=false;criticalActive=false;
+  if(tone!=null){ToneGenerator old=tone;tone=null;old.release();}
+  if(vibrator!=null)vibrator.cancel();
+ }
+ void stop(){handler.post(this::stopOnMain);}
  static final String[] CRITICAL_KINDS={"SMS_READY","GREEN_DATE","CALENDAR","SESSION_EXPIRED","MONITOR_FAILED","PROTECTED_PAGE_LOST","BOOKED","LMV_AVAILABLE","MCWG_AVAILABLE","BOTH_AVAILABLE","SESSION","BOOKING_REVIEW","CONFIRM_REQUIRED"};
  int criticalNotificationId(String kind){
   for(int i=0;i<CRITICAL_KINDS.length;i++)if(CRITICAL_KINDS[i].equals(kind))return 3000+profile*20+i;
