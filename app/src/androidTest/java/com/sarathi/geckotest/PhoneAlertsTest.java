@@ -72,6 +72,19 @@ public class PhoneAlertsTest {
     }
 
 
+    @Test public void criticalNotificationIdsAreUniqueAcrossProfilesAndKinds() {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        for (int profile = 1; profile <= 9; profile++) {
+            PhoneAlerts alerts = new PhoneAlerts(context, profile);
+            for (String kind : PhoneAlerts.CRITICAL_KINDS) {
+                int id = alerts.criticalNotificationId(kind);
+                assertTrue("Notification ID collision for profile " + profile + " kind " + kind + " id " + id,
+                    ids.add(id));
+            }
+        }
+    }
+
     @Test public void repeatedAlertsAndSilenceSerializeToneLifecycle() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         PhoneAlerts alerts = new PhoneAlerts(context, 6);
