@@ -275,10 +275,14 @@ public class GeckoIntegrationTest {
   assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();BrowserEngine e=service.engine;
   java.util.concurrent.atomic.AtomicBoolean accepted=new java.util.concurrent.atomic.AtomicBoolean();
   main(()->{
-   service.visible=false;service.stopAll();
+   service.stopAll();
+   // START is a foreground-only action. Keep the Activity visible while arming,
+   // then hide it before checking that an unprotected STOP needs no confirmation.
+   service.activity=a;service.visible=true;
    e.updateProtection(json("running",true,"bookingStage","MONITORING","successWatch",true));
    assertFalse("Normal START must not protect COV: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage,e.protectedPage);
    e.run.arm();
+   service.visible=false;
    service.confirmProtected("Stop",java.util.Collections.singletonList(e),()->{e.run.stopByUser();accepted.set(true);});
   });
   assertTrue("Normal monitoring STOP must be accepted without a dialog",accepted.get());
@@ -304,7 +308,13 @@ public class GeckoIntegrationTest {
  @Test public void lostNormalPageRecoversButLostProtectedPageDoesNotReplace()throws Exception{
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
   while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(200);
-  assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();BrowserEngine e=service.engine;
+  assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();
+  // Use a dedicated applicant so a protected-page latch from another integration
+  // test cannot leak into this normal-page recovery scenario.
+  final BrowserEngine[] isolated=new BrowserEngine[1];main(()->isolated[0]=service.profile(2));
+  BrowserEngine e=isolated[0];end=System.currentTimeMillis()+60000;
+  while(!e.ready&&System.currentTimeMillis()<end)Thread.sleep(200);
+  assertTrue("Isolated applicant extension did not connect",e.ready);
   android.app.NotificationManager nm=service.getSystemService(android.app.NotificationManager.class);
   main(()->{
    service.stopAll();e.alerts.clearNotification();service.visible=true;e.foreground=true;
@@ -336,7 +346,12 @@ public class GeckoIntegrationTest {
  @Test public void idlePageLossRecoversWithoutAlarmAndHomeWorksWithoutBridge()throws Exception{
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
   while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(200);
-  assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();BrowserEngine e=service.engine;
+  assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();
+  // Keep idle-recovery assertions independent from the protected-page tests.
+  final BrowserEngine[] isolated=new BrowserEngine[0+1];main(()->isolated[0]=service.profile(3));
+  BrowserEngine e=isolated[0];end=System.currentTimeMillis()+60000;
+  while(!e.ready&&System.currentTimeMillis()<end)Thread.sleep(200);
+  assertTrue("Isolated applicant extension did not connect",e.ready);
   android.app.NotificationManager nm=service.getSystemService(android.app.NotificationManager.class);
   main(()->{service.stopAll();e.alerts.clearNotification();});
   org.mozilla.geckoview.GeckoSession old=e.current;
