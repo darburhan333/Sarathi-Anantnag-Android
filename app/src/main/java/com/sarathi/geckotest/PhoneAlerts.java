@@ -12,7 +12,7 @@ final class PhoneAlerts {
  void setMode(String mode){if(!java.util.Arrays.asList(MODES).contains(mode))throw new IllegalArgumentException("Invalid alert mode");activity.getSharedPreferences("monitor",0).edit().putString("alertMode"+profile,mode).apply();}
  private boolean criticalActive;
  private final java.util.Set<String> criticalKeys=new java.util.HashSet<>();
- void newRun(){criticalKeys.clear();}
+ void newRun(){synchronized(criticalKeys){criticalKeys.clear();}}
  void critical(String kind,String message){
   synchronized(criticalKeys){if(!criticalKeys.add(kind))return;}
   String notification="failed";
