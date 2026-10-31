@@ -10,6 +10,7 @@ import java.io.*;
 import static org.junit.Assert.*;
 @RunWith(AndroidJUnit4.class)
 public class GeckoIntegrationTest {
+ // Lifecycle tests use separate applicant profiles where page-loss latches are part of the scenario.
  @Rule public GrantPermissionRule permissions=GrantPermissionRule.grant(android.Manifest.permission.POST_NOTIFICATIONS);
  @Rule public ActivityTestRule<MainActivity> activity=new ActivityTestRule<>(MainActivity.class);
  private final java.util.concurrent.atomic.AtomicInteger requests=new java.util.concurrent.atomic.AtomicInteger();
