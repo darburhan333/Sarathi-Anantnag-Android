@@ -262,6 +262,67 @@ public class GeckoIntegrationTest {
   assertEquals("Each pending result completes once",20,completions.get());assertEquals("All waits cancelled",20,cancelled.get());
  }
 
+ @Test public void normalMonitoringStartThenStopDoesNotRequireProtectionConfirmation()throws Exception{
+  MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
+  while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(200);
+  assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();BrowserEngine e=service.engine;
+  java.util.concurrent.atomic.AtomicBoolean accepted=new java.util.concurrent.atomic.AtomicBoolean();
+  main(()->{
+   service.visible=false;service.stopAll();
+   e.updateProtection(new org.json.JSONObject().put("running",true).put("bookingStage","MONITORING").put("successWatch",true));
+   assertFalse("Normal START must not protect COV: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage,e.protectedPage);
+   e.run.arm();
+   service.confirmProtected("Stop",java.util.Collections.singletonList(e),()->{e.run.stopByUser();accepted.set(true);});
+  });
+  assertTrue("Normal monitoring STOP must be accepted without a dialog",accepted.get());
+  assertFalse("Normal monitoring STOP must disarm",e.run.armed);
+  assertFalse("Normal monitoring STOP must leave page unprotected",e.protectedPage);
+  main(()->{service.visible=true;service.stopAll();});
+ }
+ @Test public void smsBookingStageRequiresProtectionConfirmation()throws Exception{
+  MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
+  while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(200);
+  assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();BrowserEngine e=service.engine;
+  java.util.concurrent.atomic.AtomicBoolean accepted=new java.util.concurrent.atomic.AtomicBoolean();
+  main(()->{
+   service.visible=false;service.stopAll();
+   e.updateProtection(new org.json.JSONObject().put("running",true).put("bookingStage","AWAITING MANUAL SMS VERIFICATION"));
+   assertTrue("SMS verification stage must be protected: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage,e.protectedPage);
+   service.confirmProtected("Stop",java.util.Collections.singletonList(e),()->accepted.set(true));
+  });
+  assertFalse("Protected SMS stage must not accept STOP while app is hidden",accepted.get());
+  assertTrue("Confirmation-required alert should be active",e.alerts.isRepeating());
+  main(()->{e.alerts.stop();e.alerts.clearNotification();service.visible=true;service.stopAll();});
+ }
+ @Test public void lostNormalPageRecoversButLostProtectedPageDoesNotReplace()throws Exception{
+  MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
+  while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(200);
+  assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();BrowserEngine e=service.engine;
+  android.app.NotificationManager nm=service.getSystemService(android.app.NotificationManager.class);
+  main(()->{
+   service.stopAll();e.alerts.clearNotification();service.visible=true;e.foreground=true;
+   e.updateProtection(new org.json.JSONObject().put("running",true).put("bookingStage","MONITORING").put("successWatch",true));
+   org.mozilla.geckoview.GeckoSession normal=e.current;
+   normal.close();e.pageLost(normal,"Injected normal COV page loss");e.ensureUsable();
+  });
+  end=System.currentTimeMillis()+10000;
+  while((e.current==null||!e.current.isOpen())&&System.currentTimeMillis()<end)Thread.sleep(100);
+  assertNotNull("Normal page should be replaced; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected,e.current);
+  assertTrue("Replacement normal page must be open",e.current.isOpen());
+  assertFalse("Normal page loss must not be protected",e.pageLostProtected);
+  for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())
+   assertNotEquals("Normal page loss must not raise protected-page alert",e.alerts.criticalNotificationId("PROTECTED_PAGE_LOST"),n.getId());
+  main(()->{
+   e.updateProtection(new org.json.JSONObject().put("running",true).put("bookingStage","AWAITING MANUAL SMS VERIFICATION"));
+   org.mozilla.geckoview.GeckoSession protectedSession=e.current;
+   protectedSession.close();e.pageLost(protectedSession,"Injected protected SMS page loss");e.ensureUsable();
+  });
+  assertTrue("Protected page loss must be latched: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected,e.pageLostProtected);
+  assertNull("Lost protected page must not be replaced; current="+e.current+" armed="+e.run.armed,e.current);
+  assertNotNull("Protected-page loss must raise critical notification",awaitNotification(nm,e.alerts.criticalNotificationId("PROTECTED_PAGE_LOST")));
+  main(()->{e.alerts.stop();e.alerts.clearNotification();e.foreground=false;service.visible=true;service.stopAll();});
+ }
+
  @Test public void idlePageLossRecoversWithoutAlarmAndHomeWorksWithoutBridge()throws Exception{
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
   while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(200);
