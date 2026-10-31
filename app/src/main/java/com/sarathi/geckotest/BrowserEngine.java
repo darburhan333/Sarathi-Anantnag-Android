@@ -93,13 +93,12 @@ final class BrowserEngine {
       }
     }
     void updateProtection(JSONObject state){
-      String stage=state.optString("bookingStage",state.optString("reason",""));
+      String stage=state.optString("bookingStage","");
       boolean bookingStage=stage.contains("SMS")||stage.contains("CALENDAR")||stage.contains("BOOK SLOT")||stage.equals("APPOINTMENT CONFIRMED");
       boolean protectedNow=state.optBoolean("protectPage")||state.optBoolean("calendarLock")||bookingStage;
       if(protectedNow){
         protectedPage=true;protectedStage=stage;protectedUrl=safeLocation(state.optString("url",pageUrl));
-      }else if(state.optBoolean("running")&&!state.optBoolean("calendarLock")
-          &&(stage.isEmpty()||stage.equals("MONITORING")||stage.equals("STANDBY"))){
+      }else if(state.optBoolean("running")&&!state.optBoolean("calendarLock")){
         protectedPage=false;protectedStage="";protectedUrl="";
       }
       if(state.has("reason"))lastPageReason=state.optString("reason");
