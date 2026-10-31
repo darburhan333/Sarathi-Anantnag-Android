@@ -308,7 +308,7 @@ public class GeckoIntegrationTest {
   end=System.currentTimeMillis()+10000;
   while((e.current==null||!e.current.isOpen())&&System.currentTimeMillis()<end)Thread.sleep(100);
   assertNotNull("Normal page should be replaced; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected,e.current);
-  assertTrue("Replacement normal page must be open",e.current.isOpen());
+  main(()->assertTrue("Replacement normal page must be open",e.current!=null&&e.current.isOpen()));
   assertFalse("Normal page loss must not be protected",e.pageLostProtected);
   for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())
    assertNotEquals("Normal page loss must not raise protected-page alert",e.alerts.criticalNotificationId("PROTECTED_PAGE_LOST"),n.getId());
@@ -319,7 +319,10 @@ public class GeckoIntegrationTest {
   });
   assertTrue("Protected page loss must be latched: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected,e.pageLostProtected);
   assertNull("Lost protected page must not be replaced; current="+e.current+" armed="+e.run.armed,e.current);
-  assertNotNull("Protected-page loss must raise critical notification",awaitNotification(nm,e.alerts.criticalNotificationId("PROTECTED_PAGE_LOST")));
+  boolean protectedAlert=false;
+  for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())
+   if(n.getId()==e.alerts.criticalNotificationId("PROTECTED_PAGE_LOST"))protectedAlert=true;
+  assertTrue("Protected-page loss must raise critical notification",protectedAlert);
   main(()->{e.alerts.stop();e.alerts.clearNotification();e.foreground=false;service.visible=true;service.stopAll();});
  }
 
