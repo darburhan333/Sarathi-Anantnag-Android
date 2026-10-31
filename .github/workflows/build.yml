@@ -22,7 +22,7 @@ jobs:
         with:
           gradle-version: '9.3.1'
       - name: Compile debug app and Android tests
-        run: ./gradlew :app:compileDebugJavaWithJavac :app:compileDebugAndroidTestJavaWithJavac
+        run: gradle :app:compileDebugJavaWithJavac :app:compileDebugAndroidTestJavaWithJavac
   apk:
     needs: compile
     runs-on: ubuntu-latest
