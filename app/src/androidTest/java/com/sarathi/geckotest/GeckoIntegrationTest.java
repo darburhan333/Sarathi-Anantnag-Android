@@ -162,7 +162,7 @@ public class GeckoIntegrationTest {
    }
    shell("screencap -p /data/local/tmp/monitor-preview.png");
    assertTrue("Monitor viewport remained blank after re-attachment; colors="+colors,colors>=30);
-   assertFalse("STOP must release foreground mode",s.isArmedForTest());
+   assertFalse("STOP must release foreground mode: protectedPage="+s.engine.protectedPage+" protectedStage="+s.engine.protectedStage+" pageLostProtected="+s.engine.pageLostProtected+" armed="+s.engine.run.armed+" current="+(s.engine.current!=null),s.isArmedForTest());
    java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
    main(()->{s.arm();s.waitFor(8000).accept(result->cancelled.set(result.toString().contains("cancelled")));});
    ctx.startService(new android.content.Intent(ctx,MonitorService.class).setAction("STOP"));
@@ -334,7 +334,7 @@ public class GeckoIntegrationTest {
   main(()->{service.stopAll();e.alerts.clearNotification();});
   org.mozilla.geckoview.GeckoSession old=e.current;
   main(()->{old.close();e.pageLost(old,"Injected idle content kill");e.pageLost(old,"Duplicate kill");e.ensureUsable();});
-  Thread.sleep(1500);assertNotSame("Dead browser must be replaced",old,e.current);main(()->assertTrue(e.current.isOpen()));assertFalse(e.run.armed);
+  Thread.sleep(1500);assertNotSame("Dead browser must be replaced; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected+" armed="+e.run.armed+" current="+(e.current!=null),old,e.current);main(()->assertTrue("Replacement must be open; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected+" armed="+e.run.armed+" current="+(e.current!=null),e.current!=null&&e.current.isOpen()));assertFalse("Idle page loss must not leave run armed; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected+" armed="+e.run.armed+" current="+(e.current!=null),e.run.armed);
   for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())assertNotEquals("Idle page loss must not notify",1100+e.profile,n.getId());
   java.util.concurrent.atomic.AtomicBoolean navigated=new java.util.concurrent.atomic.AtomicBoolean();
   main(()->{org.mozilla.geckoview.WebExtension.Port saved=e.nativePort;e.nativePort=null;e.navigate(()->navigated.set(true));e.nativePort=saved;});
