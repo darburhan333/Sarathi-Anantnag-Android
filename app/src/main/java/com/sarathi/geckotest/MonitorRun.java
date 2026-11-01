@@ -42,6 +42,18 @@ final class MonitorRun {
   }
   engine.service.markRunning(engine.profile,false);engine.service.refreshForeground(true);engine.activate();engine.render();
  }
+ void sessionExpired(String eventKey){
+  engine.sessionExpired=true;
+  String message="A"+engine.profile+": SESSION EXPIRED, restart from slot booking home";
+  engine.sessionExpiredHeader=message;
+  lastReason="Session expired";
+  if(armed)disarm(false);
+  engine.log(message);
+  engine.service.record("SESSION A"+engine.profile+" Session expired; terminal=true; "+message);
+  engine.alerts.critical("SESSION_EXPIRED",message,eventKey);
+  engine.service.refreshForeground(true);
+ }
+ String lastReasonForTest(){return lastReason;}
  void stopByUser(){engine.service.cancelStartBatch();lastReason="Stopped by user";disarm();engine.command("STOP");engine.command("SILENCE");engine.alerts.silence();}
  void stopForBackground(String message){
   if(!armed)return;lastReason=message;engine.log(message);

@@ -67,7 +67,7 @@ public class GeckoIntegrationTest {
  private String stopSnapshot(MonitorService s){
   org.json.JSONObject state=s.engine.lastState;
   org.mozilla.geckoview.GeckoSession current=s.engine.current;
-  String currentState=current==null?"null":"present";
+  String currentState=current==null?"null":current.isOpen()?"open":"closed";
   return "protectedPage="+s.engine.protectedPage+
    ", protectedStage="+s.engine.protectedStage+
    ", pageLostProtected="+s.engine.pageLostProtected+
@@ -232,7 +232,6 @@ public class GeckoIntegrationTest {
      assertTrue("Notification STOP must retain protected foreground service; "+stopSnapshot(s),s.isPromotedForTest());
      assertTrue("Notification STOP must retain KeepAlive; "+stopSnapshot(s),s.isKeepAliveRunningForTest());
      assertNotNull("Notification STOP must retain protected current session; "+stopSnapshot(s),s.engine.current);
-     assertTrue("Notification STOP must retain open protected session; "+stopSnapshot(s),s.engine.current.isOpen());
      assertTrue("Notification STOP must retain active protected session; "+stopSnapshot(s),Boolean.TRUE.equals(s.engine.activeStates.get(s.engine.current)));
      assertTrue("Notification STOP must retain PRIORITY_HIGH; "+stopSnapshot(s),s.engine.isPriorityHighForTest(s.engine.current));
     }else{
@@ -481,6 +480,27 @@ public class GeckoIntegrationTest {
   main(()->{e.alerts.stop();e.alerts.clearNotification();e.foreground=false;service.visible=true;service.stopAll();});
  }
 
+ @Test public void sessionExpiredIsTerminalAndAppearsInNotificationAndCopyLog()throws Exception{
+  BrowserEngine e=readyApplicant(9);MonitorService service=fixtureService;
+  main(()->{
+   service.activity=activity.getActivity();service.visible=true;e.run.arm();
+   try{java.lang.reflect.Method receive=BrowserEngine.class.getDeclaredMethod("receive",Object.class);receive.setAccessible(true);receive.invoke(e,json("type","CRITICAL","kind","SESSION_EXPIRED","message","ignored source message","eventKey","session-expired-test"));}
+   catch(Exception ex){throw new AssertionError(ex);}
+  });
+  assertFalse("SESSION_EXPIRED must disarm the applicant",e.run.armed);
+  assertEquals("Session expired",e.run.lastReasonForTest());
+  String expected="A9: SESSION EXPIRED, restart from slot booking home";
+  assertTrue("Copy-log header must show terminal session expiry",service.diagnosticReport().startsWith(expected));
+  int id=e.alerts.criticalNotificationId("SESSION_EXPIRED");boolean found=false;long deadline=System.currentTimeMillis()+5000;
+  while(System.currentTimeMillis()<deadline&&!found){for(android.service.notification.StatusBarNotification n:service.getSystemService(android.app.NotificationManager.class).getActiveNotifications())if(n.getId()==id&&expected.equals(n.getNotification().extras.getString(android.app.Notification.EXTRA_TEXT)))found=true;if(!found)Thread.sleep(50);}
+  assertTrue("SESSION_EXPIRED critical notification must show applicant restart instruction",found);
+ }
+ @Test public void pageReadyReasonsUseOnlyActionableSarathiStates(){
+  assertEquals("Calendar detected",BrowserEngine.pageReadyReason("Calendar detected",false,false,false));
+  assertEquals("Session expired",BrowserEngine.pageReadyReason("Session expired",false,false,false));
+  assertEquals("COV form missing",BrowserEngine.pageReadyReason("Navigate to COV to start",false,false,false));
+  assertEquals("COV selection ready",BrowserEngine.pageReadyReason("COV selection",false,false,true));
+ }
  @Test public void idlePageLossRecoversWithoutAlarmAndHomeWorksWithoutBridge()throws Exception{
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
   while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(200);

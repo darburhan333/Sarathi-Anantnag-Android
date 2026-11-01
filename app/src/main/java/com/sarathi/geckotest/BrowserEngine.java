@@ -54,7 +54,7 @@ final class BrowserEngine {
     final ArrayList<String> logs=new ArrayList<>();
     String status="Opening Parivahan…", monitorStatus="Connecting monitor…", monitorUrl;
     boolean canGoBack, foreground, showingMonitor, ready, monitoring, destroyed;
-    boolean protectedPage,pageLostProtected;String protectedStage="",protectedUrl="",lastPageReason="COV form missing";long lastVisibleAt=SystemClock.elapsedRealtime();
+    boolean protectedPage,pageLostProtected,sessionExpired;String sessionExpiredHeader="",protectedStage="",protectedUrl="",lastPageReason="COV form missing";long lastVisibleAt=SystemClock.elapsedRealtime();
     boolean firstPageRecorded;int installAttempts;
     long bridgeLostAt;
     final long startupAt=SystemClock.elapsedRealtime();
@@ -152,7 +152,7 @@ final class BrowserEngine {
     // Test-only instrumentation hook; production code must not call this method.
     void resetProtectionForTest(){
       if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Test reset must run on the main thread");
-      protectedPage=false;pageLostProtected=false;protectedStage="";protectedUrl="";
+      protectedPage=false;pageLostProtected=false;sessionExpired=false;sessionExpiredHeader="";protectedStage="";protectedUrl="";
       lastPageReason="Test fixture reset";lastState=new JSONObject();monitoring=false;
       pageQuery="";pageUrl="";pageReady=false;pageLoading=false;showingMonitor=false;canGoBack=false;
       pendingId=null;afterStop=null;activeStates.clear();priorityHints.clear();
@@ -186,6 +186,12 @@ final class BrowserEngine {
       runtime.getWebExtensionController().setTabActive(showingMonitor?monitorSession:current,true);
     }
     private String pageQuery="",pageUrl="";private boolean pageReady,pageLoading;
+    static String pageReadyReason(String supplied,boolean calendar,boolean expired,boolean covReady){
+      String value=supplied==null?"":supplied.toLowerCase(Locale.US);
+      if(expired||value.contains("session expired"))return "Session expired";
+      if(calendar||value.contains("calendar detected"))return "Calendar detected";
+      return covReady?"COV selection ready":"COV form missing";
+    }
     private void receive(Object message){
       if(!(message instanceof JSONObject))return;
       JSONObject o=(JSONObject)message;
@@ -194,7 +200,12 @@ final class BrowserEngine {
           monitorUrl=o.optString("monitorUrl");ready=true;foregroundState();
           log("Monitor connected in "+(SystemClock.elapsedRealtime()-startupAt)+" ms");
           log("Monitor ready — open Sarathi, then MONITOR to start");prepareMonitor();break;
-        case "CRITICAL":alerts.critical(o.optString("kind"),o.optString("message"));break;
+        case "CRITICAL":{
+          String kind=o.optString("kind"),message=o.optString("message"),eventKey=o.optString("eventKey");
+          if("SESSION_EXPIRED".equals(kind))run.sessionExpired(eventKey);
+          else alerts.critical(kind,message,eventKey);
+          break;
+        }
         case "ALERT_DELIVERY":service.record("ALERT A"+profile+" kind="+o.optString("kind")+" Telegram="+o.optString("telegram"));break;
         case "STATE":
           monitoring=o.optBoolean("running")||o.optBoolean("successWatch");
@@ -205,7 +216,7 @@ final class BrowserEngine {
         case "ACK":
           finishNavigation(o.optString("id"));break;
         case "START_RESULT":if(o.optString("batch").equals(service.startBatch)){log("Start All: "+o.optString("reason"));service.record("Applicant "+profile+" Start All: "+o.optString("reason"));}break;
-        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;updateProtection(o);log(o.optString("reason",o.optBoolean("covReady")?"COV selection":"COV form missing"));}break;
+        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;updateProtection(o);String reason=pageReadyReason(o.optString("reason"),o.optBoolean("calendarLock")||o.optBoolean("protectPage")&&o.optString("reason").toLowerCase(Locale.US).contains("calendar"),o.optString("reason").toLowerCase(Locale.US).contains("session expired"),o.optBoolean("covReady"));lastPageReason=reason;log("PAGE_READY: "+reason);}break;
         case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"),o.optBoolean("terminal"),o.optString("reason","No verification details"));break;
         case "ERROR":log(o.optString("message"));break;
       }
