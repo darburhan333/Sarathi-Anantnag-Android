@@ -513,6 +513,10 @@ public class GeckoIntegrationTest {
    e.foreground=true;e.ensureUsable();
    assertFalse("Opening the applicant must consume the unload banner state",e.pageUnloaded);
    assertTrue("Unloaded applicant must reopen a usable home page",e.current!=null&&e.current.isOpen());
+   e.foreground=false;e.loggedInPage=false;e.lastState=new org.json.JSONObject();e.lastVisibleAt=now-60L*60*1000;
+   e.unloadIdle(now,false);
+   assertNull("Known logged-out page may unload after the configured 60-minute timeout",e.current);
+   assertTrue("Timed idle unload must retain the login-needed banner",e.pageUnloaded);
   });
  }
  @Test public void idleUnloadTimeoutDefaultsToSixtyMinutesAndCanBeConfigured(){

@@ -54,7 +54,7 @@ final class BrowserEngine {
     final ArrayList<String> logs=new ArrayList<>();
     String status="Opening Parivahan…", monitorStatus="Connecting monitor…", monitorUrl;
     boolean canGoBack, foreground, showingMonitor, ready, monitoring, destroyed;
-    boolean protectedPage,pageLostProtected,sessionExpired,pageUnloaded;String sessionExpiredHeader="",protectedStage="",protectedUrl="",lastPageReason="COV form missing";long lastVisibleAt=SystemClock.elapsedRealtime();
+    boolean protectedPage,pageLostProtected,sessionExpired,pageUnloaded,loggedInPage=true;String sessionExpiredHeader="",protectedStage="",protectedUrl="",lastPageReason="COV form missing";long lastVisibleAt=SystemClock.elapsedRealtime();
     boolean firstPageRecorded;int installAttempts;
     long bridgeLostAt;
     final long startupAt=SystemClock.elapsedRealtime();
@@ -105,6 +105,7 @@ final class BrowserEngine {
       }else if(state.optBoolean("running")&&!state.optBoolean("calendarLock")){
         protectedPage=false;protectedStage="";protectedUrl="";
       }
+      if(state.has("loggedIn"))loggedInPage=state.optBoolean("loggedIn",true);
       if(state.has("reason"))lastPageReason=state.optString("reason");
       activate();service.refreshForeground(false);
     }
@@ -112,7 +113,7 @@ final class BrowserEngine {
     private long idleUnloadTimeoutMs(){int minutes=service.getSharedPreferences("monitor",0).getInt("idleUnloadMinutes",60);return idleUnloadTimeoutMsForTest(minutes);}
     void unloadIdle(long now,boolean pressure){
       if(protectedPage||pageLostProtected||run.armed||foreground)return;
-      boolean loggedIn=lastState.optBoolean("covReady")||lastState.optBoolean("successWatch")||lastState.optBoolean("calendarLock")||lastState.optString("bookingStage").contains("SMS")||lastState.optString("bookingStage").contains("BOOK SLOT");
+      boolean loggedIn=loggedInPage||lastState.optBoolean("covReady")||lastState.optBoolean("successWatch")||lastState.optBoolean("calendarLock")||lastState.optString("bookingStage").contains("SMS")||lastState.optString("bookingStage").contains("BOOK SLOT");
       if(loggedIn&&!pressure)return;
       if(!pressure&&now-lastVisibleAt<idleUnloadTimeoutMs())return;
       boolean unloaded=false;
@@ -159,7 +160,7 @@ final class BrowserEngine {
     // Test-only instrumentation hook; production code must not call this method.
     void resetProtectionForTest(){
       if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Test reset must run on the main thread");
-      protectedPage=false;pageLostProtected=false;sessionExpired=false;sessionExpiredHeader="";protectedStage="";protectedUrl="";
+      protectedPage=false;pageLostProtected=false;sessionExpired=false;sessionExpiredHeader="";loggedInPage=true;protectedStage="";protectedUrl="";
       lastPageReason="Test fixture reset";lastState=new JSONObject();monitoring=false;
       pageQuery="";pageUrl="";pageReady=false;pageLoading=false;showingMonitor=false;canGoBack=false;
       pendingId=null;afterStop=null;activeStates.clear();priorityHints.clear();

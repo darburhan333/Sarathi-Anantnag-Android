@@ -713,11 +713,11 @@
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if(message?.type==='SARATHI_PROFILE_QUERY'){sendResponse({ok:true,ready:document.readyState!=='loading',covReady:!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),protectPage:isSmsVerificationPage()||realCalendar(),reason:isSmsVerificationPage()?'SMS verification ready':realCalendar()?'Calendar detected':EXPIRY_TEXT.test(pageText(true))?'Session expired':getCovForm()?'COV selection':'COV form missing',page:location.href});return false;}
+    if(message?.type==='SARATHI_PROFILE_QUERY'){const pageTextNow=pageText(true);const loginRequired=/captcha|session expired|please login|login again|sign in to continue/i.test(pageTextNow)&&!getCovForm();sendResponse({ok:true,ready:document.readyState!=='loading',loggedIn:!loginRequired,covReady:!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageTextNow),protectPage:isSmsVerificationPage()||realCalendar(),reason:isSmsVerificationPage()?'SMS verification ready':realCalendar()?'Calendar detected':EXPIRY_TEXT.test(pageTextNow)?'Session expired':getCovForm()?'COV selection':'COV form missing',page:location.href});return false;}
     if (message?.type === 'SARATHI_HEALTH_PING') {
       (async()=>{
         const owner=await confirmOwnership();
-        return {ok:true,page:location.pathname,owner,loopActive,
+        return {ok:true,page:location.pathname,owner,loggedIn:!(/captcha|session expired|please login|login again|sign in to continue/i.test(pageText(true))&&!getCovForm()),loopActive,
           safeToRestart:owner&&!loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
           safeToResume:owner&&loopActive&&cachedRunning&&!localStop&&!sessionLocked&&!calendarLocked&&!bookingActionBusy&&!inFlight&&!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageText(true)),
           protectPage:isSmsVerificationPage()||realCalendar(),pageReason:isSmsVerificationPage()?"SMS verification ready":realCalendar()?"Calendar detected":EXPIRY_TEXT.test(pageText(true))?"Session expired":getCovForm()?"COV selection":"COV form missing",lastLoopProgress,loopStartedAt,covPresent:!!getCovForm(),calendar:realCalendar(),

@@ -169,10 +169,10 @@ final class PhoneAlerts {
   int max=audio==null?0:audio.getStreamMaxVolume(AudioManager.STREAM_ALARM);
   boolean blocks=false;
   try{
-   NotificationManager nm=context.getSystemService(NotificationManager.class);
-   int filter=nm.getCurrentInterruptionFilter();
-   if(filter==NotificationManager.INTERRUPTION_FILTER_NONE)blocks=true;
-   else if(filter==NotificationManager.INTERRUPTION_FILTER_PRIORITY){
+   int zenMode=android.provider.Settings.Global.getInt(context.getContentResolver(),android.provider.Settings.Global.ZEN_MODE,0);
+   if(zenMode==2)blocks=true;
+   else if(zenMode==1){
+    NotificationManager nm=context.getSystemService(NotificationManager.class);
     if(nm.isNotificationPolicyAccessGranted())blocks=(nm.getNotificationPolicy().priorityCategories&NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS)==0;
     else blocks=true;
    }
