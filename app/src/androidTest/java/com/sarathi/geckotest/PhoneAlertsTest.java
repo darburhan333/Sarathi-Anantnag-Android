@@ -170,7 +170,7 @@ public class PhoneAlertsTest {
             for (String kind : kinds) {
                 int id = alerts.criticalNotificationId(kind);
                 StatusBarNotification delivered = awaitNotification(manager, id);
-                assertNotNull(kind + " notification must remain active beside other critical kinds", delivered);
+                assertNotNull(kind + " notification must remain active beside other critical kinds; expectedId=" + id + "; activeIds=" + activeNotificationIds(manager), delivered);
                 assertEquals("Applicant 5 · " + kind, delivered.getNotification().extras.getString(Notification.EXTRA_TITLE));
             }
             alerts.stop();
@@ -181,6 +181,21 @@ public class PhoneAlertsTest {
             alerts.stop();
             alerts.clearNotification();
             alerts.setMode(originalMode);
+        }
+    }
+
+    @Test public void criticalKindsRearmAfterSilenceCooldownAndEventChange() {
+        PhoneAlerts alerts = new PhoneAlerts(InstrumentationRegistry.getInstrumentation().getTargetContext(), 7);
+        alerts.silence();
+        try {
+            assertTrue("First event must arm", alerts.criticalAt("SMS_READY", "SMS ready", "session:event-A", 1000));
+            assertFalse("Same event must deduplicate inside 60 seconds", alerts.criticalAt("SMS_READY", "SMS ready", "session:event-A", 2000));
+            assertTrue("Changed event key must re-arm immediately", alerts.criticalAt("SMS_READY", "SMS ready again", "session:event-B", 2000));
+            assertTrue("Same event must re-arm after 60 seconds", alerts.criticalAt("SMS_READY", "SMS ready again", "session:event-B", 62000));
+            alerts.silence();
+            assertTrue("Silence must clear dedupe so the event can re-arm", alerts.criticalAt("SMS_READY", "SMS ready after silence", "session:event-B", 62001));
+        } finally {
+            alerts.silence();
         }
     }
 
@@ -202,6 +217,7 @@ public class PhoneAlertsTest {
             message.put("type", "CRITICAL");
             message.put("kind", "GREEN_DATE");
             message.put("message", "Extension critical route test");
+            message.put("eventKey", "extension-critical-test-event");
             Method receive = BrowserEngine.class.getDeclaredMethod("receive", Object.class);
             receive.setAccessible(true);
             InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
@@ -219,6 +235,12 @@ public class PhoneAlertsTest {
             alerts.clearNotification();
             alerts.setMode(originalMode);
         }
+    }
+
+    private static String activeNotificationIds(NotificationManager manager) {
+        java.util.Set<Integer> ids = new java.util.TreeSet<>();
+        for (StatusBarNotification item : manager.getActiveNotifications()) ids.add(item.getId());
+        return ids.toString();
     }
 
     private static boolean awaitNotificationGone(NotificationManager manager, int id) {

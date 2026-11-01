@@ -42,7 +42,7 @@ final class MonitorRun {
   }
   engine.service.markRunning(engine.profile,false);engine.service.refreshForeground(true);engine.activate();engine.render();
  }
- void stopByUser(){engine.service.cancelStartBatch();lastReason="Stopped by user";disarm();engine.command("STOP");engine.command("SILENCE");engine.alerts.stop();engine.alerts.clearNotification();}
+ void stopByUser(){engine.service.cancelStartBatch();lastReason="Stopped by user";disarm();engine.command("STOP");engine.command("SILENCE");engine.alerts.silence();}
  void stopForBackground(String message){
   if(!armed)return;lastReason=message;engine.log(message);
   disarm(false);engine.command("SAFE_STOP",message);

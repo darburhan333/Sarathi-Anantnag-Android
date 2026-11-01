@@ -2,15 +2,16 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('p
 const root=path.resolve(__dirname,'../app/src/main/assets/extension');
 (async()=>{
  const listeners=[],changes=[],native=[];
- const data={androidServiceReady:true,running:true,monitoredTabId:7,monitorSessionId:'s1',calendarLock:true,autoBookingEnabled:true,bookingClickIssued:false};
+ const data={androidServiceReady:true,running:true,monitoredTabId:7,monitorSessionId:'s1',calendarLock:true,autoBookingEnabled:true,bookingClickIssued:false,successWatch:false,telegramEnabled:true,desktopEnabled:true,chatId:'111',chatId2:'222',botToken:'123456:TEST_TOKEN_NOT_REAL_abcdefghijklmn',telegramConfigRevision:'adapter-test-revision',telegramOutbox:[],history:[],smsAlertKey:''};
+ let failCritical=true,fetchCalls=0;
  const browser={
   storage:{local:{get:async k=>typeof k==='string'?{[k]:data[k]}:Array.isArray(k)?Object.fromEntries(k.map(x=>[x,data[x]])):Object.fromEntries(Object.entries(k).map(([x,v])=>[x,data[x]===undefined?v:data[x]])),set:async p=>{const c={};for(const [k,v]of Object.entries(p)){c[k]={oldValue:data[k],newValue:v};data[k]=v;}changes.forEach(f=>f(c,'local'));}},onChanged:{addListener:f=>changes.push(f)}},
-  runtime:{getURL:p=>'moz-extension://test/'+p,onMessage:{addListener:f=>listeners.push(f)},sendNativeMessage:async(app,m)=>{native.push(m);return {ok:true};}},
+  runtime:{getURL:p=>'moz-extension://test/'+p,onMessage:{addListener:f=>listeners.push(f)},sendNativeMessage:async(app,m)=>{native.push(m);if(failCritical&&m.type==='CRITICAL')throw Error('fixture native CRITICAL failure');return {ok:true};}},
   tabs:{onRemoved:{addListener(){}},executeScript:async(id,o)=>[o.file],sendMessage:async()=>({ok:true})},
   alarms:{create(){},onAlarm:{addListener(){}}},
   webNavigation:{onBeforeNavigate:{addListener(){}},onCompleted:{addListener(){}},onErrorOccurred:{addListener(){}}}
  };
- const ctx={browser,console,URL,Date,Math,Promise,setTimeout,clearTimeout,AbortController,fetch:()=>{throw Error('Network forbidden in tests')}};vm.createContext(ctx);
+ const ctx={browser,console,URL,Date,Math,Promise,setTimeout,clearTimeout,AbortController,navigator:{onLine:true},fetch:async()=>{fetchCalls++;return {ok:true,status:200,json:async()=>({ok:true})};}};vm.createContext(ctx);
  for(const f of ['compat.js','background.js'])vm.runInContext(fs.readFileSync(path.join(root,f),'utf8'),ctx);
  const call=m=>new Promise(resolve=>listeners[0]({type:'SARATHI_ACTION_GATE',sessionId:'s1',documentNonce:'doc1',...m},{tab:{id:7},url:'https://sarathi.parivahan.gov.in/slots/x'},resolve));
  assert((await call({action:'BOOK_SLOT',reservationId:'reservation-1',date:'2026-12-09',kind:'BOTH'})).authorized);
@@ -24,6 +25,15 @@ const root=path.resolve(__dirname,'../app/src/main/assets/extension');
  await ctx.audioCommand('TEST');assert.equal(native.at(-1).type,'AUDIO');
  await ctx.showDesktopNotification({title:'Test',message:'Safe'});assert.equal(native.at(-1).type,'NOTIFY');
  const result=await ctx.chrome.scripting.executeScript({target:{tabId:7},files:['a.js','b.js']});assert.equal(result.join(','),'a.js,b.js');
- console.log('PASS: Firefox injection, native audio/notification, document-bound reservation, service authorization, stopped cleanup');
+ const smsReply=await new Promise(resolve=>{
+  const keep=listeners[0]({type:'SARATHI_SMS_READY',sessionId:'s1',url:'/sms'}, {tab:{id:7},url:'https://sarathi.parivahan.gov.in/slots/x'}, resolve);
+  assert.equal(keep,true,'Alert listener must keep the response channel open');
+ });
+ assert.equal(smsReply.ok,true,'Remote delivery must finish even when native CRITICAL fails');
+ assert(native.some(m=>m.type==='CRITICAL'),'Native CRITICAL attempt must be made');
+ assert(native.some(m=>m.type==='NOTIFY'),'Desktop notification must still be attempted after native CRITICAL failure');
+ assert(fetchCalls>=2,'Telegram must still be delivered to both configured recipients after native CRITICAL failure');
+ assert.equal(data.smsAlertKey,'s1:7:/sms');
+ console.log('PASS: Firefox injection, native audio/notification, document-bound reservation, service authorization, stopped cleanup, remote alerts survive native CRITICAL failure');
 })().catch(e=>{console.error(e);process.exitCode=1});
 

@@ -165,7 +165,14 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
     const owner=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,successWatch:false});
     if(!msg.sessionId || msg.sessionId!==owner.monitorSessionId || sender.tab?.id!==owner.monitoredTabId || (!owner.running&&!owner.successWatch))return;
     const criticalKind=msg.type==='SARATHI_SMS_READY'?'SMS_READY':msg.type==='SARATHI_WARNING'?(msg.kind||'SESSION'):msg.type==='SARATHI_BOOKED'?'BOOKED':(msg.kind||'CALENDAR');
-    await nativeRequest({type:'CRITICAL',kind:criticalKind,message:msg.message||({SMS_READY:'SMS verification ready — enter code manually',GREEN_DATE:'Green date detected — act now',CALENDAR:'Calendar detected — act now'}[criticalKind]||criticalKind)});
+    const criticalEventKey=String(msg.eventKey || (msg.sessionId+':'+msg.type+':'+sender.tab?.id+':'+String(msg.kind||'')+':'+String(msg.url||'')+':'+String(msg.bookingKey||'')));
+    // Native alarm failure must never block independent desktop and Telegram delivery.
+    try {
+      const nativeCritical=await nativeRequest({type:'CRITICAL',kind:criticalKind,eventKey:criticalEventKey,message:msg.message||({SMS_READY:'SMS verification ready — enter code manually',GREEN_DATE:'Green date detected — act now',CALENDAR:'Calendar detected — act now'}[criticalKind]||criticalKind)});
+      if(!nativeCritical?.ok)console.warn('Native critical alert unavailable; continuing remote delivery',nativeCritical?.error||'no acknowledgement');
+    } catch(error) {
+      console.warn('Native critical alert failed; continuing remote delivery',String(error?.message||error));
+    }
     if(msg.type==='SARATHI_SMS_READY') {
       const d=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',telegramEnabled:true,desktopEnabled:true,history:[],smsAlertKey:''});
       if(sender.tab?.id!==d.monitoredTabId)return;

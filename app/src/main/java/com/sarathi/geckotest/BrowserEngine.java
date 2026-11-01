@@ -250,9 +250,9 @@ final class BrowserEngine {
                 case "AUTHORIZE":return run.authorization();
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;
                 case "UI_STOP":stopFromUi();break;
-                case "CRITICAL":alerts.critical(m.optString("kind"),m.optString("message"));break;
+                case "CRITICAL":alerts.critical(m.optString("kind"),m.optString("message"),m.optString("eventKey"));break;
                 case "DISARM":run.disarm();break;
-                case "ACK_ALERT":alerts.stop();alerts.clearNotification();service.refreshForeground(true);break;
+                case "ACK_ALERT":alerts.silence();service.refreshForeground(true);break;
                 case "ALERT_DELIVERY":service.record("ALERT A"+profile+" kind="+m.optString("kind")+" Telegram="+m.optString("telegram"));break;
                 case "WAIT":return run.waitFor(m.optLong("ms"));
                 case "UI_READY":monitorReady=true;break;

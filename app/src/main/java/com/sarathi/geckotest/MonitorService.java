@@ -86,7 +86,7 @@ public final class MonitorService extends Service {
   statusBots.put(profile,bot);statusClaims.put(profile,now);return true;
  }
  void releaseStatus(int profile){statusBots.remove(profile);statusClaims.remove(profile);}
- void silenceAll(){for(BrowserEngine e:profiles)if(e!=null){e.alerts.stop();e.command("SILENCE");}refreshForeground(true);}
+ void silenceAll(){for(BrowserEngine e:profiles)if(e!=null){e.alerts.silence();e.command("SILENCE");}refreshForeground(true);}
  void stopForBackground(String detail){
   if(activeCount()==0)return;
   String message="Background monitoring stopped for all applicants — inspect pages and press START";

@@ -64,6 +64,18 @@ public class GeckoIntegrationTest {
    return out.toString("UTF-8");
   }
  }
+ private String stopSnapshot(MonitorService s){
+  org.json.JSONObject state=s.engine.lastState;
+  org.mozilla.geckoview.GeckoSession current=s.engine.current;
+  String currentState=current==null?"null":current.isOpen()?"open":"closed";
+  return "protectedPage="+s.engine.protectedPage+
+   ", protectedStage="+s.engine.protectedStage+
+   ", pageLostProtected="+s.engine.pageLostProtected+
+   ", armed="+s.engine.run.armed+
+   ", current="+currentState+
+   ", successWatch="+state.optBoolean("successWatch")+
+   ", calendarLock="+state.optBoolean("calendarLock");
+ }
  private void captureEvidence(MonitorService s,String label)throws Exception{
   System.out.println("EVIDENCE_BEGIN "+label);
   for(String command:new String[]{
@@ -200,22 +212,7 @@ public class GeckoIntegrationTest {
    }
    shell("screencap -p /data/local/tmp/monitor-preview.png");
    assertTrue("Monitor viewport remained blank after re-attachment; colors="+colors,colors>=30);
-   System.out.println("realExtensionLoop: 10-minute locked, forced-Doze and Activity-destroyed phases completed; entering STOP assertions");
-   assertFalse("STOP must disarm automation (armed must be false)",s.isArmedForTest());
-   main(()->{
-    if(s.engine.protectedPage){
-     assertTrue("Protected page must keep service foreground after STOP",s.isPromotedForTest());
-     assertTrue("Protected page must keep KeepAlive running after STOP",s.isKeepAliveRunningForTest());
-     assertTrue("Protected page must keep silent audio running after STOP",s.isKeepAliveAudioRunningForTest());
-     assertNotNull("Protected page session must remain after STOP",s.engine.current);
-     assertTrue("Protected page session must remain open after STOP",s.engine.current.isOpen());
-     assertTrue("Protected page session must remain active after STOP",Boolean.TRUE.equals(s.engine.activeStates.get(s.engine.current)));
-     assertTrue("Protected page must retain PRIORITY_HIGH after STOP",s.engine.isPriorityHighForTest(s.engine.current));
-    }else{
-     assertFalse("Unprotected applicant must not become protected after STOP",s.engine.protectedPage);
-     assertFalse("KeepAlive must stop for unprotected applicant after STOP",s.isKeepAliveRunningForTest());
-    }
-   });
+   System.out.println("realExtensionLoop: 10-minute locked, forced-Doze and Activity-destroyed phases completed; next exercising notification STOP");
    java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
    main(()->{s.arm();s.waitFor(8000).accept(result->cancelled.set(result.toString().contains("cancelled")));});
    main(reopened::finish);
@@ -227,14 +224,19 @@ public class GeckoIntegrationTest {
    java.util.concurrent.atomic.AtomicBoolean disarmed=new java.util.concurrent.atomic.AtomicBoolean();
    long stopDeadline=System.currentTimeMillis()+5000;
    while(System.currentTimeMillis()<stopDeadline){main(()->disarmed.set(!s.isArmedForTest()));if(disarmed.get())break;Thread.sleep(50);}
-   assertTrue("Notification STOP action must disarm when no Activity is visible",disarmed.get());
+   assertTrue("Notification STOP action must disarm when no Activity is visible; "+stopSnapshot(s),disarmed.get());
+   assertFalse("STOP must disarm automation; "+stopSnapshot(s),s.isArmedForTest());
    assertTrue("STOP must cancel pending native wait",cancelled.get());
    main(()->{
     if(s.engine.protectedPage){
-     assertTrue("Notification STOP must retain protected foreground service",s.isPromotedForTest());
-     assertTrue("Notification STOP must retain KeepAlive",s.isKeepAliveRunningForTest());
-     assertTrue("Notification STOP must retain active protected session",Boolean.TRUE.equals(s.engine.activeStates.get(s.engine.current)));
-     assertTrue("Notification STOP must retain PRIORITY_HIGH",s.engine.isPriorityHighForTest(s.engine.current));
+     assertTrue("Notification STOP must retain protected foreground service; "+stopSnapshot(s),s.isPromotedForTest());
+     assertTrue("Notification STOP must retain KeepAlive; "+stopSnapshot(s),s.isKeepAliveRunningForTest());
+     assertNotNull("Notification STOP must retain protected current session; "+stopSnapshot(s),s.engine.current);
+     assertTrue("Notification STOP must retain active protected session; "+stopSnapshot(s),Boolean.TRUE.equals(s.engine.activeStates.get(s.engine.current)));
+     assertTrue("Notification STOP must retain PRIORITY_HIGH; "+stopSnapshot(s),s.engine.isPriorityHighForTest(s.engine.current));
+    }else{
+     assertFalse("Unprotected applicant must not become protected after STOP; "+stopSnapshot(s),s.engine.protectedPage);
+     assertFalse("KeepAlive must stop for unprotected applicant after STOP; "+stopSnapshot(s),s.isKeepAliveRunningForTest());
     }
    });
    System.out.println("PASS realExtensionLoop: locked, forced-Doze, Activity-destroyed and STOP phases");

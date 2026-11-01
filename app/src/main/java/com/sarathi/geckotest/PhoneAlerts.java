@@ -11,14 +11,57 @@ final class PhoneAlerts {
  String mode(){return activity.getSharedPreferences("monitor",0).getString("alertMode"+profile,"CRITICAL ONLY");}
  void setMode(String mode){if(!java.util.Arrays.asList(MODES).contains(mode))throw new IllegalArgumentException("Invalid alert mode");activity.getSharedPreferences("monitor",0).edit().putString("alertMode"+profile,mode).apply();}
  private boolean criticalActive;
- private final java.util.Set<String> criticalKeys=new java.util.HashSet<>();
+ private final java.util.Map<String,CriticalStamp> criticalKeys=new java.util.HashMap<>();
+ private volatile int notificationGeneration;
+ private static final long CRITICAL_REARM_MS=60000L;
+ private static final long CRITICAL_POST_GAP_MS=250L;
+ private static final Object CRITICAL_QUEUE_LOCK=new Object();
+ private static final java.util.ArrayDeque<QueuedCritical> CRITICAL_QUEUE=new java.util.ArrayDeque<>();
+ private static final Handler CRITICAL_HANDLER=new Handler(Looper.getMainLooper());
+ private static boolean criticalDrainScheduled;
+ private static final class CriticalStamp {
+  final String eventKey;final long at;
+  CriticalStamp(String key,long time){eventKey=key;at=time;}
+ }
+ private static final class QueuedCritical {
+  final PhoneAlerts owner;final int generation;final String kind,message;final int id;
+  QueuedCritical(PhoneAlerts o,int g,String k,String m,int n){owner=o;generation=g;kind=k;message=m;id=n;}
+ }
  void newRun(){synchronized(criticalKeys){criticalKeys.clear();}}
- void critical(String kind,String message){
-  synchronized(criticalKeys){if(!criticalKeys.add(kind))return;}
-  String notification="failed";
-  try{postNotification(kind,message,"sarathi-critical-v36",criticalNotificationId(kind));notification="posted";}catch(Exception ex){notification="failed:"+ex.getClass().getSimpleName();}
-  runAudioSync(()->{criticalActive=true;volume=85;startAudio(true);});
-  if(activity instanceof MonitorService){MonitorService s=(MonitorService)activity;s.record("ALERT A"+profile+" kind="+kind+" notification="+notification+" audio=queued on main thread Telegram=not requested by native; see extension delivery log");s.refreshForeground(true);}
+ void critical(String kind,String message){critical(kind,message,message);}
+ boolean critical(String kind,String message,String eventKey){return criticalAt(kind,message,eventKey,SystemClock.elapsedRealtime());}
+ // Explicit clock injection keeps the 60-second re-arm rule deterministic in instrumentation tests.
+ boolean criticalAt(String kind,String message,String eventKey,long now){
+  int id=criticalNotificationId(kind);
+  String key=eventKey==null||eventKey.isEmpty()?String.valueOf(message):eventKey;
+  synchronized(criticalKeys){
+   CriticalStamp previous=criticalKeys.get(kind);
+   if(previous!=null&&previous.eventKey.equals(key)&&now-previous.at<CRITICAL_REARM_MS)return false;
+   criticalKeys.put(kind,new CriticalStamp(key,now));
+  }
+  enqueueCriticalNotification(kind,message,id);
+  runAudioSync(()->{if(!criticalActive){criticalActive=true;volume=85;startAudio(true);}});
+  if(activity instanceof MonitorService){MonitorService s=(MonitorService)activity;s.record("ALERT A"+profile+" kind="+kind+" event="+key+" notification=queued audio=active");s.refreshForeground(true);}
+  return true;
+ }
+ private void enqueueCriticalNotification(String kind,String message,int id){
+  synchronized(CRITICAL_QUEUE_LOCK){
+   CRITICAL_QUEUE.addLast(new QueuedCritical(this,notificationGeneration,kind,message,id));
+   if(!criticalDrainScheduled){criticalDrainScheduled=true;CRITICAL_HANDLER.post(PhoneAlerts::drainCriticalQueue);}
+  }
+ }
+ private static void drainCriticalQueue(){
+  QueuedCritical item;
+  synchronized(CRITICAL_QUEUE_LOCK){
+   item=CRITICAL_QUEUE.pollFirst();
+   if(item==null){criticalDrainScheduled=false;return;}
+  }
+  if(item.generation==item.owner.notificationGeneration){
+   try{item.owner.postNotification(item.kind,item.message,"sarathi-critical-v36",item.id);}
+   catch(Exception ex){if(item.owner.activity instanceof MonitorService)((MonitorService)item.owner.activity).record("ALERT A"+item.owner.profile+" kind="+item.kind+" notification=failed:"+ex.getClass().getSimpleName());}
+  }
+  synchronized(CRITICAL_QUEUE_LOCK){if(CRITICAL_QUEUE.isEmpty()){criticalDrainScheduled=false;return;}}
+  CRITICAL_HANDLER.postDelayed(PhoneAlerts::drainCriticalQueue,CRITICAL_POST_GAP_MS);
  }
  void testOnce(){runAudioSync(()->{if(tone==null)tone=new ToneGenerator(AudioManager.STREAM_ALARM,85);beep();});}
 
@@ -88,12 +131,24 @@ final class PhoneAlerts {
   if(vibrator!=null)vibrator.cancel();
  }
  void stop(){runAudioSync(this::stopOnMain);}
+ void silence(){
+  synchronized(criticalKeys){criticalKeys.clear();}
+  stop();
+  clearNotification();
+ }
+ private void cancelQueuedCriticalPosts(){
+  synchronized(CRITICAL_QUEUE_LOCK){
+   notificationGeneration++;
+   CRITICAL_QUEUE.removeIf(item->item.owner==this);
+  }
+ }
  static final String[] CRITICAL_KINDS={"SMS_READY","GREEN_DATE","CALENDAR","SESSION_EXPIRED","MONITOR_FAILED","PROTECTED_PAGE_LOST","BOOKED","LMV_AVAILABLE","MCWG_AVAILABLE","BOTH_AVAILABLE","SESSION","BOOKING_REVIEW","CONFIRM_REQUIRED"};
  int criticalNotificationId(String kind){
   for(int i=0;i<CRITICAL_KINDS.length;i++)if(CRITICAL_KINDS[i].equals(kind))return 3000+profile*20+i;
   throw new IllegalArgumentException("Unknown critical alert kind: "+kind);
  }
  void clearNotification(){
+  cancelQueuedCriticalPosts();
   NotificationManager nm=activity.getSystemService(NotificationManager.class);
   nm.cancel(1100+profile);
   for(String kind:CRITICAL_KINDS)nm.cancel(criticalNotificationId(kind));

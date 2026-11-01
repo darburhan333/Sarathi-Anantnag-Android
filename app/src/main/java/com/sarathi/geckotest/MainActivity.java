@@ -238,7 +238,7 @@ public class MainActivity extends Activity {
         monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);monitorButton.setTextSize(12);
         button(controls,"Start All",Color.rgb(5,150,105),()->{if(engine!=null)engine.service.startAllReady();});
         Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.stopFromUi();});
-        Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});
+        Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.silence();command("SILENCE");});
         silenceButton.setOnLongClickListener(v->{if(engine!=null){engine.service.silenceAll();Toast.makeText(this,"All applicant alarms silenced",Toast.LENGTH_SHORT).show();}return true;});
         stopButton.setOnLongClickListener(v->{if(engine!=null){engine.service.stopAll();Toast.makeText(this,"All applicants stopped",Toast.LENGTH_SHORT).show();}return true;});
         for(int i=0;i<controls.getChildCount();i++){Button control=(Button)controls.getChildAt(i);control.setTextSize(15);control.getLayoutParams().height=dp(64);}
