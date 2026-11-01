@@ -14,7 +14,8 @@ adb shell dumpsys deviceidle > emulator-deviceidle.txt 2>&1 || echo "dumpsys dev
 adb shell dumpsys battery > ci-evidence/emulator-battery.txt 2>&1 || echo "dumpsys battery failed" >> emulator-diagnostic-capture-status.txt
 adb shell dumpsys notification --noredact > ci-evidence/emulator-notifications.txt 2>&1 || echo "dumpsys notification failed" >> emulator-diagnostic-capture-status.txt
 adb logcat -d > emulator-logcat.txt 2>&1 || echo "logcat capture failed" >> emulator-diagnostic-capture-status.txt
-adb shell run-as com.sarathi.anantnag.gecko.v33 cat files/monitor-copy-log.txt > monitor-copy-log.txt 2>> emulator-diagnostic-capture-status.txt || echo "monitor Copy-log not produced (non-fatal if test failed before diagnostic capture)" >> emulator-diagnostic-capture-status.txt
+adb shell run-as com.sarathi.anantnag.gecko.v33 cat files/monitor-copy-log.txt > monitor-copy-log.txt 2>> emulator-diagnostic-capture-status.txt || { echo "::error::monitor-copy-log.txt could not be pulled from the instrumentation app"; echo "monitor Copy-log pull FAILED" >> emulator-diagnostic-capture-status.txt; result=1; }
+if [ ! -s monitor-copy-log.txt ]; then echo "::error::monitor-copy-log.txt is empty; instrumentation diagnostics capture is mandatory"; echo "monitor Copy-log EMPTY" >> emulator-diagnostic-capture-status.txt; result=1; fi
 if [ "$result" -eq 0 ]; then
   # The emulator job intentionally has no production signing secrets. Create a disposable
   # CI-only key so the minified release APK can be installed and exercised by the smoke test.

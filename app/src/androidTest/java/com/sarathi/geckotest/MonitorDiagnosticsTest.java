@@ -67,18 +67,35 @@ public class MonitorDiagnosticsTest {
         while (main.serviceForTest() == null && System.currentTimeMillis() < deadline) Thread.sleep(200);
         MonitorService service = main.serviceForTest();
         assertNotNull(service);
-        service.record("Screen OFF at elapsed=111");
-        service.record("Screen OFF at elapsed=222");
-        service.record("Screen ON at elapsed=333");
-        service.record("Screen ON at elapsed=444");
-        String events = service.getSharedPreferences("diagnostics", 0).getString("events", "");
-        assertEquals("Repeated minimize events must collapse", 1, occurrences(events, "Screen OFF"));
-        assertEquals("Repeated resume events must collapse", 1, occurrences(events, "Screen ON"));
+        android.content.SharedPreferences prefs = service.getSharedPreferences("diagnostics", 0);
+        String original = prefs.getString("events", "");
+        try {
+            prefs.edit().putString("events", "").commit();
+            service.record("Screen OFF at elapsed=111");
+            service.record("Screen OFF at elapsed=222");
+            service.record("Screen ON at elapsed=333");
+            service.record("Screen ON at elapsed=444");
+            String events = prefs.getString("events", "");
+            assertTrue("First minimize transition must be retained", events.contains("Screen OFF at elapsed=111"));
+            assertFalse("Repeated minimize transition must be collapsed", events.contains("Screen OFF at elapsed=222"));
+            assertTrue("First resume transition must be retained", events.contains("Screen ON at elapsed=333"));
+            assertFalse("Repeated resume transition must be collapsed", events.contains("Screen ON at elapsed=444"));
+        } finally { prefs.edit().putString("events", original).commit(); }
     }
 
-    @Test public void audioModeNamesIdentifyCallAndRingtoneModes() {
+    @Test public void audioModeNamesIdentifyCallAndRingtoneModes() throws Exception {
         assertEquals("IN_CALL", MonitorService.audioModeNameForTest(android.media.AudioManager.MODE_IN_CALL));
         assertEquals("RINGTONE", MonitorService.audioModeNameForTest(android.media.AudioManager.MODE_RINGTONE));
+        MainActivity main = activity.getActivity();
+        long deadline = System.currentTimeMillis() + 30000;
+        while (main.serviceForTest() == null && System.currentTimeMillis() < deadline) Thread.sleep(200);
+        MonitorService service = main.serviceForTest();
+        assertNotNull(service);
+        service.recordAudioModeForTest(android.media.AudioManager.MODE_IN_CALL);
+        service.recordAudioModeForTest(android.media.AudioManager.MODE_RINGTONE);
+        String events = service.getSharedPreferences("diagnostics", 0).getString("events", "");
+        assertTrue(events, events.contains("AudioManager mode changed unknown -> IN_CALL"));
+        assertTrue(events, events.contains("IN_CALL -> RINGTONE"));
     }
 
     private static int occurrences(String value, String token) {
