@@ -14,12 +14,35 @@ adb shell dumpsys deviceidle > emulator-deviceidle.txt 2>&1 || echo "dumpsys dev
 adb shell dumpsys battery > ci-evidence/emulator-battery.txt 2>&1 || echo "dumpsys battery failed" >> emulator-diagnostic-capture-status.txt
 adb shell dumpsys notification --noredact > ci-evidence/emulator-notifications.txt 2>&1 || echo "dumpsys notification failed" >> emulator-diagnostic-capture-status.txt
 adb logcat -d > emulator-logcat.txt 2>&1 || echo "logcat capture failed" >> emulator-diagnostic-capture-status.txt
-if ! adb pull /data/local/tmp/monitor-copy-log.txt monitor-copy-log.txt >> emulator-diagnostic-capture-status.txt 2>&1; then
-  echo "::error::monitor-copy-log.txt could not be pulled from the instrumentation diagnostic handoff"
-  echo "monitor Copy-log pull FAILED" >> emulator-diagnostic-capture-status.txt
-  result=1
+rm -f monitor-copy-log.txt monitor-copy-log.txt.tmp
+PACKAGE="com.sarathi.anantnag.gecko.v33"
+CAPTURED=false
+# Prefer the app-private diagnostics file. run-as reads the exact file written
+# by the instrumentation target, avoiding stale or mismatched external paths.
+if adb exec-out run-as "$PACKAGE" cat files/monitor-copy-log.txt > monitor-copy-log.txt.tmp 2>> emulator-diagnostic-capture-status.txt && [ -s monitor-copy-log.txt.tmp ]; then
+  mv monitor-copy-log.txt.tmp monitor-copy-log.txt
+  CAPTURED=true
+  echo "monitor Copy-log captured from app-private files/" >> emulator-diagnostic-capture-status.txt
 fi
-if [ ! -s monitor-copy-log.txt ]; then echo "::error::monitor-copy-log.txt is empty; instrumentation diagnostics capture is mandatory"; echo "monitor Copy-log EMPTY" >> emulator-diagnostic-capture-status.txt; result=1; fi
+# Fall back to the app external-files directory, then the instrumentation shell handoff.
+if [ "$CAPTURED" != true ] && adb pull "/sdcard/Android/data/$PACKAGE/files/monitor-copy-log.txt" monitor-copy-log.txt.tmp >> emulator-diagnostic-capture-status.txt 2>&1 && [ -s monitor-copy-log.txt.tmp ]; then
+  mv monitor-copy-log.txt.tmp monitor-copy-log.txt
+  CAPTURED=true
+  echo "monitor Copy-log captured from external app files/" >> emulator-diagnostic-capture-status.txt
+fi
+if [ "$CAPTURED" != true ] && adb pull /data/local/tmp/monitor-copy-log.txt monitor-copy-log.txt.tmp >> emulator-diagnostic-capture-status.txt 2>&1 && [ -s monitor-copy-log.txt.tmp ]; then
+  mv monitor-copy-log.txt.tmp monitor-copy-log.txt
+  CAPTURED=true
+  echo "monitor Copy-log captured from instrumentation shell handoff" >> emulator-diagnostic-capture-status.txt
+fi
+rm -f monitor-copy-log.txt.tmp
+if [ "$CAPTURED" != true ] || [ ! -s monitor-copy-log.txt ]; then
+  echo "::error::monitor-copy-log.txt could not be captured or was empty; instrumentation diagnostics capture is mandatory"
+  echo "monitor Copy-log capture FAILED or EMPTY" >> emulator-diagnostic-capture-status.txt
+  result=1
+else
+  echo "monitor-copy-log.txt captured: $(wc -c < monitor-copy-log.txt) bytes"
+fi
 if [ "$result" -eq 0 ]; then
   # The emulator job intentionally has no production signing secrets. Create a disposable
   # CI-only key so the minified release APK can be installed and exercised by the smoke test.

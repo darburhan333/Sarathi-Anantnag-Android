@@ -106,6 +106,24 @@ public class GeckoIntegrationTest {
    ", successWatch="+state.optBoolean("successWatch")+
    ", calendarLock="+state.optBoolean("calendarLock");
  }
+ private void logProtectionSnapshot(MonitorService service,String label){
+  main(()->{
+   for(int i=0;i<service.profiles.length;i++){
+    BrowserEngine applicant=service.profiles[i];
+    if(applicant==null){
+     System.out.println("PROTECTION_SNAPSHOT label="+label+" profile="+(i+1)+" protectPage=unknown calendarLock=unknown stage=unknown engineProtectedPage=unknown");
+     continue;
+    }
+    org.json.JSONObject state=applicant.lastState==null?new org.json.JSONObject():applicant.lastState;
+    System.out.println("PROTECTION_SNAPSHOT label="+label+
+     " profile="+applicant.profile+
+     " protectPage="+state.optBoolean("protectPage")+
+     " calendarLock="+state.optBoolean("calendarLock")+
+     " stage="+state.optString("bookingStage","")+
+     " engineProtectedPage="+applicant.protectedPage);
+   }
+  });
+ }
  private void captureEvidence(MonitorService s,String label)throws Exception{
   System.out.println("EVIDENCE_BEGIN "+label);
   for(String command:new String[]{
@@ -377,12 +395,16 @@ public class GeckoIntegrationTest {
 
  @Test public void normalMonitoringStartThenStopDoesNotRequireProtectionConfirmation()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=service.engine;
+  logProtectionSnapshot(service,"test-start");
   main(()->{
    // KeepAlive is shared by all nine applicants. Isolate this assertion so a
    // different protected applicant cannot legitimately keep the shared service alive.
    service.silenceAll();
    service.stopAll();
    for(BrowserEngine applicant:service.profiles)if(applicant!=null&&(applicant.protectedPage||applicant.pageLostProtected))applicant.resetProtectionForTest();
+  });
+  logProtectionSnapshot(service,"immediately-after-reset");
+  main(()->{
    assertEquals("STOP fixture must have no active applicants",0,service.activeCount());
    assertEquals("STOP fixture must have no protected applicants",0,service.protectedCount());
    service.engine=e;service.activity=a;service.visible=true;e.run.arm();
@@ -398,6 +420,7 @@ public class GeckoIntegrationTest {
   });
   long deadline=System.currentTimeMillis()+40000;
   while(service.isPromotedForTest()&&System.currentTimeMillis()<deadline)Thread.sleep(250);
+  logProtectionSnapshot(service,"immediately-before-foreground-assertion");
   assertFalse("Unprotected service must leave foreground after the grace period; active="+service.activeCount()+" protected="+service.protectedCount()+" keepAlive="+service.isKeepAliveRunningForTest()+" report="+service.diagnosticReport(),service.isPromotedForTest());
   assertFalse("KeepAlive must remain stopped after the grace period",service.isKeepAliveRunningForTest());
  }
