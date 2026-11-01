@@ -70,6 +70,7 @@ final class KeepAlive {
     }
   }
 
+  // Test-only instrumentation hooks; production code must not call these methods.
   boolean isRunningForTest(){return requested;}
   boolean isAudioRunningForTest(){return audioRunning;}
   String status() {

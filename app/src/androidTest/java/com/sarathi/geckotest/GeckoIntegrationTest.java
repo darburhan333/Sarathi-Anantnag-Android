@@ -498,7 +498,7 @@ public class GeckoIntegrationTest {
   });
   for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())assertNotEquals("Idle page loss must not notify",1100+e.profile,n.getId());
   java.util.concurrent.atomic.AtomicBoolean navigated=new java.util.concurrent.atomic.AtomicBoolean();
-  main(()->{org.mozilla.geckoview.WebExtension.Port saved=e.nativePort;e.nativePort=null;e.navigate(()->navigated.set(true));e.nativePort=saved;});
+  main(()->{org.mozilla.geckoview.WebExtension.Port saved=e.nativePort;e.nativePort=null;e.navigate("Go Home",()->navigated.set(true));e.nativePort=saved;});
   Thread.sleep(1600);assertTrue("Home action must not depend on extension ACK",navigated.get());
   main(e::home);Thread.sleep(1800);main(()->assertTrue("Home must keep a usable session",e.current.isOpen()));
  }

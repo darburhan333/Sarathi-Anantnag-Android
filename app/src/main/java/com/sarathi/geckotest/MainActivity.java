@@ -56,7 +56,8 @@ public class MainActivity extends Activity {
       }
       public void onServiceDisconnected(android.content.ComponentName name){engine=null;status.setText("Service disconnected — reopen the app");}
     };
-    public boolean monitorReadyForTest(){return engine!=null&&engine.monitorReady;}
+    // Test-only instrumentation hooks; production code must not call these methods.
+ public boolean monitorReadyForTest(){return engine!=null&&engine.monitorReady;}
     public String smokeResultForTest(){return engine==null?"":engine.smokeResult;}
     public void runSmokeForTest(){if(engine!=null){engine.smokeResult="";engine.smokePhase="";engine.command("SMOKE_RUN");}}
     public void openMonitorForTest(){if(engine!=null)engine.toggleMonitor();}

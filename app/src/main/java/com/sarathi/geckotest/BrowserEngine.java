@@ -47,7 +47,7 @@ final class BrowserEngine {
     final MonitorService service;
     final MonitorRun run;final int profile;final String extensionId,assetPath;
     final java.util.Map<GeckoSession,Boolean> activeStates=new java.util.HashMap<>();
-    final java.util.Map<GeckoSession,Integer> priorityHints=new java.util.HashMap<>();
+    final java.util.Map<GeckoSession,Integer> priorityHints=new java.util.concurrent.ConcurrentHashMap<>();
     MainActivity activity;
     GeckoSession current, monitorSession;
     final ArrayList<GeckoSession> sessions=new ArrayList<>();
@@ -149,6 +149,7 @@ final class BrowserEngine {
       }
       if(showingMonitor)prepareMonitor();
     }
+    // Test-only instrumentation hook; production code must not call this method.
     void resetProtectionForTest(){
       if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Test reset must run on the main thread");
       protectedPage=false;pageLostProtected=false;protectedStage="";protectedUrl="";
@@ -159,6 +160,7 @@ final class BrowserEngine {
       GeckoSession fresh=newSession();fresh.open(runtime);showSession(fresh);fresh.loadUri(HOME);
       activate();service.refreshForeground(true);
     }
+    // Test-only instrumentation hook; production code must not call this method.
     boolean isPriorityHighForTest(GeckoSession session){return java.util.Objects.equals(priorityHints.get(session),GeckoSession.PRIORITY_HIGH);}
 
     void pageLost(GeckoSession session,String reason){
