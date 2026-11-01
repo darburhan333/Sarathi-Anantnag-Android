@@ -142,7 +142,16 @@ final class BrowserEngine {
         // Only an explicitly confirmed navigation may discard protected-page ownership.
         protectedPage=false;pageLostProtected=false;protectedStage="";protectedUrl="";
         run.stopByUser(false); // Revoke native action permissions before waiting for JavaScript.
-        updateProtection(json("running",false,"protectPage",false,"calendarLock",false,"bookingStage","STOPPED"));
+        JSONObject protectionState = new JSONObject();
+        try {
+          protectionState.put("running", false);
+          protectionState.put("protectPage", false);
+          protectionState.put("calendarLock", false);
+          protectionState.put("bookingStage", "STOPPED");
+        } catch (org.json.JSONException e) {
+          throw new IllegalStateException(e);
+        }
+        updateProtection(protectionState);
         final String id=String.valueOf(System.nanoTime());pendingId=id;afterStop=action;
         if(nativePort!=null){JSONObject o=json("STOP");try{o.put("id",id);}catch(Exception ignored){}nativePort.postMessage(o);}
         service.handler.postDelayed(()->finishNavigation(id),nativePort==null?0:1200);
@@ -164,7 +173,16 @@ final class BrowserEngine {
       if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Test reset must run on the main thread");
       protectedPage=false;pageLostProtected=false;sessionExpired=false;sessionExpiredHeader="";loggedInPage=true;protectedStage="";protectedUrl="";
       lastPageReason="Test fixture reset";lastState=new JSONObject();monitoring=false;
-      updateProtection(json("running",false,"protectPage",false,"calendarLock",false,"bookingStage","STOPPED"));
+      JSONObject protectionState = new JSONObject();
+        try {
+          protectionState.put("running", false);
+          protectionState.put("protectPage", false);
+          protectionState.put("calendarLock", false);
+          protectionState.put("bookingStage", "STOPPED");
+        } catch (org.json.JSONException e) {
+          throw new IllegalStateException(e);
+        }
+        updateProtection(protectionState);
       pageQuery="";pageUrl="";pageReady=false;pageLoading=false;showingMonitor=false;canGoBack=false;
       pendingId=null;afterStop=null;activeStates.clear();priorityHints.clear();
       if(current!=null){GeckoSession previous=current;current=null;sessions.remove(previous);if(previous.isOpen())previous.close();}
