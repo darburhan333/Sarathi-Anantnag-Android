@@ -9,16 +9,16 @@ if [ "${1:-all}" != "release-only" ]; then
   result=$?
 fi
 adb pull /data/local/tmp/monitor-preview.png monitor-preview.png >> emulator-diagnostic-capture-status.txt 2>&1 || echo "monitor-preview.png unavailable (non-fatal; test may have failed before capture)" >> emulator-diagnostic-capture-status.txt
-INSTALLED_SARATHI_PACKAGES="$(adb shell pm list packages | tr -d '\r' | grep -i sarathi || true)"
-printf 'Installed Sarathi packages (adb shell pm list packages | grep -i sarathi):\n%s\n' "$INSTALLED_SARATHI_PACKAGES" >> emulator-diagnostic-capture-status.txt
-PACKAGE_LINE="$(printf '%s\n' "$INSTALLED_SARATHI_PACKAGES" | grep -iv '\.test
+discover_sarathi_package() {
+  INSTALLED_SARATHI_PACKAGES="$(adb shell pm list packages | tr -d '\r' | grep -i sarathi || true)"
+  printf 'Installed Sarathi packages (adb shell pm list packages | grep -i sarathi):\n%s\n' "$INSTALLED_SARATHI_PACKAGES" >> emulator-diagnostic-capture-status.txt
+  PACKAGE_LINE="$(printf '%s\n' "$INSTALLED_SARATHI_PACKAGES" | grep -ivE '\.(test|geckotest)
 adb shell dumpsys power > emulator-power.txt 2>&1 || echo "dumpsys power failed" >> emulator-diagnostic-capture-status.txt
 adb shell dumpsys deviceidle > emulator-deviceidle.txt 2>&1 || echo "dumpsys deviceidle failed" >> emulator-diagnostic-capture-status.txt
 adb shell dumpsys battery > ci-evidence/emulator-battery.txt 2>&1 || echo "dumpsys battery failed" >> emulator-diagnostic-capture-status.txt
 adb shell dumpsys notification --noredact > ci-evidence/emulator-notifications.txt 2>&1 || echo "dumpsys notification failed" >> emulator-diagnostic-capture-status.txt
 adb logcat -d > emulator-logcat.txt 2>&1 || echo "logcat capture failed" >> emulator-diagnostic-capture-status.txt
 rm -f monitor-copy-log.txt monitor-copy-log.txt.tmp
-PACKAGE="$PACKAGE"
 CAPTURED=false
 CAPTURE_TMP="monitor-copy-log.txt.tmp"
 : > "$CAPTURE_TMP"
@@ -117,22 +117,33 @@ if [ "$result" -eq 0 ]; then
   "$APKSIGNER" verify --verbose "$APK_PATH" || exit 1
   echo "Installing signed release smoke APK: $APK_PATH"
   # Clear only the disposable CI emulator so debug extensions cannot survive into release smoke.
-  if adb shell pm path $PACKAGE | grep -q '^package:'; then
-    adb uninstall $PACKAGE || exit 1
+  if [ -n "$PACKAGE" ] && adb shell pm path "$PACKAGE" | grep -q '^package:'; then
+    adb uninstall "$PACKAGE" || exit 1
   fi
   adb install "$APK_PATH" || exit 1
-  adb shell pm clear $PACKAGE || exit 1
+  if [ -z "$PACKAGE" ]; then
+    discover_sarathi_package || true
+  fi
+  [ -n "$PACKAGE" ] || { echo "Unable to resolve installed Sarathi package after release install."; exit 1; }
+  adb shell pm clear "$PACKAGE" || exit 1
   python3 scripts/release-smoke.py || exit 1
 fi
 exit "$result"
 
  | head -n1)"
-PACKAGE="${PACKAGE_LINE#package:}"
+  PACKAGE="${PACKAGE_LINE#package:}"
+  if [ -n "$PACKAGE" ]; then
+    echo "Selected installed target package: $PACKAGE" >> emulator-diagnostic-capture-status.txt
+    return 0
+  fi
+  echo "No installed Sarathi target package found" >> emulator-diagnostic-capture-status.txt
+  return 1
+}
+PACKAGE=""
+discover_sarathi_package || true
 if [ -n "$PACKAGE" ]; then
-  echo "Selected installed target package: $PACKAGE" >> emulator-diagnostic-capture-status.txt
   adb shell dumpsys activity services "$PACKAGE" > service-state.txt 2>&1 || echo "dumpsys activity services failed" >> emulator-diagnostic-capture-status.txt
 else
-  echo "No installed Sarathi target package found; package-dependent captures skipped" >> emulator-diagnostic-capture-status.txt
   : > service-state.txt
 fi
 adb shell dumpsys power > emulator-power.txt 2>&1 || echo "dumpsys power failed" >> emulator-diagnostic-capture-status.txt
@@ -141,7 +152,6 @@ adb shell dumpsys battery > ci-evidence/emulator-battery.txt 2>&1 || echo "dumps
 adb shell dumpsys notification --noredact > ci-evidence/emulator-notifications.txt 2>&1 || echo "dumpsys notification failed" >> emulator-diagnostic-capture-status.txt
 adb logcat -d > emulator-logcat.txt 2>&1 || echo "logcat capture failed" >> emulator-diagnostic-capture-status.txt
 rm -f monitor-copy-log.txt monitor-copy-log.txt.tmp
-PACKAGE="$PACKAGE"
 CAPTURED=false
 CAPTURE_TMP="monitor-copy-log.txt.tmp"
 : > "$CAPTURE_TMP"
@@ -169,7 +179,7 @@ validate_diagnostic_candidate() {
   return 0
 }
 # Source 1: app-private file via run-as. Its failure is recorded, not mistaken for file content.
-if [ -n "$PACKAGE" ] && adb exec-out run-as "$PACKAGE" cat files/monitor-copy-log.txt > "$CAPTURE_TMP" 2>> emulator-diagnostic-capture-status.txt; then
+if adb exec-out run-as "$PACKAGE" cat files/monitor-copy-log.txt > "$CAPTURE_TMP" 2>> emulator-diagnostic-capture-status.txt; then
   validate_diagnostic_candidate "app-private-run-as" || rm -f "$CAPTURE_TMP"
 else
   rc=$?
@@ -179,7 +189,7 @@ fi
 # Source 2: target app external-files directory.
 if [ "$CAPTURED" != true ]; then
   rm -f "$CAPTURE_TMP"
-  if [ -n "$PACKAGE" ] && adb pull "/sdcard/Android/data/$PACKAGE/files/monitor-copy-log.txt" "$CAPTURE_TMP" >> emulator-diagnostic-capture-status.txt 2>&1; then
+  if adb pull "/sdcard/Android/data/$PACKAGE/files/monitor-copy-log.txt" "$CAPTURE_TMP" >> emulator-diagnostic-capture-status.txt 2>&1; then
     validate_diagnostic_candidate "target-app-external-files" || rm -f "$CAPTURE_TMP"
   else
     rc=$?
@@ -251,17 +261,15 @@ if [ "$result" -eq 0 ]; then
   "$APKSIGNER" verify --verbose "$APK_PATH" || exit 1
   echo "Installing signed release smoke APK: $APK_PATH"
   # Clear only the disposable CI emulator so debug extensions cannot survive into release smoke.
-  if adb shell pm path $PACKAGE | grep -q '^package:'; then
-    adb uninstall $PACKAGE || exit 1
+  if [ -n "$PACKAGE" ] && adb shell pm path "$PACKAGE" | grep -q '^package:'; then
+    adb uninstall "$PACKAGE" || exit 1
   fi
   adb install "$APK_PATH" || exit 1
   if [ -z "$PACKAGE" ]; then
-    INSTALLED_AFTER_BUILD="$(adb shell pm list packages | tr -d '\r' | grep -i sarathi || true)"
-    PACKAGE_LINE="$(printf '%s\n' "$INSTALLED_AFTER_BUILD" | grep -iv '\.test$' | head -n1)"
-    PACKAGE="${PACKAGE_LINE#package:}"
+    discover_sarathi_package || true
   fi
   [ -n "$PACKAGE" ] || { echo "Unable to resolve installed Sarathi package after release install."; exit 1; }
-  adb shell pm clear $PACKAGE || exit 1
+  adb shell pm clear "$PACKAGE" || exit 1
   python3 scripts/release-smoke.py || exit 1
 fi
 exit "$result"
