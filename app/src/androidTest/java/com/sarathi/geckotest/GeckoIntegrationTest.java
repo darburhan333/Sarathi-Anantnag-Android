@@ -40,6 +40,8 @@ public class GeckoIntegrationTest {
   try{if(fixtureService!=null)report.append(fixtureService.diagnosticReport());else report.append("MonitorService unavailable\n");}
   catch(Exception e){report.append("diagnosticReport failed: ").append(e).append('\n');}
   report.append("DIAG-END\n");
+  // Mirror the complete report to logcat as ordered DIAG-tagged text lines for CI fallback.
+  for(String diagnosticLine:report.toString().split("\n",-1))android.util.Log.i("DIAG",diagnosticLine);
   byte[] diagnosticBytes=report.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
   try(java.io.FileOutputStream out=InstrumentationRegistry.getInstrumentation().getTargetContext().openFileOutput("monitor-copy-log.txt",android.content.Context.MODE_PRIVATE)){
    out.write(diagnosticBytes);out.flush();

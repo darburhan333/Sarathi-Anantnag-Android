@@ -100,9 +100,10 @@ final class BrowserEngine {
       String stage=state.optString("bookingStage","");
       boolean bookingStage=stage.contains("SMS")||stage.contains("CALENDAR")||stage.contains("BOOK SLOT")||stage.equals("APPOINTMENT CONFIRMED");
       boolean protectedNow=state.optBoolean("protectPage")||state.optBoolean("calendarLock")||bookingStage;
+      boolean hasProtectionInputs=state.has("protectPage")||state.has("calendarLock")||state.has("bookingStage");
       if(protectedNow){
         protectedPage=true;protectedStage=stage;protectedUrl=safeLocation(state.optString("url",pageUrl));
-      }else if(state.optBoolean("running")&&!state.optBoolean("calendarLock")){
+      }else if(hasProtectionInputs){
         protectedPage=false;protectedStage="";protectedUrl="";
       }
       if(state.has("loggedIn"))loggedInPage=state.optBoolean("loggedIn",true);
@@ -140,7 +141,8 @@ final class BrowserEngine {
       service.confirmProtected(actionName,java.util.Collections.singletonList(this),()->{
         // Only an explicitly confirmed navigation may discard protected-page ownership.
         protectedPage=false;pageLostProtected=false;protectedStage="";protectedUrl="";
-        run.stopByUser(); // Revoke native action permissions before waiting for JavaScript.
+        run.stopByUser(false); // Revoke native action permissions before waiting for JavaScript.
+        updateProtection(json("running",false,"protectPage",false,"calendarLock",false,"bookingStage","STOPPED"));
         final String id=String.valueOf(System.nanoTime());pendingId=id;afterStop=action;
         if(nativePort!=null){JSONObject o=json("STOP");try{o.put("id",id);}catch(Exception ignored){}nativePort.postMessage(o);}
         service.handler.postDelayed(()->finishNavigation(id),nativePort==null?0:1200);
@@ -162,6 +164,7 @@ final class BrowserEngine {
       if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Test reset must run on the main thread");
       protectedPage=false;pageLostProtected=false;sessionExpired=false;sessionExpiredHeader="";loggedInPage=true;protectedStage="";protectedUrl="";
       lastPageReason="Test fixture reset";lastState=new JSONObject();monitoring=false;
+      updateProtection(json("running",false,"protectPage",false,"calendarLock",false,"bookingStage","STOPPED"));
       pageQuery="";pageUrl="";pageReady=false;pageLoading=false;showingMonitor=false;canGoBack=false;
       pendingId=null;afterStop=null;activeStates.clear();priorityHints.clear();
       if(current!=null){GeckoSession previous=current;current=null;sessions.remove(previous);if(previous.isOpen())previous.close();}

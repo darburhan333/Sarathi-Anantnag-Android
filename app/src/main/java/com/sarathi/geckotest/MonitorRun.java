@@ -54,7 +54,11 @@ final class MonitorRun {
   engine.service.refreshForeground(true);
  }
  String lastReasonForTest(){return lastReason;}
- void stopByUser(){engine.service.cancelStartBatch();lastReason="Stopped by user";disarm();engine.command("STOP");engine.command("SILENCE");engine.alerts.silence();}
+ void stopByUser(){stopByUser(true);}
+ void stopByUser(boolean recomputeProtection){
+  engine.service.cancelStartBatch();lastReason="Stopped by user";disarm();engine.command("STOP");engine.command("SILENCE");engine.alerts.silence();
+  if(recomputeProtection)engine.updateProtection(engine.lastState);
+ }
  void stopForBackground(String message){
   if(!armed)return;lastReason=message;engine.log(message);
   disarm(false);engine.command("SAFE_STOP",message);
