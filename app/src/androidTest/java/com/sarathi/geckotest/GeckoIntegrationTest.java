@@ -5,6 +5,8 @@ import androidx.test.rule.GrantPermissionRule;
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.*;
 import org.junit.runner.RunWith;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
 import java.net.*;
 import java.io.*;
 import static org.junit.Assert.*;
@@ -13,6 +15,9 @@ public class GeckoIntegrationTest {
  // Lifecycle tests use separate applicant profiles where page-loss latches are part of the scenario.
  @Rule public GrantPermissionRule permissions=GrantPermissionRule.grant(android.Manifest.permission.POST_NOTIFICATIONS);
  @Rule public ActivityTestRule<MainActivity> activity=new ActivityTestRule<>(MainActivity.class);
+ @Rule public TestWatcher diagnosticWatcher=new TestWatcher(){
+  @Override protected void failed(Throwable failure,Description description){writeDiagnosticFile("TEST FAILURE "+description.getClassName()+"#"+description.getMethodName()+": "+failure);}
+ };
  private final java.util.concurrent.atomic.AtomicInteger requests=new java.util.concurrent.atomic.AtomicInteger();
  private void shell(String command)throws Exception{
   try(android.os.ParcelFileDescriptor fd=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
@@ -27,7 +32,16 @@ public class GeckoIntegrationTest {
   resetApplicantFixtures("before");
  }
  @After public void resetFixturesAfter()throws Exception{
-  if(fixtureService!=null)resetApplicantFixtures("after");
+  try{writeDiagnosticFile("TEST TEARDOWN");}
+  finally{if(fixtureService!=null)resetApplicantFixtures("after");}
+ }
+ private void writeDiagnosticFile(String label){
+  StringBuilder report=new StringBuilder("MPARIVAHAN MONITOR DIAGNOSTICS\n").append(label).append('\n');
+  try{if(fixtureService!=null)report.append(fixtureService.diagnosticReport());else report.append("MonitorService unavailable\n");}
+  catch(Exception e){report.append("diagnosticReport failed: ").append(e).append('\n');}
+  try(java.io.FileOutputStream out=InstrumentationRegistry.getInstrumentation().getTargetContext().openFileOutput("monitor-copy-log.txt",android.content.Context.MODE_PRIVATE)){
+   out.write(report.toString().getBytes("UTF-8"));out.flush();
+  }catch(Exception e){System.err.println("DIAGNOSTIC_FILE_WRITE_FAILED "+e);}
  }
  private void resetApplicantFixtures(String phase)throws Exception{
   java.util.ArrayList<BrowserEngine> existing=new java.util.ArrayList<>();
@@ -67,7 +81,7 @@ public class GeckoIntegrationTest {
  private String stopSnapshot(MonitorService s){
   org.json.JSONObject state=s.engine.lastState;
   org.mozilla.geckoview.GeckoSession current=s.engine.current;
-  String currentState=current==null?"null":current.isOpen()?"open":"closed";
+  String currentState=current==null?"null":"present";
   return "protectedPage="+s.engine.protectedPage+
    ", protectedStage="+s.engine.protectedStage+
    ", pageLostProtected="+s.engine.pageLostProtected+
@@ -86,15 +100,14 @@ public class GeckoIntegrationTest {
    "dumpsys notification --noredact",
    "logcat -d -t 1200"
   })try{System.out.println("COMMAND "+command+"\\n"+shellText(command));}catch(Exception e){System.out.println("EVIDENCE_COMMAND_FAILED "+command+" "+e);}
-  try(java.io.FileOutputStream out=InstrumentationRegistry.getInstrumentation().getTargetContext().openFileOutput("monitor-copy-log.txt",android.content.Context.MODE_PRIVATE)){
-   out.write(s.diagnosticReport().getBytes("UTF-8"));
-  }
+  writeDiagnosticFile(label);
   System.out.println("MONITOR_COPY_LOG\n"+s.diagnosticReport());
   System.out.println("EVIDENCE_END "+label);
  }
  private void progress(MonitorService s,String label,int seconds)throws Exception{
   int before=s.attemptsForTest(),beforeRequests=requests.get();Thread.sleep(seconds*1000L);
   if(!s.isArmedForTest()||!s.isPromotedForTest())captureEvidence(s,label+" run/service failure");
+  if(label.contains("screen locked")||label.contains("forced Doze"))assertTrue(label+": KeepAlive silent audio must remain running",s.isKeepAliveAudioRunningForTest());
   String events=s.getSharedPreferences("diagnostics",0).getString("events","");String[] lines=events.split("\n");StringBuilder tail=new StringBuilder();String disarm="No DISARM recorded";for(String line:lines)if(line.contains("DISARM"))disarm=line;for(int i=Math.max(0,lines.length-40);i<lines.length;i++)tail.append(lines[i]).append('\n');
   String detail="; "+disarm+"\n"+tail+"\n"+s.engine.run.rawState()+"\nengine.lastState="+s.engine.lastState;
   assertTrue(label+": service not promoted"+detail,s.isPromotedForTest());
@@ -193,6 +206,7 @@ public class GeckoIntegrationTest {
    end=System.currentTimeMillis()+10000;
    while(reopened.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
    assertSame("Must reuse same service and browser",s,reopened.serviceForTest());
+   main(()->assertTrue("Re-attached GeckoSession must remain open",s.engine.current!=null&&s.engine.current.isOpen()));
    main(()->s.engine.command("SMOKE_CONTINUE"));
    end=System.currentTimeMillis()+100000;
    while(s.engine.smokeResult.isEmpty()&&System.currentTimeMillis()<end)Thread.sleep(500);
@@ -232,11 +246,15 @@ public class GeckoIntegrationTest {
      assertTrue("Notification STOP must retain protected foreground service; "+stopSnapshot(s),s.isPromotedForTest());
      assertTrue("Notification STOP must retain KeepAlive; "+stopSnapshot(s),s.isKeepAliveRunningForTest());
      assertNotNull("Notification STOP must retain protected current session; "+stopSnapshot(s),s.engine.current);
+     assertTrue("Notification STOP must retain open protected session; "+stopSnapshot(s),s.engine.current.isOpen());
+     assertTrue("Notification STOP must retain KeepAlive silent audio; "+stopSnapshot(s),s.isKeepAliveAudioRunningForTest());
      assertTrue("Notification STOP must retain active protected session; "+stopSnapshot(s),Boolean.TRUE.equals(s.engine.activeStates.get(s.engine.current)));
      assertTrue("Notification STOP must retain PRIORITY_HIGH; "+stopSnapshot(s),s.engine.isPriorityHighForTest(s.engine.current));
     }else{
      assertFalse("Unprotected applicant must not become protected after STOP; "+stopSnapshot(s),s.engine.protectedPage);
      assertFalse("KeepAlive must stop for unprotected applicant after STOP; "+stopSnapshot(s),s.isKeepAliveRunningForTest());
+     Thread.sleep(31000L);
+     assertFalse("KeepAlive silent audio must stop after unprotected STOP grace; "+stopSnapshot(s),s.isKeepAliveAudioRunningForTest());
     }
    });
    System.out.println("PASS realExtensionLoop: locked, forced-Doze, Activity-destroyed and STOP phases");
