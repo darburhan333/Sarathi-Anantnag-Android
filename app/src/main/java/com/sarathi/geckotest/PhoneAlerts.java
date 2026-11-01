@@ -169,7 +169,7 @@ final class PhoneAlerts {
   int max=audio==null?0:audio.getStreamMaxVolume(AudioManager.STREAM_ALARM);
   boolean blocks=false;
   try{
-   int zenMode=android.provider.Settings.Global.getInt(context.getContentResolver(),android.provider.Settings.Global.ZEN_MODE,0);
+   int zenMode=android.provider.Settings.Global.getInt(context.getContentResolver(),"zen_mode",0);
    if(zenMode==2)blocks=true;
    else if(zenMode==1){
     NotificationManager nm=context.getSystemService(NotificationManager.class);

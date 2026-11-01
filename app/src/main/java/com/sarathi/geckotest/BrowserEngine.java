@@ -209,9 +209,9 @@ final class BrowserEngine {
           log("Monitor connected in "+(SystemClock.elapsedRealtime()-startupAt)+" ms");
           log("Monitor ready — open Sarathi, then MONITOR to start");prepareMonitor();break;
         case "CRITICAL":{
-          String kind=o.optString("kind"),message=o.optString("message"),eventKey=o.optString("eventKey");
+          String kind=o.optString("kind"),criticalMessage=o.optString("message"),eventKey=o.optString("eventKey");
           if("SESSION_EXPIRED".equals(kind))run.sessionExpired(eventKey);
-          else alerts.critical(kind,message,eventKey);
+          else alerts.critical(kind,criticalMessage,eventKey);
           break;
         }
         case "ALERT_DELIVERY":service.record("ALERT A"+profile+" kind="+o.optString("kind")+" Telegram="+o.optString("telegram"));break;
