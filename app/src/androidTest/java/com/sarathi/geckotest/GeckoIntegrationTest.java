@@ -109,6 +109,18 @@ public class GeckoIntegrationTest {
    ", successWatch="+state.optBoolean("successWatch")+
    ", calendarLock="+state.optBoolean("calendarLock");
  }
+ private String stopSnapshot(BrowserEngine e){
+  org.json.JSONObject state=e.lastState;
+  org.mozilla.geckoview.GeckoSession current=e.current;
+  String currentState=current==null?"null":"present";
+  return "protectedPage="+e.protectedPage+
+   ", protectedStage="+e.protectedStage+
+   ", pageLostProtected="+e.pageLostProtected+
+   ", armed="+e.run.armed+
+   ", current="+currentState+
+   ", successWatch="+state.optBoolean("successWatch")+
+   ", calendarLock="+state.optBoolean("calendarLock");
+ }
  private void logProtectionSnapshot(MonitorService service,String label){
   main(()->{
    for(int i=0;i<service.profiles.length;i++){
@@ -463,7 +475,7 @@ public class GeckoIntegrationTest {
    assertTrue("SMS stage must establish protection before STOP",e.protectedPage);
    e.stopFromUi();
    assertFalse("STOP must disarm SMS applicant immediately",e.run.armed);
-   assertTrue("STOP must preserve SMS page protection",e.protectedPage);
+   assertTrue("STOP must preserve SMS page protection; protectedPage="+e.protectedPage+", protectedStage="+e.protectedStage+", protectedUrl="+e.protectedUrl+", lastState="+e.lastState.toString()+", armed="+e.run.armed+", "+stopSnapshot(e),e.protectedPage);
    assertTrue("Protected SMS page must keep service foreground",service.isPromotedForTest());
    assertTrue("Protected SMS page must keep KeepAlive running",service.isKeepAliveRunningForTest());
    assertTrue("Protected SMS page must keep silent audio running",service.isKeepAliveAudioRunningForTest());
@@ -487,7 +499,7 @@ public class GeckoIntegrationTest {
   assertFalse("Notification STOP ALL must disarm protected applicant without Activity",protectedApplicant.run.armed);
   assertFalse("Notification STOP ALL must disarm unprotected applicant without Activity",normalApplicant.run.armed);
   main(()->{
-   assertTrue("Notification STOP must preserve SMS page protection",protectedApplicant.protectedPage);
+   assertTrue("Notification STOP must preserve SMS page protection; protectedPage="+protectedApplicant.protectedPage+", protectedStage="+protectedApplicant.protectedStage+", protectedUrl="+protectedApplicant.protectedUrl+", lastState="+protectedApplicant.lastState.toString()+", armed="+protectedApplicant.run.armed+", "+stopSnapshot(protectedApplicant),protectedApplicant.protectedPage);
    assertTrue("Protected page must keep service foreground",service.isPromotedForTest());
    assertTrue("Protected page must keep KeepAlive running",service.isKeepAliveRunningForTest());
    assertTrue("Protected page must keep silent audio running",service.isKeepAliveAudioRunningForTest());
