@@ -167,6 +167,8 @@ public class PhoneAlertsTest {
         try {
             alerts.newRun();
             for (String kind : kinds) alerts.critical(kind, "Critical test: " + kind);
+            // Ensure the main-looper queue has delivered the entire critical batch before checking it.
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
             for (String kind : kinds) {
                 int id = alerts.criticalNotificationId(kind);
                 StatusBarNotification delivered = awaitNotification(manager, id);
