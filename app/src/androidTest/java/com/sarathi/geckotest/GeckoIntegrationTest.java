@@ -33,7 +33,7 @@ public class GeckoIntegrationTest {
  }
  @After public void resetFixturesAfter()throws Exception{
   try{writeDiagnosticFile("TEST TEARDOWN");}
-  finally{if(fixtureService!=null)resetApplicantFixtures("after");}
+  finally{if(fixtureService!=null&&!fixtureService.isDestroyingForTest())resetApplicantFixtures("after");}
  }
  private void writeDiagnosticFile(String label){
   StringBuilder report=new StringBuilder("MPARIVAHAN MONITOR DIAGNOSTICS\n").append(label).append('\n');
@@ -48,6 +48,16 @@ public class GeckoIntegrationTest {
    if(external==null)throw new java.io.IOException("External app files directory unavailable");
    try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(external,"monitor-copy-log.txt"))){out.write(diagnosticBytes);out.flush();}
   }catch(Exception e){System.err.println("DIAGNOSTIC_EXTERNAL_FILE_WRITE_FAILED "+e);}
+  try{
+   String encoded=android.util.Base64.encodeToString(diagnosticBytes,android.util.Base64.NO_WRAP);
+   for(int offset=0;offset<encoded.length();offset+=8000){
+    String chunk=encoded.substring(offset,Math.min(encoded.length(),offset+8000));
+    String redirect=offset==0?">":">>";
+    String command="printf '%s' '"+chunk+"' | base64 -d "+redirect+" /data/local/tmp/monitor-copy-log.txt";
+    try(android.os.ParcelFileDescriptor fd=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
+        InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){while(in.read()!=-1){}}
+   }
+  }catch(Exception e){System.err.println("DIAGNOSTIC_SHELL_FILE_WRITE_FAILED "+e);}
  }
  private void resetApplicantFixtures(String phase)throws Exception{
   java.util.ArrayList<BrowserEngine> existing=new java.util.ArrayList<>();
@@ -233,8 +243,9 @@ public class GeckoIntegrationTest {
    shell("screencap -p /data/local/tmp/monitor-preview.png");
    assertTrue("Monitor viewport remained blank after re-attachment; colors="+colors,colors>=30);
    System.out.println("realExtensionLoop: 10-minute locked, forced-Doze and Activity-destroyed phases completed; next exercising notification STOP");
+   java.util.concurrent.atomic.AtomicBoolean waitCompleted=new java.util.concurrent.atomic.AtomicBoolean();
    java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
-   main(()->{s.arm();s.waitFor(8000).accept(result->cancelled.set(result.toString().contains("cancelled")));});
+   main(()->{s.arm();s.waitFor(8000).accept(result->{String payload=result==null?"":result.toString();cancelled.set(payload.contains("\"cancelled\":true"));waitCompleted.set(true);});});
    main(reopened::finish);
    java.util.concurrent.atomic.AtomicBoolean hidden=new java.util.concurrent.atomic.AtomicBoolean();
    long hiddenDeadline=System.currentTimeMillis()+5000;
@@ -246,7 +257,10 @@ public class GeckoIntegrationTest {
    while(System.currentTimeMillis()<stopDeadline){main(()->disarmed.set(!s.isArmedForTest()));if(disarmed.get())break;Thread.sleep(50);}
    assertTrue("Notification STOP action must disarm when no Activity is visible; "+stopSnapshot(s),disarmed.get());
    assertFalse("STOP must disarm automation; "+stopSnapshot(s),s.isArmedForTest());
-   assertTrue("STOP must cancel pending native wait",cancelled.get());
+   long waitCallbackDeadline=System.currentTimeMillis()+5000;
+   while(!waitCompleted.get()&&System.currentTimeMillis()<waitCallbackDeadline)Thread.sleep(25);
+   assertTrue("STOP must complete the pending native wait callback",waitCompleted.get());
+   assertTrue("STOP must cancel pending native wait; callback completed="+waitCompleted.get(),cancelled.get());
    java.util.concurrent.atomic.AtomicBoolean unprotectedStop=new java.util.concurrent.atomic.AtomicBoolean();
    main(()->{
     if(s.engine.protectedPage){
@@ -371,7 +385,7 @@ public class GeckoIntegrationTest {
    assertEquals("STOP fixture must have no active applicants",0,service.activeCount());
    assertEquals("STOP fixture must have no protected applicants",0,service.protectedCount());
    service.engine=e;service.activity=a;service.visible=true;e.run.arm();
-   e.updateProtection(json("running",true,"bookingStage","MONITORING","successWatch",true));
+   long stateAt=android.os.SystemClock.elapsedRealtime();org.json.JSONObject runningState=json("running",true,"bookingStage","MONITORING","successWatch",true,"heartbeatAt",stateAt,"monitorProgressAt",stateAt);e.run.onState(runningState);e.updateProtection(runningState);
    assertFalse("Unprotected applicant must remain unprotected",e.protectedPage);
    assertEquals("Only the target applicant may be armed",1,service.activeCount());
    assertEquals("No applicant may hold page protection",0,service.protectedCount());
