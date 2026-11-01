@@ -10,7 +10,7 @@ public final class MonitorService extends Service {
  final HandlerThread clockThread=new HandlerThread("MonitoringClock",android.os.Process.THREAD_PRIORITY_DEFAULT);Handler clock;
  private volatile long clockBeat,clockUptime,longestClockGap,mainBeat;volatile long screenOffAt,screenOnAt;private final java.util.concurrent.atomic.AtomicBoolean tickQueued=new java.util.concurrent.atomic.AtomicBoolean();
  private volatile boolean needsCpu;
- final String processId=java.util.UUID.randomUUID().toString().substring(0,8);private volatile long renewAt;private long stopAfter,lastNotification,lastStallAt;
+ final String processId=java.util.UUID.randomUUID().toString().substring(0,8);private volatile long renewAt;private long stopAfter,lastNotification,lastStallAt;private String lastNotificationText="";
  private PowerManager.WakeLock wake;private android.net.wifi.WifiManager.WifiLock wifiLock;private ConnectivityManager connectivity;private Network network;
  private final IBinder binder=new LocalBinder();
  private boolean screenReceiverRegistered;
@@ -54,25 +54,31 @@ public final class MonitorService extends Service {
   if(!power.isIgnoringBatteryOptimizations(getPackageName()))throw new IllegalStateException("Open Background setup and allow battery optimization exemption before START");
   if(power.isPowerSaveMode())throw new IllegalStateException("Turn off Battery Saver before background monitoring");
   activity.startForegroundService(new Intent(this,MonitorService.class).setAction("ARM"));
-  if(Build.VERSION.SDK_INT>=34)startForeground(1002,notification(),ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE|ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);else startForeground(1002,notification());
+  String initialSummary=notificationText();Notification initialNotification=notification(initialSummary);
+  if(Build.VERSION.SDK_INT>=34)startForeground(1002,initialNotification,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE|ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);else startForeground(1002,initialNotification);
+  lastNotificationText=initialSummary;lastNotification=SystemClock.elapsedRealtime();
   promoted=true;stopAfter=0;needsCpu=true;synchronized(wake){wake.acquire(120000);renewAt=SystemClock.elapsedRealtime()+30000;}
   if(wifiLock!=null&&!wifiLock.isHeld())wifiLock.acquire();
   keepAlive.start();if(!keepAlive.overlayAllowed())record("WARNING: overlay permission missing; background reliability is not established");
  }
  String routineWarning(){StringBuilder ids=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&e.run.armed&&e.alerts.mode().equals("ROUTINE OFF")){if(ids.length()>0)ids.append(", ");ids.append("A").append(e.profile);}return ids.length()==0?"":"\nALERTS: ROUTINE OFF ("+ids+")";}
- private Notification notification(){
-  PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-  PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,MonitorService.class).setAction("STOP"),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+ private String notificationText(){
   StringBuilder text=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&(e.run.armed||e.protectedPage)){if(text.length()>0)text.append(" · ");text.append("A").append(e.profile).append(" ").append(e.lastState.optBoolean("calendarLock")?"CALENDAR, act now":e.lastState.optString("bookingStage").contains("SMS")?"SMS, waiting":String.valueOf(e.lastState.optInt("sessionAttempts"))).append(" [").append(e.alerts.mode()).append("]");}
   if(text.length()==0)text.append(alerting()?"Alert active — open app":"Finishing alerts");
-  String summary=text.toString()+routineWarning()+(keepAlive.overlayAllowed()?"":"\nWARNING: Display over other apps permission missing");
+  return text.toString()+routineWarning()+(keepAlive.overlayAllowed()?"":"\nWARNING: Display over other apps permission missing");
+ }
+ static boolean shouldUpdateForegroundNotificationForTest(String previous,String next,long now,long last){return !java.util.Objects.equals(previous,next)&&(last==0||now-last>=10000L);}
+ private Notification notification(){return notification(notificationText());}
+ private Notification notification(String summary){
+  PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+  PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,MonitorService.class).setAction("STOP"),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
   return new Notification.Builder(this,"sarathi-monitor").setSmallIcon(R.drawable.ic_notification).setContentTitle("MPARIVAHAN SLOT BOOKING -J&K").setContentText(summary).setStyle(new Notification.BigTextStyle().bigText(summary)).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).addAction(new Notification.Action.Builder(null,"STOP ALL",stop).build()).build();
  }
  void refreshForeground(boolean immediate){needsCpu=activeCount()>0||protectedCount()>0||alerting();if(destroying||!promoted)return;
   if(activeCount()>0||protectedCount()>0)keepAlive.start();else keepAlive.stop();
   long now=SystemClock.elapsedRealtime();
   if(activeCount()>0||protectedCount()>0||alerting())stopAfter=0;else if(stopAfter==0)stopAfter=now+30000;
-  if(immediate||now-lastNotification>=10000){getSystemService(NotificationManager.class).notify(1002,notification());lastNotification=now;}
+  String summary=notificationText();if(shouldUpdateForegroundNotificationForTest(lastNotificationText,summary,now,lastNotification)){getSystemService(NotificationManager.class).notify(1002,notification(summary));lastNotificationText=summary;lastNotification=now;}
   // Retain a bounded delivery grace period after monitoring stops.
   if(activeCount()==0&&protectedCount()==0&&!alerting()&&stopAfter>0&&now>=stopAfter){if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();}
  }

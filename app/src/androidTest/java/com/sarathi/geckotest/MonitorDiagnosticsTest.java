@@ -30,6 +30,13 @@ public class MonitorDiagnosticsTest {
         assertTrue(report, report.contains("screen-off max gap"));
     }
 
+    @Test public void foregroundNotificationChangesAreThrottledAndUnchangedTextIsNeverReposted() {
+        assertFalse(MonitorService.shouldUpdateForegroundNotificationForTest("same", "same", 50000, 40000));
+        assertFalse(MonitorService.shouldUpdateForegroundNotificationForTest("old", "new", 49000, 40000));
+        assertTrue(MonitorService.shouldUpdateForegroundNotificationForTest("old", "new", 50000, 40000));
+        assertTrue(MonitorService.shouldUpdateForegroundNotificationForTest("", "first", 1, 0));
+    }
+
     @Test public void diagnosticEventHistoryRemainsBounded() throws Exception {
         MainActivity main = activity.getActivity();
         long deadline = System.currentTimeMillis() + 30000;
