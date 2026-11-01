@@ -241,6 +241,7 @@ public class GeckoIntegrationTest {
    assertTrue("Notification STOP action must disarm when no Activity is visible; "+stopSnapshot(s),disarmed.get());
    assertFalse("STOP must disarm automation; "+stopSnapshot(s),s.isArmedForTest());
    assertTrue("STOP must cancel pending native wait",cancelled.get());
+   java.util.concurrent.atomic.AtomicBoolean unprotectedStop=new java.util.concurrent.atomic.AtomicBoolean();
    main(()->{
     if(s.engine.protectedPage){
      assertTrue("Notification STOP must retain protected foreground service; "+stopSnapshot(s),s.isPromotedForTest());
@@ -253,10 +254,13 @@ public class GeckoIntegrationTest {
     }else{
      assertFalse("Unprotected applicant must not become protected after STOP; "+stopSnapshot(s),s.engine.protectedPage);
      assertFalse("KeepAlive must stop for unprotected applicant after STOP; "+stopSnapshot(s),s.isKeepAliveRunningForTest());
-     Thread.sleep(31000L);
-     assertFalse("KeepAlive silent audio must stop after unprotected STOP grace; "+stopSnapshot(s),s.isKeepAliveAudioRunningForTest());
+     unprotectedStop.set(true);
     }
    });
+   if(unprotectedStop.get()){
+    Thread.sleep(31000L);
+    assertFalse("KeepAlive silent audio must stop after unprotected STOP grace; "+stopSnapshot(s),s.isKeepAliveAudioRunningForTest());
+   }
    System.out.println("PASS realExtensionLoop: locked, forced-Doze, Activity-destroyed and STOP phases");
   }finally{
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");
