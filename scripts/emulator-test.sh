@@ -17,31 +17,68 @@ adb logcat -d > emulator-logcat.txt 2>&1 || echo "logcat capture failed" >> emul
 rm -f monitor-copy-log.txt monitor-copy-log.txt.tmp
 PACKAGE="com.sarathi.anantnag.gecko.v33"
 CAPTURED=false
-# Prefer the app-private diagnostics file. run-as reads the exact file written
-# by the instrumentation target, avoiding stale or mismatched external paths.
-if adb exec-out run-as "$PACKAGE" cat files/monitor-copy-log.txt > monitor-copy-log.txt.tmp 2>> emulator-diagnostic-capture-status.txt && [ -s monitor-copy-log.txt.tmp ]; then
-  mv monitor-copy-log.txt.tmp monitor-copy-log.txt
+CAPTURE_TMP="monitor-copy-log.txt.tmp"
+: > "$CAPTURE_TMP"
+validate_diagnostic_candidate() {
+  local source="$1"
+  if [ ! -s "$CAPTURE_TMP" ]; then
+    echo "SOURCE $source FAILED: file missing or empty" >> emulator-diagnostic-capture-status.txt
+    return 1
+  fi
+  if grep -Eiq 'run-as:|unknown package' "$CAPTURE_TMP"; then
+    echo "SOURCE $source FAILED: file contains run-as/unknown-package error text" >> emulator-diagnostic-capture-status.txt
+    return 1
+  fi
+  if ! grep -Fxq 'DIAG-START' "$CAPTURE_TMP"; then
+    echo "SOURCE $source FAILED: missing exact DIAG-START marker line" >> emulator-diagnostic-capture-status.txt
+    return 1
+  fi
+  if ! grep -Fxq 'DIAG-END' "$CAPTURE_TMP"; then
+    echo "SOURCE $source FAILED: missing exact DIAG-END marker line" >> emulator-diagnostic-capture-status.txt
+    return 1
+  fi
+  mv "$CAPTURE_TMP" monitor-copy-log.txt
+  echo "SOURCE $source SUCCEEDED: validated DIAG-START and DIAG-END; $(wc -c < monitor-copy-log.txt) bytes" >> emulator-diagnostic-capture-status.txt
   CAPTURED=true
-  echo "monitor Copy-log captured from app-private files/" >> emulator-diagnostic-capture-status.txt
+  return 0
+}
+# Source 1: app-private file via run-as. Its failure is recorded, not mistaken for file content.
+if adb exec-out run-as "$PACKAGE" cat files/monitor-copy-log.txt > "$CAPTURE_TMP" 2>> emulator-diagnostic-capture-status.txt; then
+  validate_diagnostic_candidate "app-private-run-as" || rm -f "$CAPTURE_TMP"
+else
+  rc=$?
+  echo "SOURCE app-private-run-as FAILED: run-as command exit=$rc" >> emulator-diagnostic-capture-status.txt
+  rm -f "$CAPTURE_TMP"
 fi
-# Fall back to the app external-files directory, then the instrumentation shell handoff.
-if [ "$CAPTURED" != true ] && adb pull "/sdcard/Android/data/$PACKAGE/files/monitor-copy-log.txt" monitor-copy-log.txt.tmp >> emulator-diagnostic-capture-status.txt 2>&1 && [ -s monitor-copy-log.txt.tmp ]; then
-  mv monitor-copy-log.txt.tmp monitor-copy-log.txt
-  CAPTURED=true
-  echo "monitor Copy-log captured from external app files/" >> emulator-diagnostic-capture-status.txt
+# Source 2: target app external-files directory.
+if [ "$CAPTURED" != true ]; then
+  rm -f "$CAPTURE_TMP"
+  if adb pull "/sdcard/Android/data/$PACKAGE/files/monitor-copy-log.txt" "$CAPTURE_TMP" >> emulator-diagnostic-capture-status.txt 2>&1; then
+    validate_diagnostic_candidate "target-app-external-files" || rm -f "$CAPTURE_TMP"
+  else
+    rc=$?
+    echo "SOURCE target-app-external-files FAILED: adb pull exit=$rc" >> emulator-diagnostic-capture-status.txt
+    rm -f "$CAPTURE_TMP"
+  fi
 fi
-if [ "$CAPTURED" != true ] && adb pull /data/local/tmp/monitor-copy-log.txt monitor-copy-log.txt.tmp >> emulator-diagnostic-capture-status.txt 2>&1 && [ -s monitor-copy-log.txt.tmp ]; then
-  mv monitor-copy-log.txt.tmp monitor-copy-log.txt
-  CAPTURED=true
-  echo "monitor Copy-log captured from instrumentation shell handoff" >> emulator-diagnostic-capture-status.txt
+# Source 3: instrumentation shell handoff written directly by the test.
+if [ "$CAPTURED" != true ]; then
+  rm -f "$CAPTURE_TMP"
+  if adb pull /data/local/tmp/monitor-copy-log.txt "$CAPTURE_TMP" >> emulator-diagnostic-capture-status.txt 2>&1; then
+    validate_diagnostic_candidate "instrumentation-shell-handoff" || rm -f "$CAPTURE_TMP"
+  else
+    rc=$?
+    echo "SOURCE instrumentation-shell-handoff FAILED: adb pull exit=$rc" >> emulator-diagnostic-capture-status.txt
+    rm -f "$CAPTURE_TMP"
+  fi
 fi
-rm -f monitor-copy-log.txt.tmp
+rm -f "$CAPTURE_TMP"
 if [ "$CAPTURED" != true ] || [ ! -s monitor-copy-log.txt ]; then
-  echo "::error::monitor-copy-log.txt could not be captured or was empty; instrumentation diagnostics capture is mandatory"
-  echo "monitor Copy-log capture FAILED or EMPTY" >> emulator-diagnostic-capture-status.txt
+  echo "::error::No valid monitor-copy-log.txt source; required DIAG-START/DIAG-END markers were not captured"
+  echo "FINAL CAPTURE RESULT: FAILED" >> emulator-diagnostic-capture-status.txt
   result=1
 else
-  echo "monitor-copy-log.txt captured: $(wc -c < monitor-copy-log.txt) bytes"
+  echo "FINAL CAPTURE RESULT: SUCCEEDED from validated source" >> emulator-diagnostic-capture-status.txt
 fi
 if [ "$result" -eq 0 ]; then
   # The emulator job intentionally has no production signing secrets. Create a disposable
