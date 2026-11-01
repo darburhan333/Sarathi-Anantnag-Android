@@ -533,6 +533,8 @@ public class GeckoIntegrationTest {
   });
   assertFalse("SESSION_EXPIRED must disarm the applicant",e.run.armed);
   assertEquals("Session expired",e.run.lastReasonForTest());
+  assertFalse("Session expiry must also stop the receipt watcher",e.monitoring);
+  assertTrue("Monitor status must show terminal session expiry",e.monitorStatus.contains("SESSION EXPIRED"));
   String expected="A9: SESSION EXPIRED, restart from slot booking home";
   assertTrue("Copy-log header must show terminal session expiry",service.diagnosticReport().startsWith(expected));
   int id=e.alerts.criticalNotificationId("SESSION_EXPIRED");boolean found=false;long deadline=System.currentTimeMillis()+5000;

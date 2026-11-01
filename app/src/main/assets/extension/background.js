@@ -163,7 +163,8 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
     if(msg.type==='TEST_TELEGRAM'){return {delivery:sendTelegram('🔔 MPARIVAHAN SLOT BOOKING -J&K TEST ALERT — phone notifications are connected.',true)}}
     if (!sender.url?.startsWith('https://sarathi.parivahan.gov.in/')) return;
     const owner=await chrome.storage.local.get({monitoredTabId:null,monitorSessionId:'',running:false,successWatch:false});
-    if(!msg.sessionId || msg.sessionId!==owner.monitorSessionId || sender.tab?.id!==owner.monitoredTabId || (!owner.running&&!owner.successWatch))return;
+    const terminalSessionExpiry=msg.type==='SARATHI_WARNING'&&msg.kind==='SESSION_EXPIRED';
+    if(!msg.sessionId || msg.sessionId!==owner.monitorSessionId || sender.tab?.id!==owner.monitoredTabId || (!owner.running&&!owner.successWatch&&!terminalSessionExpiry))return;
     const criticalKind=msg.type==='SARATHI_SMS_READY'?'SMS_READY':msg.type==='SARATHI_WARNING'?(msg.kind||'SESSION'):msg.type==='SARATHI_BOOKED'?'BOOKED':(msg.kind||'CALENDAR');
     const criticalEventKey=String(msg.eventKey || (msg.sessionId+':'+msg.type+':'+sender.tab?.id+':'+String(msg.kind||'')+':'+String(msg.url||'')+':'+String(msg.bookingKey||'')));
     // Native alarm failure must never block independent desktop and Telegram delivery.

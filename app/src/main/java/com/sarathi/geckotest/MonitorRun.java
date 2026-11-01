@@ -43,9 +43,9 @@ final class MonitorRun {
   engine.service.markRunning(engine.profile,false);engine.service.refreshForeground(true);engine.activate();engine.render();
  }
  void sessionExpired(String eventKey){
-  engine.sessionExpired=true;
+  engine.sessionExpired=true;engine.monitoring=false;
   String message="A"+engine.profile+": SESSION EXPIRED, restart from slot booking home";
-  engine.sessionExpiredHeader=message;
+  engine.sessionExpiredHeader=message;engine.monitorStatus="STOPPED · "+message;
   lastReason="Session expired";
   if(armed)disarm(false);
   engine.log(message);

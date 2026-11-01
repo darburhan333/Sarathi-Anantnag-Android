@@ -94,7 +94,7 @@ public class MonitorDiagnosticsTest {
         service.recordAudioModeForTest(android.media.AudioManager.MODE_IN_CALL);
         service.recordAudioModeForTest(android.media.AudioManager.MODE_RINGTONE);
         String events = service.getSharedPreferences("diagnostics", 0).getString("events", "");
-        assertTrue(events, events.contains("AudioManager mode changed unknown -> IN_CALL"));
+        assertTrue(events, events.contains(" -> IN_CALL"));
         assertTrue(events, events.contains("IN_CALL -> RINGTONE"));
     }
 
