@@ -36,9 +36,10 @@ public class GeckoIntegrationTest {
   finally{if(fixtureService!=null&&!fixtureService.isDestroyingForTest())resetApplicantFixtures("after");}
  }
  private void writeDiagnosticFile(String label){
-  StringBuilder report=new StringBuilder("MPARIVAHAN MONITOR DIAGNOSTICS\n").append(label).append('\n');
-  try{if(fixtureService!=null)report.append(fixtureService.diagnosticReport());else report.append("MonitorService unavailable\n");}
-  catch(Exception e){report.append("diagnosticReport failed: ").append(e).append('\n');}
+  StringBuilder report=new StringBuilder("DIAG-START\\nMPARIVAHAN MONITOR DIAGNOSTICS\\n").append(label).append('\\n');
+  try{if(fixtureService!=null)report.append(fixtureService.diagnosticReport());else report.append("MonitorService unavailable\\n");}
+  catch(Exception e){report.append("diagnosticReport failed: ").append(e).append('\\n');}
+  report.append("DIAG-END\\n");
   byte[] diagnosticBytes=report.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
   try(java.io.FileOutputStream out=InstrumentationRegistry.getInstrumentation().getTargetContext().openFileOutput("monitor-copy-log.txt",android.content.Context.MODE_PRIVATE)){
    out.write(diagnosticBytes);out.flush();
@@ -408,6 +409,14 @@ public class GeckoIntegrationTest {
    for(BrowserEngine applicant:service.profiles)if(applicant!=null&&(applicant.protectedPage||applicant.pageLostProtected))applicant.resetProtectionForTest();
   });
   logProtectionSnapshot(service,"immediately-after-reset");
+  long protectionWaitDeadline=System.currentTimeMillis()+5000;
+  java.util.concurrent.atomic.AtomicInteger remainingProtected=new java.util.concurrent.atomic.AtomicInteger();
+  do{
+   main(()->remainingProtected.set(service.protectedCount()));
+   if(remainingProtected.get()==0)break;
+   Thread.sleep(100);
+  }while(System.currentTimeMillis()<protectionWaitDeadline);
+  if(remainingProtected.get()!=0)logProtectionSnapshot(service,"protection-clear-timeout");
   main(()->{
    assertEquals("STOP fixture must have no active applicants",0,service.activeCount());
    assertEquals("STOP fixture must have no protected applicants",0,service.protectedCount());
