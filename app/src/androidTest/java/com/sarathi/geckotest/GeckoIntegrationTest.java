@@ -67,7 +67,7 @@ public class GeckoIntegrationTest {
  private String stopSnapshot(MonitorService s){
   org.json.JSONObject state=s.engine.lastState;
   org.mozilla.geckoview.GeckoSession current=s.engine.current;
-  String currentState=current==null?"null":current.isOpen()?"open":"closed";
+  String currentState=current==null?"null":"present";
   return "protectedPage="+s.engine.protectedPage+
    ", protectedStage="+s.engine.protectedStage+
    ", pageLostProtected="+s.engine.pageLostProtected+
@@ -232,6 +232,7 @@ public class GeckoIntegrationTest {
      assertTrue("Notification STOP must retain protected foreground service; "+stopSnapshot(s),s.isPromotedForTest());
      assertTrue("Notification STOP must retain KeepAlive; "+stopSnapshot(s),s.isKeepAliveRunningForTest());
      assertNotNull("Notification STOP must retain protected current session; "+stopSnapshot(s),s.engine.current);
+     assertTrue("Notification STOP must retain open protected session; "+stopSnapshot(s),s.engine.current.isOpen());
      assertTrue("Notification STOP must retain active protected session; "+stopSnapshot(s),Boolean.TRUE.equals(s.engine.activeStates.get(s.engine.current)));
      assertTrue("Notification STOP must retain PRIORITY_HIGH; "+stopSnapshot(s),s.engine.isPriorityHighForTest(s.engine.current));
     }else{
