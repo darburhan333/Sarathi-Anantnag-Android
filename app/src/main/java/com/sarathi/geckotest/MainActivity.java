@@ -121,7 +121,7 @@ public class MainActivity extends Activity {
       if(engine==null)return;
       MonitorService service=engine.service;
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(14),dp(8),dp(14),dp(8));
-      TextView hint=new TextView(this);hint.setText("Critical alarms always sound until Silence. Modes affect routine notices only. ALL includes routine sound; CRITICAL ONLY keeps critical alerts; ROUTINE OFF also shows a persistent reminder.");hint.setTextSize(12);hint.setPadding(0,0,0,dp(8));panel.addView(hint);
+      TextView hint=new TextView(this);hint.setText("Critical alarms pulse every 2 seconds for 60 seconds, then every 30 seconds until Silence. Modes affect routine notices only. ALL includes routine sound; CRITICAL ONLY keeps critical alerts; ROUTINE OFF also shows a persistent reminder.\n"+PhoneAlerts.alarmEnvironmentWarning(this));hint.setTextSize(12);hint.setPadding(0,0,0,dp(8));panel.addView(hint);
       android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(350)));
       for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){
         final int number=n;LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.VERTICAL);

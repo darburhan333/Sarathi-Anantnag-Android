@@ -184,6 +184,17 @@ public class PhoneAlertsTest {
         }
     }
 
+    @Test public void criticalAlarmPulseAndEnvironmentWarningsAreExplicit() {
+        assertEquals("First minute must pulse every 2 seconds", 2000L, PhoneAlerts.criticalPulseDelayForTest(0));
+        assertEquals("At 59 seconds must still pulse every 2 seconds", 2000L, PhoneAlerts.criticalPulseDelayForTest(59000));
+        assertEquals("After 60 seconds must pulse every 30 seconds", 30000L, PhoneAlerts.criticalPulseDelayForTest(60000));
+        assertEquals("Critical vibration must use maximum amplitude", 255, PhoneAlerts.criticalVibrationAmplitudeForTest());
+        assertTrue(PhoneAlerts.buildAlarmEnvironmentWarning(0, 10, false).contains("volume is 0"));
+        assertTrue(PhoneAlerts.buildAlarmEnvironmentWarning(1, 10, false).contains("volume is low"));
+        assertTrue(PhoneAlerts.buildAlarmEnvironmentWarning(8, 10, true).contains("Do Not Disturb"));
+        assertFalse(PhoneAlerts.buildAlarmEnvironmentWarning(8, 10, false).startsWith("WARNING:"));
+    }
+
     @Test public void criticalKindsRearmAfterSilenceCooldownAndEventChange() {
         PhoneAlerts alerts = new PhoneAlerts(InstrumentationRegistry.getInstrumentation().getTargetContext(), 7);
         alerts.silence();

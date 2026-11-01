@@ -11,10 +11,14 @@ final class PhoneAlerts {
  String mode(){return activity.getSharedPreferences("monitor",0).getString("alertMode"+profile,"CRITICAL ONLY");}
  void setMode(String mode){if(!java.util.Arrays.asList(MODES).contains(mode))throw new IllegalArgumentException("Invalid alert mode");activity.getSharedPreferences("monitor",0).edit().putString("alertMode"+profile,mode).apply();}
  private boolean criticalActive;
+ private long criticalStartedAt;
  private final java.util.Map<String,CriticalStamp> criticalKeys=new java.util.HashMap<>();
  private volatile int notificationGeneration;
  private static final long CRITICAL_REARM_MS=60000L;
  private static final long CRITICAL_POST_GAP_MS=250L;
+ private static final long CRITICAL_FAST_PULSE_MS=2000L;
+ private static final long CRITICAL_FAST_WINDOW_MS=60000L;
+ private static final long CRITICAL_SLOW_PULSE_MS=30000L;
  private static final Object CRITICAL_QUEUE_LOCK=new Object();
  private static final java.util.ArrayDeque<QueuedCritical> CRITICAL_QUEUE=new java.util.ArrayDeque<>();
  private static final Handler CRITICAL_HANDLER=new Handler(Looper.getMainLooper());
@@ -40,7 +44,7 @@ final class PhoneAlerts {
    criticalKeys.put(kind,new CriticalStamp(key,now));
   }
   enqueueCriticalNotification(kind,message,id);
-  runAudioSync(()->{if(!criticalActive){criticalActive=true;volume=85;startAudio(true);}});
+  runAudioSync(()->{if(!criticalActive){criticalActive=true;criticalStartedAt=SystemClock.elapsedRealtime();volume=100;startAudio(true);}});
   if(activity instanceof MonitorService){MonitorService s=(MonitorService)activity;s.record("ALERT A"+profile+" kind="+kind+" event="+key+" notification=queued audio=active");s.refreshForeground(true);}
   return true;
  }
@@ -82,18 +86,20 @@ final class PhoneAlerts {
  private final Vibrator vibrator;
  private boolean repeating;
  private int volume=85;
+ static long criticalPulseDelayForTest(long elapsedSinceStart){return elapsedSinceStart<CRITICAL_FAST_WINDOW_MS?CRITICAL_FAST_PULSE_MS:CRITICAL_SLOW_PULSE_MS;}
+ static int criticalVibrationAmplitudeForTest(){return 255;}
  private void schedulePulse(int generation){
   Runnable next=new Runnable(){public void run(){
    if(generation!=audioGeneration||!repeating||tone==null)return;
    beep();
    schedulePulse(generation);
   }};
-  pulse=next;handler.postDelayed(next,criticalActive?30000:1800);
+  pulse=next;long delay=criticalActive?criticalPulseDelayForTest(Math.max(0,SystemClock.elapsedRealtime()-criticalStartedAt)):1800L;handler.postDelayed(next,delay);
  }
  private void startAudio(boolean critical){
   audioGeneration++;handler.removeCallbacks(pulse);pulse=null;
   if(tone!=null){ToneGenerator old=tone;tone=null;old.release();}
-  volume=critical?85:volume;
+  volume=critical?100:volume;
   tone=new ToneGenerator(AudioManager.STREAM_ALARM,volume);
   repeating=true;beep();schedulePulse(audioGeneration);
  }
@@ -108,7 +114,10 @@ final class PhoneAlerts {
  }
  private void beep(){
   if(tone!=null)tone.startTone(ToneGenerator.TONE_PROP_BEEP2,650);
-  if(vibrator!=null && vibrator.hasVibrator())vibrator.vibrate(VibrationEffect.createOneShot(500,VibrationEffect.DEFAULT_AMPLITUDE));
+  if(vibrator!=null && vibrator.hasVibrator()){
+   if(criticalActive)vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0,900,200,900},new int[]{0,criticalVibrationAmplitudeForTest(),0,criticalVibrationAmplitudeForTest()},-1));
+   else vibrator.vibrate(VibrationEffect.createOneShot(500,VibrationEffect.DEFAULT_AMPLITUDE));
+  }
  }
  void audio(String action,boolean enabled,int requestedVolume){
   runAudioSync(()->{
@@ -126,7 +135,7 @@ final class PhoneAlerts {
   });
  }
  private void stopOnMain(){
-  audioGeneration++;handler.removeCallbacks(pulse);pulse=null;repeating=false;criticalActive=false;
+  audioGeneration++;handler.removeCallbacks(pulse);pulse=null;repeating=false;criticalActive=false;criticalStartedAt=0;
   if(tone!=null){ToneGenerator old=tone;tone=null;old.release();}
   if(vibrator!=null)vibrator.cancel();
  }
@@ -146,6 +155,29 @@ final class PhoneAlerts {
  int criticalNotificationId(String kind){
   for(int i=0;i<CRITICAL_KINDS.length;i++)if(CRITICAL_KINDS[i].equals(kind))return 3000+profile*20+i;
   throw new IllegalArgumentException("Unknown critical alert kind: "+kind);
+ }
+ static String buildAlarmEnvironmentWarning(int currentVolume,int maxVolume,boolean dndBlocksAlarms){
+  java.util.ArrayList<String> warnings=new java.util.ArrayList<>();
+  if(maxVolume<=0||currentVolume<=0)warnings.add("STREAM_ALARM volume is 0 — critical sound may be inaudible");
+  else if(currentVolume*5<=maxVolume)warnings.add("STREAM_ALARM volume is low — increase alarm volume");
+  if(dndBlocksAlarms)warnings.add("Do Not Disturb is blocking alarms — allow alarms in DND settings");
+  return warnings.isEmpty()?"Alarm volume and Do Not Disturb settings look OK": "WARNING: "+String.join("; ",warnings);
+ }
+ static String alarmEnvironmentWarning(Context context){
+  AudioManager audio=(AudioManager)context.getSystemService(Context.AUDIO_SERVICE);
+  int current=audio==null?0:audio.getStreamVolume(AudioManager.STREAM_ALARM);
+  int max=audio==null?0:audio.getStreamMaxVolume(AudioManager.STREAM_ALARM);
+  boolean blocks=false;
+  try{
+   NotificationManager nm=context.getSystemService(NotificationManager.class);
+   int filter=nm.getCurrentInterruptionFilter();
+   if(filter==NotificationManager.INTERRUPTION_FILTER_NONE)blocks=true;
+   else if(filter==NotificationManager.INTERRUPTION_FILTER_PRIORITY){
+    if(nm.isNotificationPolicyAccessGranted())blocks=(nm.getNotificationPolicy().priorityCategories&NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS)==0;
+    else blocks=true;
+   }
+  }catch(Exception ignored){}
+  return buildAlarmEnvironmentWarning(current,max,blocks);
  }
  void clearNotification(){
   cancelQueuedCriticalPosts();
