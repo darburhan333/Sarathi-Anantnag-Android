@@ -245,7 +245,7 @@ public class GeckoIntegrationTest {
    System.out.println("realExtensionLoop: 10-minute locked, forced-Doze and Activity-destroyed phases completed; next exercising notification STOP");
    java.util.concurrent.atomic.AtomicBoolean waitCompleted=new java.util.concurrent.atomic.AtomicBoolean();
    java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
-   main(()->{s.arm();s.waitFor(8000).accept(result->{String payload=result==null?"":result.toString();cancelled.set(payload.contains("\"cancelled\":true"));waitCompleted.set(true);});});
+   main(()->{s.arm();if(!s.isArmedForTest())throw new AssertionError("Pending-wait fixture failed to arm");s.waitFor(8000).accept(result->{String payload=result==null?"":result.toString();System.out.println("REAL_EXTENSION_STOP_WAIT_RESULT="+payload);cancelled.set(payload.contains("\"cancelled\":true"));waitCompleted.set(true);});});
    main(reopened::finish);
    java.util.concurrent.atomic.AtomicBoolean hidden=new java.util.concurrent.atomic.AtomicBoolean();
    long hiddenDeadline=System.currentTimeMillis()+5000;
@@ -380,6 +380,7 @@ public class GeckoIntegrationTest {
   main(()->{
    // KeepAlive is shared by all nine applicants. Isolate this assertion so a
    // different protected applicant cannot legitimately keep the shared service alive.
+   service.silenceAll();
    service.stopAll();
    for(BrowserEngine applicant:service.profiles)if(applicant!=null&&(applicant.protectedPage||applicant.pageLostProtected))applicant.resetProtectionForTest();
    assertEquals("STOP fixture must have no active applicants",0,service.activeCount());
@@ -397,7 +398,7 @@ public class GeckoIntegrationTest {
   });
   long deadline=System.currentTimeMillis()+40000;
   while(service.isPromotedForTest()&&System.currentTimeMillis()<deadline)Thread.sleep(250);
-  assertFalse("Unprotected service must leave foreground after the grace period",service.isPromotedForTest());
+  assertFalse("Unprotected service must leave foreground after the grace period; active="+service.activeCount()+" protected="+service.protectedCount()+" keepAlive="+service.isKeepAliveRunningForTest()+" report="+service.diagnosticReport(),service.isPromotedForTest());
   assertFalse("KeepAlive must remain stopped after the grace period",service.isKeepAliveRunningForTest());
  }
  @Test public void stopDuringCalendarReviewDisarmsAndKeepsProtectedPageActive()throws Exception{
