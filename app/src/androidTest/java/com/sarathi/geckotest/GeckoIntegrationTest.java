@@ -19,6 +19,36 @@ public class GeckoIntegrationTest {
       InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){while(in.read()!=-1){}}
  }
  private void main(Runnable r){InstrumentationRegistry.getInstrumentation().runOnMainSync(r);}
+ private MonitorService fixtureService;
+ @Before public void resetFixturesBefore()throws Exception{
+  MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
+  while((a.serviceForTest()==null||!a.extensionReadyForTest())&&System.currentTimeMillis()<end)Thread.sleep(200);
+  fixtureService=a.serviceForTest();assertNotNull("Monitor service did not initialize",fixtureService);
+  resetApplicantFixtures("before");
+ }
+ @After public void resetFixturesAfter()throws Exception{
+  if(fixtureService!=null)resetApplicantFixtures("after");
+ }
+ private void resetApplicantFixtures(String phase)throws Exception{
+  java.util.ArrayList<BrowserEngine> existing=new java.util.ArrayList<>();
+  main(()->{
+   fixtureService.stopAll();
+   for(BrowserEngine e:fixtureService.profiles)if(e!=null){
+    e.alerts.stop();e.alerts.clearNotification();e.alerts.newRun();e.resetProtectionForTest();existing.add(e);
+   }
+  });
+  for(BrowserEngine e:existing){
+   long end=System.currentTimeMillis()+60000;java.util.concurrent.atomic.AtomicBoolean ready=new java.util.concurrent.atomic.AtomicBoolean();
+   while(System.currentTimeMillis()<end){main(()->ready.set(e.ready));if(ready.get())break;Thread.sleep(200);}
+   assertTrue("Applicant "+e.profile+" extension did not become ready during "+phase+" fixture reset",ready.get());
+  }
+ }
+ private BrowserEngine readyApplicant(int number)throws Exception{
+  final BrowserEngine[] selected=new BrowserEngine[1];main(()->selected[0]=fixtureService.profile(number));
+  long end=System.currentTimeMillis()+60000;java.util.concurrent.atomic.AtomicBoolean ready=new java.util.concurrent.atomic.AtomicBoolean();
+  while(System.currentTimeMillis()<end){main(()->ready.set(selected[0].ready));if(ready.get())break;Thread.sleep(200);}
+  assertTrue("Applicant "+number+" extension did not connect",ready.get());return selected[0];
+ }
  private static org.json.JSONObject json(Object... pairs){
   if(pairs.length%2!=0)throw new IllegalArgumentException("JSON helper requires key/value pairs");
   org.json.JSONObject value=new org.json.JSONObject();
@@ -170,13 +200,44 @@ public class GeckoIntegrationTest {
    }
    shell("screencap -p /data/local/tmp/monitor-preview.png");
    assertTrue("Monitor viewport remained blank after re-attachment; colors="+colors,colors>=30);
-   assertFalse("STOP must release foreground mode: protectedPage="+s.engine.protectedPage+" protectedStage="+s.engine.protectedStage+" pageLostProtected="+s.engine.pageLostProtected+" armed="+s.engine.run.armed+" current="+(s.engine.current!=null),s.isArmedForTest());
+   System.out.println("realExtensionLoop: 10-minute locked, forced-Doze and Activity-destroyed phases completed; entering STOP assertions");
+   assertFalse("STOP must disarm automation (armed must be false)",s.isArmedForTest());
+   main(()->{
+    if(s.engine.protectedPage){
+     assertTrue("Protected page must keep service foreground after STOP",s.isPromotedForTest());
+     assertTrue("Protected page must keep KeepAlive running after STOP",s.isKeepAliveRunningForTest());
+     assertTrue("Protected page must keep silent audio running after STOP",s.isKeepAliveAudioRunningForTest());
+     assertNotNull("Protected page session must remain after STOP",s.engine.current);
+     assertTrue("Protected page session must remain open after STOP",s.engine.current.isOpen());
+     assertTrue("Protected page session must remain active after STOP",Boolean.TRUE.equals(s.engine.activeStates.get(s.engine.current)));
+     assertTrue("Protected page must retain PRIORITY_HIGH after STOP",s.engine.isPriorityHighForTest(s.engine.current));
+    }else{
+     assertFalse("Unprotected applicant must not become protected after STOP",s.engine.protectedPage);
+     assertFalse("KeepAlive must stop for unprotected applicant after STOP",s.isKeepAliveRunningForTest());
+    }
+   });
    java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
    main(()->{s.arm();s.waitFor(8000).accept(result->cancelled.set(result.toString().contains("cancelled")));});
+   main(reopened::finish);
+   java.util.concurrent.atomic.AtomicBoolean hidden=new java.util.concurrent.atomic.AtomicBoolean();
+   long hiddenDeadline=System.currentTimeMillis()+5000;
+   while(System.currentTimeMillis()<hiddenDeadline){main(()->hidden.set(!s.visible));if(hidden.get())break;Thread.sleep(50);}
+   assertTrue("Activity must be hidden before notification STOP",hidden.get());
    ctx.startService(new android.content.Intent(ctx,MonitorService.class).setAction("STOP"));
-   Thread.sleep(1000);
-   assertFalse("Notification STOP action must stop service",s.isArmedForTest());
+   java.util.concurrent.atomic.AtomicBoolean disarmed=new java.util.concurrent.atomic.AtomicBoolean();
+   long stopDeadline=System.currentTimeMillis()+5000;
+   while(System.currentTimeMillis()<stopDeadline){main(()->disarmed.set(!s.isArmedForTest()));if(disarmed.get())break;Thread.sleep(50);}
+   assertTrue("Notification STOP action must disarm when no Activity is visible",disarmed.get());
    assertTrue("STOP must cancel pending native wait",cancelled.get());
+   main(()->{
+    if(s.engine.protectedPage){
+     assertTrue("Notification STOP must retain protected foreground service",s.isPromotedForTest());
+     assertTrue("Notification STOP must retain KeepAlive",s.isKeepAliveRunningForTest());
+     assertTrue("Notification STOP must retain active protected session",Boolean.TRUE.equals(s.engine.activeStates.get(s.engine.current)));
+     assertTrue("Notification STOP must retain PRIORITY_HIGH",s.engine.isPriorityHighForTest(s.engine.current));
+    }
+   });
+   System.out.println("PASS realExtensionLoop: locked, forced-Doze, Activity-destroyed and STOP phases");
   }finally{
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");shell("input keyevent KEYCODE_WAKEUP");
    server.close();
@@ -271,40 +332,111 @@ public class GeckoIntegrationTest {
  }
 
  @Test public void normalMonitoringStartThenStopDoesNotRequireProtectionConfirmation()throws Exception{
-  MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
-  while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(200);
-  assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();BrowserEngine e=service.engine;
-  java.util.concurrent.atomic.AtomicBoolean accepted=new java.util.concurrent.atomic.AtomicBoolean();
+  MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=service.engine;
   main(()->{
-   service.stopAll();
-   // START is a foreground-only action. Keep the Activity visible while arming,
-   // then hide it before checking that an unprotected STOP needs no confirmation.
-   service.activity=a;service.visible=true;
+   service.activity=a;service.visible=true;e.run.arm();
    e.updateProtection(json("running",true,"bookingStage","MONITORING","successWatch",true));
-   assertFalse("Normal START must not protect COV: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage,e.protectedPage);
-   e.run.arm();
-   service.visible=false;
-   service.confirmProtected("Stop",java.util.Collections.singletonList(e),()->{e.run.stopByUser();accepted.set(true);});
+   assertFalse("Unprotected applicant must remain unprotected",e.protectedPage);
+   e.stopFromUi();
+   assertFalse("STOP must disarm the unprotected applicant",e.run.armed);
+   assertFalse("STOP must not create page protection",e.protectedPage);
+   assertFalse("KeepAlive must stop for an unprotected stopped applicant",service.isKeepAliveRunningForTest());
+   assertTrue("Service must remain foreground during its stop grace period",service.isPromotedForTest());
   });
-  assertTrue("Normal monitoring STOP must be accepted without a dialog",accepted.get());
-  assertFalse("Normal monitoring STOP must disarm",e.run.armed);
-  assertFalse("Normal monitoring STOP must leave page unprotected",e.protectedPage);
-  main(()->{service.visible=true;service.stopAll();});
+  long deadline=System.currentTimeMillis()+40000;
+  while(service.isPromotedForTest()&&System.currentTimeMillis()<deadline)Thread.sleep(250);
+  assertFalse("Unprotected service must leave foreground after the grace period",service.isPromotedForTest());
+  assertFalse("KeepAlive must remain stopped after the grace period",service.isKeepAliveRunningForTest());
  }
- @Test public void smsBookingStageRequiresProtectionConfirmation()throws Exception{
-  MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
-  while(!a.extensionReadyForTest()&&System.currentTimeMillis()<end)Thread.sleep(200);
-  assertTrue(a.extensionReadyForTest());MonitorService service=a.serviceForTest();BrowserEngine e=service.engine;
-  java.util.concurrent.atomic.AtomicBoolean accepted=new java.util.concurrent.atomic.AtomicBoolean();
+ @Test public void stopDuringCalendarReviewDisarmsAndKeepsProtectedPageActive()throws Exception{
+  MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=readyApplicant(3);
   main(()->{
-   service.visible=false;service.stopAll();
-   e.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION"));
-   assertTrue("SMS verification stage must be protected: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage,e.protectedPage);
-   service.confirmProtected("Stop",java.util.Collections.singletonList(e),()->accepted.set(true));
+   service.activity=a;service.visible=true;e.run.arm();
+   e.updateProtection(json("running",true,"bookingStage","CALENDAR REVIEW","calendarLock",true,"protectPage",true));
+   e.stopFromUi();
+   assertFalse("STOP during CALENDAR REVIEW must disarm immediately",e.run.armed);
+   assertTrue("STOP must preserve calendar protection",e.protectedPage);
+   assertTrue("Protected calendar page must keep service foreground",service.isPromotedForTest());
+   assertTrue("Protected calendar page must keep KeepAlive running",service.isKeepAliveRunningForTest());
+   assertTrue("Protected calendar page must keep silent audio running",service.isKeepAliveAudioRunningForTest());
+   assertNotNull("Protected calendar session must remain",e.current);
+   assertTrue("Protected calendar session must remain active",Boolean.TRUE.equals(e.activeStates.get(e.current)));
+   assertTrue("Protected calendar session must retain PRIORITY_HIGH",e.isPriorityHighForTest(e.current));
   });
-  assertFalse("Protected SMS stage must not accept STOP while app is hidden",accepted.get());
-  assertTrue("Confirmation-required alert should be active",e.alerts.isRepeating());
-  main(()->{e.alerts.stop();e.alerts.clearNotification();service.visible=true;service.stopAll();});
+ }
+ @Test public void stopDuringSmsStageKeepsProtectedPageActiveAndForeground()throws Exception{
+  MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=readyApplicant(4);
+  main(()->{
+   service.activity=a;service.visible=true;e.run.arm();
+   e.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true));
+   assertTrue("SMS stage must establish protection before STOP",e.protectedPage);
+   e.stopFromUi();
+   assertFalse("STOP must disarm SMS applicant immediately",e.run.armed);
+   assertTrue("STOP must preserve SMS page protection",e.protectedPage);
+   assertTrue("Protected SMS page must keep service foreground",service.isPromotedForTest());
+   assertTrue("Protected SMS page must keep KeepAlive running",service.isKeepAliveRunningForTest());
+   assertTrue("Protected SMS page must keep silent audio running",service.isKeepAliveAudioRunningForTest());
+   assertNotNull("Protected SMS page session must remain",e.current);
+   assertTrue("Protected SMS page session must stay active",Boolean.TRUE.equals(e.activeStates.get(e.current)));
+   assertTrue("Protected SMS page must retain PRIORITY_HIGH",e.isPriorityHighForTest(e.current));
+  });
+ }
+ @Test public void notificationStopWorksWithoutVisibleActivity()throws Exception{
+  MonitorService service=fixtureService;BrowserEngine protectedApplicant=readyApplicant(5),normalApplicant=readyApplicant(6);
+  main(()->{
+   service.activity=activity.getActivity();service.visible=true;
+   protectedApplicant.run.arm();normalApplicant.run.arm();
+   protectedApplicant.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true));
+   service.visible=false;service.activity=null;
+  });
+  android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  context.startService(new android.content.Intent(context,MonitorService.class).setAction("STOP"));
+  long deadline=System.currentTimeMillis()+5000;
+  while((protectedApplicant.run.armed||normalApplicant.run.armed)&&System.currentTimeMillis()<deadline)Thread.sleep(50);
+  assertFalse("Notification STOP ALL must disarm protected applicant without Activity",protectedApplicant.run.armed);
+  assertFalse("Notification STOP ALL must disarm unprotected applicant without Activity",normalApplicant.run.armed);
+  main(()->{
+   assertTrue("Notification STOP must preserve SMS page protection",protectedApplicant.protectedPage);
+   assertTrue("Protected page must keep service foreground",service.isPromotedForTest());
+   assertTrue("Protected page must keep KeepAlive running",service.isKeepAliveRunningForTest());
+   assertTrue("Protected page must keep silent audio running",service.isKeepAliveAudioRunningForTest());
+   assertNotNull(protectedApplicant.current);
+   assertTrue("Protected page session must stay active",Boolean.TRUE.equals(protectedApplicant.activeStates.get(protectedApplicant.current)));
+   assertTrue("Protected page must retain PRIORITY_HIGH",protectedApplicant.isPriorityHighForTest(protectedApplicant.current));
+  });
+ }
+ @Test public void backAndHomeConfirmOnlyWhenPageProtected()throws Exception{
+  MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=service.engine;
+  final org.mozilla.geckoview.WebExtension.Port[] savedPort=new org.mozilla.geckoview.WebExtension.Port[1];
+  main(()->{
+   a.selectApplicant(1);service.activity=a;service.visible=false;savedPort[0]=e.nativePort;e.nativePort=null;e.protectedPage=false;e.pageLostProtected=false;e.canGoBack=true;
+   a.onBackPressed();
+   assertNotNull("Back without protection must follow the existing immediate navigation path",e.pendingId);
+   assertFalse("Back on an unprotected page must not request confirmation",e.alerts.isRepeating());
+   assertFalse("Back on an unprotected page must preserve unprotected state",e.protectedPage);
+  });
+  Thread.sleep(100);
+  main(()->{
+   e.home();
+   assertNotNull("Home without protection must navigate immediately",e.pendingId);
+   assertFalse("Home on an unprotected page must not request confirmation",e.alerts.isRepeating());
+   assertFalse("Home on an unprotected page must preserve unprotected state",e.protectedPage);
+   e.nativePort=savedPort[0];
+  });
+  Thread.sleep(100);
+  main(()->{
+   e.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true));
+   e.alerts.stop();e.alerts.clearNotification();e.alerts.newRun();
+   e.canGoBack=true;a.onBackPressed();
+   assertNull("Back on a protected page must wait for confirmation",e.pendingId);
+   assertTrue("Back on a protected page must request confirmation",e.alerts.isRepeating());
+   assertTrue("Rejected Back confirmation must leave protected page intact",e.protectedPage);
+   e.alerts.stop();e.alerts.clearNotification();e.alerts.newRun();
+   e.home();
+   assertNull("Home on a protected page must wait for confirmation",e.pendingId);
+   assertTrue("Home on a protected page must request confirmation",e.alerts.isRepeating());
+   assertTrue("Rejected Home confirmation must leave protected page intact",e.protectedPage);
+  });
  }
  @Test public void lostNormalPageRecoversButLostProtectedPageDoesNotReplace()throws Exception{
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;
@@ -317,26 +449,28 @@ public class GeckoIntegrationTest {
   while(!e.ready&&System.currentTimeMillis()<end)Thread.sleep(200);
   assertTrue("Isolated applicant extension did not connect",e.ready);
   android.app.NotificationManager nm=service.getSystemService(android.app.NotificationManager.class);
+  java.util.concurrent.atomic.AtomicReference<org.mozilla.geckoview.GeckoSession> normalSession=new java.util.concurrent.atomic.AtomicReference<>();
   main(()->{
    service.stopAll();e.alerts.clearNotification();service.visible=true;e.foreground=true;
    e.updateProtection(json("running",true,"bookingStage","MONITORING","successWatch",true));
-   org.mozilla.geckoview.GeckoSession normal=e.current;
-   normal.close();e.pageLost(normal,"Injected normal COV page loss");e.ensureUsable();
+   normalSession.set(e.current);normalSession.get().close();e.pageLost(normalSession.get(),"Injected normal COV page loss");e.ensureUsable();
   });
-  end=System.currentTimeMillis()+10000;
-  while((e.current==null||!e.current.isOpen())&&System.currentTimeMillis()<end)Thread.sleep(100);
-  assertNotNull("Normal page should be replaced; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected,e.current);
-  main(()->assertTrue("Replacement normal page must be open",e.current!=null&&e.current.isOpen()));
-  assertFalse("Normal page loss must not be protected",e.pageLostProtected);
+  end=System.currentTimeMillis()+10000;java.util.concurrent.atomic.AtomicBoolean replacementOpen=new java.util.concurrent.atomic.AtomicBoolean();
+  while(System.currentTimeMillis()<end){main(()->replacementOpen.set(e.current!=null&&e.current.isOpen()));if(replacementOpen.get())break;Thread.sleep(100);}
+  main(()->{
+   assertNotNull("Normal page should be replaced; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected,e.current);
+   assertTrue("Replacement normal page must be open",e.current!=null&&e.current.isOpen());
+   assertFalse("Normal page loss must not be protected",e.pageLostProtected);
+  });
   for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())
    assertNotEquals("Normal page loss must not raise protected-page alert",e.alerts.criticalNotificationId("PROTECTED_PAGE_LOST"),n.getId());
   main(()->{
    e.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION"));
    org.mozilla.geckoview.GeckoSession protectedSession=e.current;
    protectedSession.close();e.pageLost(protectedSession,"Injected protected SMS page loss");e.ensureUsable();
+   assertTrue("Protected page loss must be latched: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected,e.pageLostProtected);
+   assertNull("Lost protected page must not be replaced; armed="+e.run.armed,e.current);
   });
-  assertTrue("Protected page loss must be latched: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected,e.pageLostProtected);
-  assertNull("Lost protected page must not be replaced; current="+e.current+" armed="+e.run.armed,e.current);
   boolean protectedAlert=false;
   for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())
    if(n.getId()==e.alerts.criticalNotificationId("PROTECTED_PAGE_LOST"))protectedAlert=true;
@@ -355,9 +489,13 @@ public class GeckoIntegrationTest {
   assertTrue("Isolated applicant extension did not connect",e.ready);
   android.app.NotificationManager nm=service.getSystemService(android.app.NotificationManager.class);
   main(()->{service.stopAll();e.alerts.clearNotification();});
-  org.mozilla.geckoview.GeckoSession old=e.current;
-  main(()->{old.close();e.pageLost(old,"Injected idle content kill");e.pageLost(old,"Duplicate kill");e.ensureUsable();});
-  Thread.sleep(1500);assertNotSame("Dead browser must be replaced; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected+" armed="+e.run.armed+" current="+(e.current!=null),old,e.current);main(()->assertTrue("Replacement must be open; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected+" armed="+e.run.armed+" current="+(e.current!=null),e.current!=null&&e.current.isOpen()));assertFalse("Idle page loss must not leave run armed; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected+" armed="+e.run.armed+" current="+(e.current!=null),e.run.armed);
+  java.util.concurrent.atomic.AtomicReference<org.mozilla.geckoview.GeckoSession> old=new java.util.concurrent.atomic.AtomicReference<>();
+  main(()->{old.set(e.current);old.get().close();e.pageLost(old.get(),"Injected idle content kill");e.pageLost(old.get(),"Duplicate kill");e.ensureUsable();});
+  Thread.sleep(1500);main(()->{
+   assertNotSame("Dead browser must be replaced; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected+" armed="+e.run.armed+" current="+(e.current!=null),old.get(),e.current);
+   assertTrue("Replacement must be open; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected+" armed="+e.run.armed+" current="+(e.current!=null),e.current!=null&&e.current.isOpen());
+   assertFalse("Idle page loss must not leave run armed; protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected+" armed="+e.run.armed+" current="+(e.current!=null),e.run.armed);
+  });
   for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())assertNotEquals("Idle page loss must not notify",1100+e.profile,n.getId());
   java.util.concurrent.atomic.AtomicBoolean navigated=new java.util.concurrent.atomic.AtomicBoolean();
   main(()->{org.mozilla.geckoview.WebExtension.Port saved=e.nativePort;e.nativePort=null;e.navigate(()->navigated.set(true));e.nativePort=saved;});

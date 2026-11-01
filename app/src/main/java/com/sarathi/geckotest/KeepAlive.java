@@ -29,6 +29,7 @@ final class KeepAlive {
   private final Handler main = new Handler(Looper.getMainLooper());
   private View overlay;
   private volatile boolean audioRunning;
+  private volatile boolean requested;
   private Thread audioThread;
   private final java.util.concurrent.atomic.AtomicInteger audioGeneration=new java.util.concurrent.atomic.AtomicInteger();
   private String lastStatus = "";
@@ -48,6 +49,7 @@ final class KeepAlive {
 
   /** Idempotent; safe to call every few seconds. */
   void start() {
+    requested=true;
     main.post(this::showOverlay);
     startAudio();
     String status = status();
@@ -58,6 +60,7 @@ final class KeepAlive {
   }
 
   synchronized void stop() {
+    requested=false;
     audioGeneration.incrementAndGet();audioRunning = false;
     if(audioThread!=null)audioThread.interrupt();
     main.post(this::hideOverlay);
@@ -67,6 +70,8 @@ final class KeepAlive {
     }
   }
 
+  boolean isRunningForTest(){return requested;}
+  boolean isAudioRunningForTest(){return audioRunning;}
   String status() {
     return "overlay=" + (overlay != null ? "ON" : (overlayAllowed() ? "pending" : "OFF (permission missing)"))
         + "; audio=" + (audioRunning ? "ON" : "OFF");

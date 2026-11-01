@@ -47,6 +47,7 @@ final class BrowserEngine {
     final MonitorService service;
     final MonitorRun run;final int profile;final String extensionId,assetPath;
     final java.util.Map<GeckoSession,Boolean> activeStates=new java.util.HashMap<>();
+    final java.util.Map<GeckoSession,Integer> priorityHints=new java.util.HashMap<>();
     MainActivity activity;
     GeckoSession current, monitorSession;
     final ArrayList<GeckoSession> sessions=new ArrayList<>();
@@ -88,7 +89,10 @@ final class BrowserEngine {
         boolean changed=!java.util.Objects.equals(activeStates.get(s),active);
         // GeckoView may deactivate a detached/hidden session independently of our cache.
         // Reassert active browser sessions while monitoring, including an older selected tab.
-        if(changed||((run.armed||protectedPage)&&s==current)){s.setActive(active);s.setPriorityHint(active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT);}
+        if(changed||((run.armed||protectedPage)&&s==current)){
+          int priority=active?GeckoSession.PRIORITY_HIGH:GeckoSession.PRIORITY_DEFAULT;
+          s.setActive(active);s.setPriorityHint(priority);priorityHints.put(s,priority);
+        }
         if(changed)activeStates.put(s,active);
       }
     }
@@ -106,7 +110,7 @@ final class BrowserEngine {
     }
     void unloadIdle(long now,boolean pressure){
       if(protectedPage||pageLostProtected||run.armed||foreground||now-lastVisibleAt<600000)return;
-      for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);if(s.isOpen())s.close();if(s==current)current=null;}
+      for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);priorityHints.remove(s);if(s.isOpen())s.close();if(s==current)current=null;}
       service.record("Applicant "+profile+" unprotected idle pages unloaded; sessions="+service.sessionCount());
     }
     void shutdown(){
@@ -114,6 +118,7 @@ final class BrowserEngine {
       if(extension!=null){extension.setMessageDelegate(null,"sarathi");extension.setTabDelegate(null);}
       if(nativePort!=null)nativePort.disconnect();
       for(GeckoSession s:sessions)if(s.isOpen())s.close();
+      activeStates.clear();priorityHints.clear();
       alerts.stop();activity=null;
     }
     boolean promptAvailable(){
@@ -144,10 +149,22 @@ final class BrowserEngine {
       }
       if(showingMonitor)prepareMonitor();
     }
+    void resetProtectionForTest(){
+      if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Test reset must run on the main thread");
+      protectedPage=false;pageLostProtected=false;protectedStage="";protectedUrl="";
+      lastPageReason="Test fixture reset";lastState=new JSONObject();monitoring=false;
+      pageQuery="";pageUrl="";pageReady=false;pageLoading=false;showingMonitor=false;canGoBack=false;
+      pendingId=null;afterStop=null;activeStates.clear();priorityHints.clear();
+      if(current!=null){GeckoSession previous=current;current=null;sessions.remove(previous);if(previous.isOpen())previous.close();}
+      GeckoSession fresh=newSession();fresh.open(runtime);showSession(fresh);fresh.loadUri(HOME);
+      activate();service.refreshForeground(true);
+    }
+    boolean isPriorityHighForTest(GeckoSession session){return java.util.Objects.equals(priorityHints.get(session),GeckoSession.PRIORITY_HIGH);}
+
     void pageLost(GeckoSession session,String reason){
       if(destroyed||!sessions.remove(session))return;
       boolean website=session==current,monitor=session==monitorSession;
-      activeStates.remove(session);
+      activeStates.remove(session);priorityHints.remove(session);
       if(website){current=null;if(protectedPage){pageLostProtected=true;lastPageReason="A"+profile+": page lost during "+protectedStage+", restart the booking flow";status=lastPageReason;service.record(lastPageReason+" url="+protectedUrl);alerts.critical("PROTECTED_PAGE_LOST",lastPageReason);run.stopForBackground(lastPageReason);}else run.fail(reason+" — inspect Sarathi and press START");}
       if(monitor){monitorSession=null;monitorReady=false;}
       if(session.isOpen())session.close();
