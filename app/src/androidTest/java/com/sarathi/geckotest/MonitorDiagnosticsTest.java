@@ -91,6 +91,7 @@ public class MonitorDiagnosticsTest {
         while (main.serviceForTest() == null && System.currentTimeMillis() < deadline) Thread.sleep(200);
         MonitorService service = main.serviceForTest();
         assertNotNull(service);
+        service.recordAudioModeForTest(android.media.AudioManager.MODE_NORMAL);
         service.recordAudioModeForTest(android.media.AudioManager.MODE_IN_CALL);
         service.recordAudioModeForTest(android.media.AudioManager.MODE_RINGTONE);
         String events = service.getSharedPreferences("diagnostics", 0).getString("events", "");
