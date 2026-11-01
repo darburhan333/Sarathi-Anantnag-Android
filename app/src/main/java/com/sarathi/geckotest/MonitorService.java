@@ -150,7 +150,7 @@ public final class MonitorService extends Service {
  }
  String summary(){StringBuilder out=new StringBuilder("MPARIVAHAN SLOT BOOKING -J&K\n");for(int i=0;i<PROFILE_COUNT;i++){BrowserEngine e=profiles[i];out.append("Applicant ").append(i+1).append(": ");if(e==null)out.append("Not opened");else out.append(e.run.armed?"Monitoring":"Stopped").append(" · checks ").append(e.lastState.optInt("sessionAttempts")).append(" · ").append(e.lastState.optString("bookingStage","Ready")).append(e.run.diagnostics());out.append('\n');}return out.toString();}
  // Test-only instrumentation hooks; production code must not call these methods.
- public boolean isPromotedForTest(){return promoted;}
+ public boolean isPromotedForTest(){return promoted;}boolean isDestroyingForTest(){return destroying;}
  boolean isKeepAliveRunningForTest(){return keepAlive!=null&&keepAlive.isRunningForTest();}
  boolean isKeepAliveAudioRunningForTest(){return keepAlive!=null&&keepAlive.isAudioRunningForTest();}
  public boolean isArmedForTest(){return engine.run.armed;}public int attemptsForTest(){return engine.lastState.optInt("sessionAttempts");}
