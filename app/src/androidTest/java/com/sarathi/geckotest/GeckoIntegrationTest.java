@@ -36,10 +36,10 @@ public class GeckoIntegrationTest {
   finally{if(fixtureService!=null&&!fixtureService.isDestroyingForTest())resetApplicantFixtures("after");}
  }
  private void writeDiagnosticFile(String label){
-  StringBuilder report=new StringBuilder("DIAG-START\\nMPARIVAHAN MONITOR DIAGNOSTICS\\n").append(label).append('\\n');
-  try{if(fixtureService!=null)report.append(fixtureService.diagnosticReport());else report.append("MonitorService unavailable\\n");}
-  catch(Exception e){report.append("diagnosticReport failed: ").append(e).append('\\n');}
-  report.append("DIAG-END\\n");
+  StringBuilder report=new StringBuilder("DIAG-START\nMPARIVAHAN MONITOR DIAGNOSTICS\n").append(label).append('\n');
+  try{if(fixtureService!=null)report.append(fixtureService.diagnosticReport());else report.append("MonitorService unavailable\n");}
+  catch(Exception e){report.append("diagnosticReport failed: ").append(e).append('\n');}
+  report.append("DIAG-END\n");
   byte[] diagnosticBytes=report.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
   try(java.io.FileOutputStream out=InstrumentationRegistry.getInstrumentation().getTargetContext().openFileOutput("monitor-copy-log.txt",android.content.Context.MODE_PRIVATE)){
    out.write(diagnosticBytes);out.flush();
@@ -134,7 +134,7 @@ public class GeckoIntegrationTest {
    "dumpsys battery",
    "dumpsys notification --noredact",
    "logcat -d -t 1200"
-  })try{System.out.println("COMMAND "+command+"\\n"+shellText(command));}catch(Exception e){System.out.println("EVIDENCE_COMMAND_FAILED "+command+" "+e);}
+  })try{System.out.println("COMMAND "+command+"\n"+shellText(command));}catch(Exception e){System.out.println("EVIDENCE_COMMAND_FAILED "+command+" "+e);}
   writeDiagnosticFile(label);
   System.out.println("MONITOR_COPY_LOG\n"+s.diagnosticReport());
   System.out.println("EVIDENCE_END "+label);
