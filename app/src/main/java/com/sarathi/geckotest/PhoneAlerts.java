@@ -55,17 +55,22 @@ final class PhoneAlerts {
   }
  }
  private static void drainCriticalQueue(){
-  QueuedCritical item;
-  synchronized(CRITICAL_QUEUE_LOCK){
-   item=CRITICAL_QUEUE.pollFirst();
-   if(item==null){criticalDrainScheduled=false;return;}
+  // Drain the complete batch in one main-thread turn. A fixed delay per item
+  // could leave early critical alerts waiting behind unrelated applicants.
+  while(true){
+   QueuedCritical item;
+   synchronized(CRITICAL_QUEUE_LOCK){
+    item=CRITICAL_QUEUE.pollFirst();
+    if(item==null){criticalDrainScheduled=false;return;}
+   }
+   if(item.generation==item.owner.notificationGeneration){
+    try{item.owner.postNotification(item.kind,item.message,"sarathi-critical-v36",item.id);}
+    catch(Exception ex){
+     android.util.Log.e("PhoneAlerts","Critical notification delivery failed for applicant "+item.owner.profile+" kind="+item.kind,ex);
+     if(item.owner.activity instanceof MonitorService)((MonitorService)item.owner.activity).record("ALERT A"+item.owner.profile+" kind="+item.kind+" notification=failed:"+ex.getClass().getSimpleName());
+    }
+   }
   }
-  if(item.generation==item.owner.notificationGeneration){
-   try{item.owner.postNotification(item.kind,item.message,"sarathi-critical-v36",item.id);}
-   catch(Exception ex){if(item.owner.activity instanceof MonitorService)((MonitorService)item.owner.activity).record("ALERT A"+item.owner.profile+" kind="+item.kind+" notification=failed:"+ex.getClass().getSimpleName());}
-  }
-  synchronized(CRITICAL_QUEUE_LOCK){if(CRITICAL_QUEUE.isEmpty()){criticalDrainScheduled=false;return;}}
-  CRITICAL_HANDLER.postDelayed(PhoneAlerts::drainCriticalQueue,CRITICAL_POST_GAP_MS);
  }
  void testOnce(){runAudioSync(()->{if(tone==null)tone=new ToneGenerator(AudioManager.STREAM_ALARM,85);beep();});}
 
