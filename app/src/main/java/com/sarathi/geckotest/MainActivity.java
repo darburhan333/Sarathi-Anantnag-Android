@@ -122,6 +122,10 @@ public class MainActivity extends Activity {
       MonitorService service=engine.service;
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(14),dp(8),dp(14),dp(8));
       TextView hint=new TextView(this);hint.setText("Critical alarms pulse every 2 seconds for 60 seconds, then every 30 seconds until Silence. Modes affect routine notices only. ALL includes routine sound; CRITICAL ONLY keeps critical alerts; ROUTINE OFF also shows a persistent reminder.\n"+PhoneAlerts.alarmEnvironmentWarning(this));hint.setTextSize(12);hint.setPadding(0,0,0,dp(8));panel.addView(hint);
+      TextView idleLabel=new TextView(this);int idleMinutes=getSharedPreferences("monitor",0).getInt("idleUnloadMinutes",60);idleLabel.setText("Unload unprotected idle pages after "+idleMinutes+" minutes (logged-in pages are retained unless Android reports real memory pressure)");panel.addView(idleLabel);
+      android.widget.SeekBar idleTimeout=new android.widget.SeekBar(this);idleTimeout.setMax(175);idleTimeout.setProgress(Math.max(0,Math.min(175,idleMinutes-5)));panel.addView(idleTimeout);
+      idleTimeout.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(android.widget.SeekBar bar,int progress,boolean fromUser){idleLabel.setText("Unload unprotected idle pages after "+(progress+5)+" minutes (logged-in pages are retained unless Android reports real memory pressure)");}public void onStartTrackingTouch(android.widget.SeekBar bar){}public void onStopTrackingTouch(android.widget.SeekBar bar){getSharedPreferences("monitor",0).edit().putInt("idleUnloadMinutes",bar.getProgress()+5).apply();}});
+
       android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(350)));
       for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){
         final int number=n;LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.VERTICAL);

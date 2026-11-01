@@ -54,7 +54,7 @@ final class BrowserEngine {
     final ArrayList<String> logs=new ArrayList<>();
     String status="Opening Parivahan…", monitorStatus="Connecting monitor…", monitorUrl;
     boolean canGoBack, foreground, showingMonitor, ready, monitoring, destroyed;
-    boolean protectedPage,pageLostProtected,sessionExpired;String sessionExpiredHeader="",protectedStage="",protectedUrl="",lastPageReason="COV form missing";long lastVisibleAt=SystemClock.elapsedRealtime();
+    boolean protectedPage,pageLostProtected,sessionExpired,pageUnloaded;String sessionExpiredHeader="",protectedStage="",protectedUrl="",lastPageReason="COV form missing";long lastVisibleAt=SystemClock.elapsedRealtime();
     boolean firstPageRecorded;int installAttempts;
     long bridgeLostAt;
     final long startupAt=SystemClock.elapsedRealtime();
@@ -108,10 +108,16 @@ final class BrowserEngine {
       if(state.has("reason"))lastPageReason=state.optString("reason");
       activate();service.refreshForeground(false);
     }
+    static long idleUnloadTimeoutMsForTest(int minutes){return Math.max(5,Math.min(180,minutes))*60000L;}
+    private long idleUnloadTimeoutMs(){int minutes=service.getSharedPreferences("monitor",0).getInt("idleUnloadMinutes",60);return idleUnloadTimeoutMsForTest(minutes);}
     void unloadIdle(long now,boolean pressure){
-      if(protectedPage||pageLostProtected||run.armed||foreground||now-lastVisibleAt<600000)return;
-      for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);priorityHints.remove(s);if(s.isOpen())s.close();if(s==current)current=null;}
-      service.record("Applicant "+profile+" unprotected idle pages unloaded; sessions="+service.sessionCount());
+      if(protectedPage||pageLostProtected||run.armed||foreground)return;
+      boolean loggedIn=lastState.optBoolean("covReady")||lastState.optBoolean("successWatch")||lastState.optBoolean("calendarLock")||lastState.optString("bookingStage").contains("SMS")||lastState.optString("bookingStage").contains("BOOK SLOT");
+      if(loggedIn&&!pressure)return;
+      if(!pressure&&now-lastVisibleAt<idleUnloadTimeoutMs())return;
+      boolean unloaded=false;
+      for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);priorityHints.remove(s);if(s.isOpen())s.close();if(s==current)current=null;unloaded=true;}
+      if(unloaded){pageUnloaded=true;String message="Applicant "+profile+" page unloaded, login will be needed";service.record(message+"; memoryPressure="+pressure+"; idleMs="+(now-lastVisibleAt));log(message);}
     }
     void shutdown(){
       destroyed=true;
@@ -147,6 +153,7 @@ final class BrowserEngine {
         if(current!=null)pageLost(current,"Browser session unavailable");
         if(current==null&&!pageLostProtected){GeckoSession fresh=newSession();fresh.open(runtime);showSession(fresh);fresh.loadUri(HOME);}
       }
+      if(pageUnloaded&&current!=null){pageUnloaded=false;String banner="Applicant "+profile+" page unloaded, login will be needed";log(banner);if(activity!=null)Toast.makeText(activity,banner,Toast.LENGTH_LONG).show();}
       if(showingMonitor)prepareMonitor();
     }
     // Test-only instrumentation hook; production code must not call this method.
@@ -299,7 +306,7 @@ final class BrowserEngine {
     }
     private void showSession(GeckoSession s) {
         if (current == s) return;
-        current=s;canGoBack=false;render();activate();
+        current=s;lastVisibleAt=SystemClock.elapsedRealtime();canGoBack=false;render();activate();
         runtime.getWebExtensionController().setTabActive(s,true);
     }
     private void flattenChoices(ChoicePrompt.Choice[] input, ArrayList<ChoicePrompt.Choice> output) {

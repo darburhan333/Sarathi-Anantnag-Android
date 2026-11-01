@@ -480,6 +480,28 @@ public class GeckoIntegrationTest {
   main(()->{e.alerts.stop();e.alerts.clearNotification();e.foreground=false;service.visible=true;service.stopAll();});
  }
 
+ @Test public void idleUnloadRetainsLoggedInPagesUnlessRealMemoryPressure()throws Exception{
+  BrowserEngine e=readyApplicant(8);long now=android.os.SystemClock.elapsedRealtime();
+  main(()->{
+   e.foreground=false;e.run.disarm();e.lastVisibleAt=now-2*60*60*1000L;e.lastState=json("covReady",true,"successWatch",true,"bookingStage","MONITORING");
+   org.mozilla.geckoview.GeckoSession loggedIn=e.current;e.unloadIdle(now,false);
+   assertSame("Logged-in applicant page must not unload without real memory pressure",loggedIn,e.current);
+   assertTrue("Logged-in session must remain open",loggedIn.isOpen());
+   assertFalse("No unload banner before actual unload",e.pageUnloaded);
+   e.unloadIdle(now,true);
+   assertNull("Real memory pressure may unload an unprotected logged-in page",e.current);
+   assertTrue("Unload state must be retained for next open",e.pageUnloaded);
+   assertTrue("Diagnostic must record login requirement",fixtureService.diagnosticReport().contains("Applicant 8 page unloaded, login will be needed"));
+   e.foreground=true;e.ensureUsable();
+   assertFalse("Opening the applicant must consume the unload banner state",e.pageUnloaded);
+   assertTrue("Unloaded applicant must reopen a usable home page",e.current!=null&&e.current.isOpen());
+  });
+ }
+ @Test public void idleUnloadTimeoutDefaultsToSixtyMinutesAndCanBeConfigured(){
+  assertEquals(60L*60*1000,BrowserEngine.idleUnloadTimeoutMsForTest(60));
+  assertEquals(15L*60*1000,BrowserEngine.idleUnloadTimeoutMsForTest(15));
+  assertEquals(180L*60*1000,BrowserEngine.idleUnloadTimeoutMsForTest(240));
+ }
  @Test public void sessionExpiredIsTerminalAndAppearsInNotificationAndCopyLog()throws Exception{
   BrowserEngine e=readyApplicant(9);MonitorService service=fixtureService;
   main(()->{
