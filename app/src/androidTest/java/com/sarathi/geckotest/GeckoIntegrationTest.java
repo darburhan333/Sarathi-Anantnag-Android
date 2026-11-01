@@ -234,6 +234,8 @@ public class GeckoIntegrationTest {
    shell("dumpsys battery unplug");shell("dumpsys deviceidle force-idle");progress(s,"forced Doze with exemption",22);
    shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");
    main(a::finish);progress(s,"Activity destroyed; session retained",30);
+   assertTrue("KeepAlive must remain running after Activity destruction",s.isKeepAliveRunningForTest());
+   assertTrue("KeepAlive silent audio must remain running after Activity destruction",s.isKeepAliveAudioRunningForTest());
    shell("input keyevent KEYCODE_WAKEUP");shell("wm dismiss-keyguard");
    android.content.Context ctx=InstrumentationRegistry.getInstrumentation().getTargetContext();
    MainActivity reopened=(MainActivity)InstrumentationRegistry.getInstrumentation().startActivitySync(new android.content.Intent(ctx,MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -241,6 +243,8 @@ public class GeckoIntegrationTest {
    while(reopened.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(200);
    assertSame("Must reuse same service and browser",s,reopened.serviceForTest());
    main(()->assertTrue("Re-attached GeckoSession must remain open",s.engine.current!=null&&s.engine.current.isOpen()));
+   assertTrue("KeepAlive must remain running after Activity re-attachment",s.isKeepAliveRunningForTest());
+   assertTrue("KeepAlive silent audio must remain running after Activity re-attachment",s.isKeepAliveAudioRunningForTest());
    main(()->s.engine.command("SMOKE_CONTINUE"));
    end=System.currentTimeMillis()+100000;
    while(s.engine.smokeResult.isEmpty()&&System.currentTimeMillis()<end)Thread.sleep(500);
