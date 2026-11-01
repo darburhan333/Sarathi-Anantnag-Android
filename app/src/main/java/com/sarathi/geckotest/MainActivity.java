@@ -236,10 +236,10 @@ public class MainActivity extends Activity {
         monitorButton=button(controls,"Monitor",Color.rgb(37,99,235),this::toggleMonitor);
         monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);monitorButton.setTextSize(12);
         button(controls,"Start All",Color.rgb(5,150,105),()->{if(engine!=null)engine.service.startAllReady();});
-        Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.service.confirmProtected("Stop",java.util.Collections.singletonList(engine),engine.run::stopByUser);});
+        Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.stopFromUi();});
         Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.stop();command("SILENCE");});
         silenceButton.setOnLongClickListener(v->{if(engine!=null){engine.service.silenceAll();Toast.makeText(this,"All applicant alarms silenced",Toast.LENGTH_SHORT).show();}return true;});
-        stopButton.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Stop all applicants?").setPositiveButton("Stop all",(d,w)->{if(engine!=null)engine.service.confirmProtected("Stop all",java.util.Arrays.asList(engine.service.profiles),engine.service::stopAll);}).setNegativeButton("Cancel",null).show();return true;});
+        stopButton.setOnLongClickListener(v->{if(engine!=null){engine.service.stopAll();Toast.makeText(this,"All applicants stopped",Toast.LENGTH_SHORT).show();}return true;});
         for(int i=0;i<controls.getChildCount();i++){Button control=(Button)controls.getChildAt(i);control.setTextSize(15);control.getLayoutParams().height=dp(64);}
         header.addView(controls);
         Button copyLogButton=button(utilities, "Copy log", Color.rgb(104,65,165), () -> {
@@ -276,7 +276,7 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);notificationApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,intent.getIntExtra("applicant",1)));if(engine!=null&&intent.hasExtra("applicant"))selectApplicant(notificationApplicant);}
     @Override public void onBackPressed(){
       if(engine!=null&&engine.showingMonitor)toggleMonitor();
-      else if(engine!=null&&engine.current!=null&&engine.canGoBack)engine.navigate(()->engine.current.goBack());
+      else if(engine!=null&&engine.current!=null&&engine.canGoBack)engine.navigate("Go Back",()->engine.current.goBack());
       else super.onBackPressed();
     }
     @Override protected void onResume(){super.onResume();visible=true;if(engine!=null){engine.service.activity=this;for(BrowserEngine profile:engine.service.profiles)if(profile!=null)profile.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;if(!engine.service.visible)for(BrowserEngine e:engine.service.profiles)if(e!=null&&e.run.armed)e.run.tick();engine.service.visible=true;engine.service.record("Activity resumed; "+engine.service.clockDiagnostics());engine.foreground=true;engine.ensureUsable();engine.foregroundState();}}

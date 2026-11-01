@@ -123,7 +123,7 @@ public final class MonitorService extends Service {
  void stopAll(){cancelStartBatch();for(BrowserEngine e:profiles)if(e!=null)e.run.stopByUser();}
  void recoverAll(String message){for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)e.run.recover(message);}
  void failAll(String message){for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)e.run.fail(message);}
- @Override public int onStartCommand(Intent intent,int flags,int id){if(intent!=null&&"STOP".equals(intent.getAction()))confirmProtected("Stop all",java.util.Arrays.asList(profiles),this::stopAll);else if(intent==null)stopSelf();return START_NOT_STICKY;}
+ @Override public int onStartCommand(Intent intent,int flags,int id){if(intent!=null&&"STOP".equals(intent.getAction()))stopAll();else if(intent==null)stopSelf();return START_NOT_STICKY;}
  private final Runnable clockTick=new Runnable(){public void run(){if(destroying)return;
   long now=SystemClock.elapsedRealtime(),up=SystemClock.uptimeMillis();
   if(clockBeat>0)longestClockGap=Math.max(longestClockGap,now-clockBeat);clockBeat=now;clockUptime=up;

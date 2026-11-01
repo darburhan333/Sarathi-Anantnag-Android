@@ -123,14 +123,19 @@ final class BrowserEngine {
     private JSONObject json(String type){JSONObject o=new JSONObject();try{o.put("type",type);}catch(Exception ignored){}return o;}
     void command(String type){command(type,null);}
     void command(String type,String reason){if(nativePort!=null){JSONObject o=json(type);if(reason!=null)try{o.put("reason",reason);}catch(Exception ignored){}nativePort.postMessage(o);}}
-    void navigate(Runnable action){
-      run.stopByUser(); // Revoke native action permissions before waiting for JavaScript.
-      final String id=String.valueOf(System.nanoTime());pendingId=id;afterStop=action;
-      if(nativePort!=null){JSONObject o=json("STOP");try{o.put("id",id);}catch(Exception ignored){}nativePort.postMessage(o);}
-      service.handler.postDelayed(()->finishNavigation(id),nativePort==null?0:1200);
+    void stopFromUi(){run.stopByUser();}
+    void navigate(String actionName,Runnable action){
+      service.confirmProtected(actionName,java.util.Collections.singletonList(this),()->{
+        // Only an explicitly confirmed navigation may discard protected-page ownership.
+        protectedPage=false;pageLostProtected=false;protectedStage="";protectedUrl="";
+        run.stopByUser(); // Revoke native action permissions before waiting for JavaScript.
+        final String id=String.valueOf(System.nanoTime());pendingId=id;afterStop=action;
+        if(nativePort!=null){JSONObject o=json("STOP");try{o.put("id",id);}catch(Exception ignored){}nativePort.postMessage(o);}
+        service.handler.postDelayed(()->finishNavigation(id),nativePort==null?0:1200);
+      });
     }
     void finishNavigation(String id){if(!destroyed&&id.equals(pendingId)&&afterStop!=null){Runnable r=afterStop;afterStop=null;pendingId=null;r.run();}}
-    void home(){service.confirmProtected("Go Home",java.util.Collections.singletonList(this),()->{protectedPage=false;pageLostProtected=false;protectedStage="";navigate(()->{ensureUsable();showingMonitor=false;if(current!=null)current.loadUri(HOME);render();activate();});});}
+    void home(){navigate("Go Home",()->{ensureUsable();showingMonitor=false;if(current!=null)current.loadUri(HOME);render();activate();});}
     void ensureUsable(){
       if(destroyed||pageLostProtected)return;
       if(current==null||!current.isOpen()){
@@ -225,7 +230,7 @@ final class BrowserEngine {
                 case "RESTORE":result.put("armed",run.armed);break;
                 case "AUTHORIZE":return run.authorization();
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;
-                case "UI_STOP":if(protectedPage){service.confirmProtected("Stop",java.util.Collections.singletonList(BrowserEngine.this),run::stopByUser);throw new IllegalStateException("Confirm Stop in the app");}run.stopByUser();break;
+                case "UI_STOP":stopFromUi();break;
                 case "CRITICAL":alerts.critical(m.optString("kind"),m.optString("message"));break;
                 case "DISARM":run.disarm();break;
                 case "ACK_ALERT":alerts.stop();alerts.clearNotification();service.refreshForeground(true);break;
