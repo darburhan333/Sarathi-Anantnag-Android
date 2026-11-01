@@ -39,9 +39,15 @@ public class GeckoIntegrationTest {
   StringBuilder report=new StringBuilder("MPARIVAHAN MONITOR DIAGNOSTICS\n").append(label).append('\n');
   try{if(fixtureService!=null)report.append(fixtureService.diagnosticReport());else report.append("MonitorService unavailable\n");}
   catch(Exception e){report.append("diagnosticReport failed: ").append(e).append('\n');}
+  byte[] diagnosticBytes=report.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
   try(java.io.FileOutputStream out=InstrumentationRegistry.getInstrumentation().getTargetContext().openFileOutput("monitor-copy-log.txt",android.content.Context.MODE_PRIVATE)){
-   out.write(report.toString().getBytes("UTF-8"));out.flush();
-  }catch(Exception e){System.err.println("DIAGNOSTIC_FILE_WRITE_FAILED "+e);}
+   out.write(diagnosticBytes);out.flush();
+  }catch(Exception e){System.err.println("DIAGNOSTIC_INTERNAL_FILE_WRITE_FAILED "+e);}
+  try{
+   java.io.File external=InstrumentationRegistry.getInstrumentation().getTargetContext().getExternalFilesDir(null);
+   if(external==null)throw new java.io.IOException("External app files directory unavailable");
+   try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(external,"monitor-copy-log.txt"))){out.write(diagnosticBytes);out.flush();}
+  }catch(Exception e){System.err.println("DIAGNOSTIC_EXTERNAL_FILE_WRITE_FAILED "+e);}
  }
  private void resetApplicantFixtures(String phase)throws Exception{
   java.util.ArrayList<BrowserEngine> existing=new java.util.ArrayList<>();
@@ -358,13 +364,21 @@ public class GeckoIntegrationTest {
  @Test public void normalMonitoringStartThenStopDoesNotRequireProtectionConfirmation()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=service.engine;
   main(()->{
-   service.activity=a;service.visible=true;e.run.arm();
+   // KeepAlive is shared by all nine applicants. Isolate this assertion so a
+   // different protected applicant cannot legitimately keep the shared service alive.
+   service.stopAll();
+   for(BrowserEngine applicant:service.profiles)if(applicant!=null&&(applicant.protectedPage||applicant.pageLostProtected))applicant.resetProtectionForTest();
+   assertEquals("STOP fixture must have no active applicants",0,service.activeCount());
+   assertEquals("STOP fixture must have no protected applicants",0,service.protectedCount());
+   service.engine=e;service.activity=a;service.visible=true;e.run.arm();
    e.updateProtection(json("running",true,"bookingStage","MONITORING","successWatch",true));
    assertFalse("Unprotected applicant must remain unprotected",e.protectedPage);
+   assertEquals("Only the target applicant may be armed",1,service.activeCount());
+   assertEquals("No applicant may hold page protection",0,service.protectedCount());
    e.stopFromUi();
    assertFalse("STOP must disarm the unprotected applicant",e.run.armed);
    assertFalse("STOP must not create page protection",e.protectedPage);
-   assertFalse("KeepAlive must stop for an unprotected stopped applicant",service.isKeepAliveRunningForTest());
+   assertFalse("KeepAlive must stop for an unprotected stopped applicant; active="+service.activeCount()+" protected="+service.protectedCount()+" promoted="+service.isPromotedForTest()+" report="+service.diagnosticReport(),service.isKeepAliveRunningForTest());
    assertTrue("Service must remain foreground during its stop grace period",service.isPromotedForTest());
   });
   long deadline=System.currentTimeMillis()+40000;
@@ -495,10 +509,14 @@ public class GeckoIntegrationTest {
    assertTrue("Protected page loss must be latched: protectedPage="+e.protectedPage+" protectedStage="+e.protectedStage+" pageLostProtected="+e.pageLostProtected,e.pageLostProtected);
    assertNull("Lost protected page must not be replaced; armed="+e.run.armed,e.current);
   });
-  boolean protectedAlert=false;
-  for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())
-   if(n.getId()==e.alerts.criticalNotificationId("PROTECTED_PAGE_LOST"))protectedAlert=true;
-  assertTrue("Protected-page loss must raise critical notification",protectedAlert);
+  int protectedAlertId=e.alerts.criticalNotificationId("PROTECTED_PAGE_LOST");
+  boolean protectedAlert=false;long alertDeadline=System.currentTimeMillis()+5000;
+  while(System.currentTimeMillis()<alertDeadline&&!protectedAlert){
+   for(android.service.notification.StatusBarNotification n:nm.getActiveNotifications())
+    if(n.getId()==protectedAlertId)protectedAlert=true;
+   if(!protectedAlert)Thread.sleep(50);
+  }
+  assertTrue("Protected-page loss must raise critical notification after queued delivery; id="+protectedAlertId+" diagnostics="+service.diagnosticReport(),protectedAlert);
   main(()->{e.alerts.stop();e.alerts.clearNotification();e.foreground=false;service.visible=true;service.stopAll();});
  }
 
