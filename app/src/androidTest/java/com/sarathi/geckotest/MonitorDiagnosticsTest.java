@@ -37,6 +37,56 @@ public class MonitorDiagnosticsTest {
         assertTrue(MonitorService.shouldUpdateForegroundNotificationForTest("", "first", 1, 0));
     }
 
+    @Test public void criticalEventBufferIsSeparateNeverTrimmedAndShownFirst() throws Exception {
+        MainActivity main = activity.getActivity();
+        long deadline = System.currentTimeMillis() + 30000;
+        while (main.serviceForTest() == null && System.currentTimeMillis() < deadline) Thread.sleep(200);
+        MonitorService service = main.serviceForTest();
+        assertNotNull(service);
+        String oldest = "SESSION critical-buffer-oldest-marker";
+        service.record(oldest);
+        service.record("DISARM critical-buffer-disarm-marker");
+        service.record("STALL critical-buffer-stall-marker");
+        service.record("ALERT critical-buffer-alert-marker");
+        service.record("Applicant 4 page unloaded, login will be needed");
+        for (int i = 0; i < 2200; i++) service.record("routine-retention-" + i);
+        String critical = service.getSharedPreferences("diagnostics", 0).getString("criticalEvents", "");
+        assertTrue("Old critical SESSION event must survive routine log trimming", critical.contains(oldest));
+        assertTrue(critical.contains("DISARM critical-buffer-disarm-marker"));
+        assertTrue(critical.contains("STALL critical-buffer-stall-marker"));
+        assertTrue(critical.contains("ALERT critical-buffer-alert-marker"));
+        assertTrue(critical.contains("Applicant 4 page unloaded, login will be needed"));
+        String report = service.diagnosticReport();
+        assertTrue("Critical events must appear before ordinary diagnostics", report.indexOf("CRITICAL EVENTS") < report.indexOf("KeepAlive:"));
+        assertTrue(report.contains(oldest));
+    }
+
+    @Test public void repeatedScreenOffAndOnEventsAreCollapsed() throws Exception {
+        MainActivity main = activity.getActivity();
+        long deadline = System.currentTimeMillis() + 30000;
+        while (main.serviceForTest() == null && System.currentTimeMillis() < deadline) Thread.sleep(200);
+        MonitorService service = main.serviceForTest();
+        assertNotNull(service);
+        service.record("Screen OFF at elapsed=111");
+        service.record("Screen OFF at elapsed=222");
+        service.record("Screen ON at elapsed=333");
+        service.record("Screen ON at elapsed=444");
+        String events = service.getSharedPreferences("diagnostics", 0).getString("events", "");
+        assertEquals("Repeated minimize events must collapse", 1, occurrences(events, "Screen OFF"));
+        assertEquals("Repeated resume events must collapse", 1, occurrences(events, "Screen ON"));
+    }
+
+    @Test public void audioModeNamesIdentifyCallAndRingtoneModes() {
+        assertEquals("IN_CALL", MonitorService.audioModeNameForTest(android.media.AudioManager.MODE_IN_CALL));
+        assertEquals("RINGTONE", MonitorService.audioModeNameForTest(android.media.AudioManager.MODE_RINGTONE));
+    }
+
+    private static int occurrences(String value, String token) {
+        int count = 0, from = 0;
+        while ((from = value.indexOf(token, from)) >= 0) { count++; from += token.length(); }
+        return count;
+    }
+
     @Test public void diagnosticEventHistoryRemainsBounded() throws Exception {
         MainActivity main = activity.getActivity();
         long deadline = System.currentTimeMillis() + 30000;
