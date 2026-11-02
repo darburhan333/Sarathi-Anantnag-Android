@@ -14,6 +14,16 @@ const root=path.resolve(__dirname,'../app/src/main/assets/extension');
  const ctx={browser,console,URL,Date,Math,Promise,setTimeout,clearTimeout,AbortController,navigator:{onLine:true},fetch:async()=>{fetchCalls++;return {ok:true,status:200,json:async()=>({ok:true})};}};vm.createContext(ctx);
  for(const f of ['compat.js','background.js'])vm.runInContext(fs.readFileSync(path.join(root,f),'utf8'),ctx);
  const call=m=>new Promise(resolve=>listeners[0]({type:'SARATHI_ACTION_GATE',sessionId:'s1',documentNonce:'doc1',...m},{tab:{id:7},url:'https://sarathi.parivahan.gov.in/slots/x'},resolve));
+ const bookingActions=['DATE_SELECT','QUOTA_SELECT','QUOTA_BACK','BOOK_SLOT','BOOK_SLOT_CONFIRM'];
+ for(const action of bookingActions){
+  for(const [field,blocked] of [['running',false],['calendarLock',false],['autoBookingEnabled',false]]){
+   const prior=data[field];data[field]=blocked;
+   const denied=await call({action,reservationId:'reservation-gate',date:'2026-12-09',kind:'BOTH'});
+   assert(!denied.authorized,action+' must be denied when '+field+' is false');
+   data[field]=prior;
+  }
+ }
+ for(const action of ['DATE_SELECT','QUOTA_SELECT','QUOTA_BACK'])assert((await call({action})).authorized,action+' must authorize only with all three gates true');
  assert((await call({action:'BOOK_SLOT',reservationId:'reservation-1',date:'2026-12-09',kind:'BOTH'})).authorized);
  assert.equal(data.bookingReservationDocument,'doc1');
  assert(!(await call({action:'BOOK_SLOT_CONFIRM',reservationId:'reservation-1',documentNonce:'doc2'})).authorized);

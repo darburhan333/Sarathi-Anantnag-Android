@@ -402,7 +402,6 @@
     chrome.runtime.sendMessage({type:'SARATHI_WARNING',sessionId:eventSession,kind:'BOOKING_REVIEW',message}).catch(()=>{});
   }
   async function assistBooking() {
-    if(globalThis.MANUAL_BOOKING_ONLY)return;
     const eventSession=sessionId;
     const gate=(action,extra={})=>actionAllowed(action,extra,eventSession);
     const stopAssist=message=>safeAssistStop(message,eventSession);

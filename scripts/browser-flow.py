@@ -73,6 +73,7 @@ async def run():
   assert result['scanChecked']==['2026-12-09'],result  # rejected dates returned from; selected positive remains pending
   assert result['clicks']==1,result
   assert result['running'] is False,result
+  assert result['autoBookingEnabled'] is False,result  # SMS_READY must reset the applicant toggle to OFF
   assert result['otp']=='',result
   assert sum(e['type']=='SARATHI_SMS_READY' for e in result['events'])==1,result
   assert errors==[],errors

@@ -19,7 +19,6 @@ async function authorizeAction(msg,sender){
  if(sender.tab?.id!==d.monitoredTabId || !d.monitorSessionId || msg.sessionId!==d.monitorSessionId)
    return {authorized:false,error:'Different monitored tab or session'};
  const action=String(msg.action||'');
- if(globalThis.MANUAL_BOOKING_ONLY&&['DATE_SELECT','QUOTA_SELECT','QUOTA_BACK','BOOK_SLOT','BOOK_SLOT_CONFIRM'].includes(action))return {authorized:false,error:'Manual booking only'};
  if(['BOOK_SLOT_CANCEL','BOOK_SLOT_DISPATCHED'].includes(action)){
    if(!msg.reservationId || msg.reservationId!==d.bookingReservationId || (d.bookingReservationDocument && (sender.documentId || msg.documentNonce)!==d.bookingReservationDocument))return {authorized:false,error:'Reservation mismatch'};
    if(action==='BOOK_SLOT_DISPATCHED'){await chrome.storage.local.set({bookingDispatchStarted:true,bookingSubmittedAt:Date.now(),bookingResponseWarned:false});return {authorized:true};}

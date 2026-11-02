@@ -1,18 +1,21 @@
 plugins { id 'com.android.application' }
+def buildCommit = (System.getenv('GITHUB_SHA') ?: 'local').take(7)
 def releaseStorePath = System.getenv('RELEASE_KEYSTORE_PATH')
 def releaseStorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD')
 def releaseKeyAlias = System.getenv('ANDROID_KEY_ALIAS')
 def releaseKeyPassword = System.getenv('ANDROID_KEY_PASSWORD')
 def hasReleaseSigning = [releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { it != null && !it.trim().isEmpty() }
 android {
+ buildFeatures { buildConfig true }
  namespace 'com.sarathi.geckotest'
  compileSdk { version = release(37) { minorApiLevel = 0 } }
  defaultConfig {
   applicationId 'com.sarathi.anantnag.gecko.v33'
+  buildConfigField 'String', 'GIT_SHA', "\"${buildCommit}\""
   minSdk 26
   targetSdk 34
-  versionCode 361
-  versionName '3.6-v11.47-safety'
+  versionCode 370
+  versionName '3.7.0'
   testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
   ndk { abiFilters(project.findProperty('testAbi') ?: 'arm64-v8a') }
  }

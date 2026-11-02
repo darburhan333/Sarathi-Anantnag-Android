@@ -175,4 +175,4 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
  })().then(reply).catch(e=>reply({ok:false,reason:String(e.message||e)}));return true;
 });
 
-if(globalThis.MANUAL_BOOKING_ONLY){const toggle=$("autoBookingEnabled");toggle.checked=false;toggle.disabled=true;toggle.title="Manual date selection and booking only in this build";chrome.storage.local.set({autoBookingEnabled:false});}
+
