@@ -50,13 +50,13 @@ final class KeepAlive {
   /** Idempotent; safe to call every few seconds. */
   void start() {
     requested=true;
-    main.post(this::showOverlay);
-    startAudio();
-    String status = status();
-    if (!status.equals(lastStatus)) {
-      lastStatus = status;
-      service.record("Keep-alive " + status);
+    if (Looper.myLooper() == Looper.getMainLooper()) {
+      showOverlay();
+      recordStatus();
+    } else {
+      main.post(() -> { showOverlay(); recordStatus(); });
     }
+    startAudio();
   }
 
   synchronized void stop() {
@@ -76,6 +76,14 @@ final class KeepAlive {
   String status() {
     return "overlay=" + (overlay != null ? "ON" : (overlayAllowed() ? "pending" : "OFF (permission missing)"))
         + "; audio=" + (audioRunning ? "ON" : "OFF");
+  }
+
+  private void recordStatus() {
+    String status = status();
+    if (!status.equals(lastStatus)) {
+      lastStatus = status;
+      service.record("Keep-alive " + status);
+    }
   }
 
   private void showOverlay() {

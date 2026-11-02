@@ -663,7 +663,7 @@ public class GeckoIntegrationTest {
   assertEquals("Calendar detected",BrowserEngine.pageReadyReason("Calendar detected",false,false,false));
   assertEquals("Session expired",BrowserEngine.pageReadyReason("Session expired",false,false,false));
   assertEquals("COV form missing",BrowserEngine.pageReadyReason("Navigate to COV to start",false,false,false));
-  assertEquals("COV selection ready",BrowserEngine.pageReadyReason("COV selection",false,false,true));
+  assertEquals("Ready",BrowserEngine.pageReadyReason("COV selection",false,false,true));
  }
  @Test public void idlePageLossRecoversWithoutAlarmAndHomeWorksWithoutBridge()throws Exception{
   MainActivity a=activity.getActivity();long end=System.currentTimeMillis()+60000;

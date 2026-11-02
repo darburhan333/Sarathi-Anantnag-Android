@@ -119,7 +119,7 @@ final class BrowserEngine {
       if(!pressure&&now-lastVisibleAt<idleUnloadTimeoutMs())return;
       boolean unloaded=false;
       for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);priorityHints.remove(s);if(s.isOpen())s.close();if(s==current)current=null;unloaded=true;}
-      if(unloaded){pageUnloaded=true;String message="Applicant "+profile+" page unloaded, login will be needed";service.record(message+"; memoryPressure="+pressure+"; idleMs="+(now-lastVisibleAt));log(message);}
+      if(unloaded){pageUnloaded=true;String message="Applicant "+profile+" idle page closed; loggedIn="+loggedIn+(loggedIn?"; session retained":"; login will be needed");service.record(message+"; memoryPressure="+pressure+"; idleMs="+(now-lastVisibleAt));log(message);}
     }
     void shutdown(){
       destroyed=true;
@@ -219,7 +219,7 @@ final class BrowserEngine {
       String value=supplied==null?"":supplied.toLowerCase(Locale.US);
       if(expired||value.contains("session expired"))return "Session expired";
       if(calendar||value.contains("calendar detected"))return "Calendar detected";
-      return covReady?"COV selection ready":"COV form missing";
+      return covReady?"Ready":"COV form missing";
     }
     private void receive(Object message){
       if(!(message instanceof JSONObject))return;
@@ -413,7 +413,7 @@ final class BrowserEngine {
             @Override public void onPageStop(GeckoSession session, boolean success) {
                 if (session == current) {
                     pageLoading=false;
-                    log(success?"Navigation finished · open the COV page to monitor":"Page could not load — check connection or use Home");
+                    log(success?"Ready":"Page could not load — check connection or use Home");
                     if(success)command("PAGE_QUERY",pageQuery+"|"+pageUrl);
                     if(!firstPageRecorded){firstPageRecorded=true;logs.add("First page completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);service.handler.post(BrowserEngine.this::prepareMonitor);}
                 }

@@ -8,7 +8,7 @@ public final class MonitorService extends Service {
  private volatile boolean promoted,destroying;
  private KeepAlive keepAlive;
  final HandlerThread clockThread=new HandlerThread("MonitoringClock",android.os.Process.THREAD_PRIORITY_DEFAULT);Handler clock;
- private volatile long clockBeat,clockUptime,longestClockGap,mainBeat;volatile long screenOffAt,screenOnAt;private final java.util.concurrent.atomic.AtomicBoolean tickQueued=new java.util.concurrent.atomic.AtomicBoolean();
+ private volatile long clockBeat,clockUptime,longestClockGap,mainBeat,armedClockBeat;volatile long screenOffAt,screenOnAt;private final java.util.concurrent.atomic.AtomicBoolean tickQueued=new java.util.concurrent.atomic.AtomicBoolean();
  private volatile boolean needsCpu;private int lastAudioMode=Integer.MIN_VALUE;
  final String processId=java.util.UUID.randomUUID().toString().substring(0,8);private volatile long renewAt;private long stopAfter,lastNotification,lastStallAt;private String lastNotificationText="";
  private PowerManager.WakeLock wake;private android.net.wifi.WifiManager.WifiLock wifiLock;private ConnectivityManager connectivity;private Network network;
@@ -132,7 +132,8 @@ public final class MonitorService extends Service {
  @Override public int onStartCommand(Intent intent,int flags,int id){if(intent!=null&&"STOP".equals(intent.getAction()))stopAll();else if(intent==null)stopSelf();return START_NOT_STICKY;}
  private final Runnable clockTick=new Runnable(){public void run(){if(destroying)return;
   long now=SystemClock.elapsedRealtime(),up=SystemClock.uptimeMillis();
-  if(clockBeat>0)longestClockGap=Math.max(longestClockGap,now-clockBeat);clockBeat=now;clockUptime=up;
+  clockBeat=now;clockUptime=up;
+  if(activeCount()>0){if(armedClockBeat>0)longestClockGap=Math.max(longestClockGap,now-armedClockBeat);armedClockBeat=now;}else armedClockBeat=0;
   synchronized(wake){if(needsCpu&&promoted&&(now>=renewAt||!wake.isHeld())){wake.acquire(120000);renewAt=now+30000;}}
   if(needsCpu&&promoted&&wifiLock!=null&&!wifiLock.isHeld())wifiLock.acquire();
   if(tickQueued.compareAndSet(false,true))handler.post(()->{tickQueued.set(false);if(destroying)return;mainBeat=SystemClock.elapsedRealtime();captureAudioMode();
