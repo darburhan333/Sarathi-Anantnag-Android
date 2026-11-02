@@ -41,6 +41,7 @@ import java.util.Date;
 import java.util.Locale;
 
 final class BrowserEngine {
+    static final long STOP_PAGE_PROTECTION_MAX_MS=5L*60L*1000L;
     static final String HOME="https://parivahan.gov.in/";
     private static GeckoRuntime sharedRuntime;
     final GeckoRuntime runtime;
@@ -54,7 +55,8 @@ final class BrowserEngine {
     final ArrayList<String> logs=new ArrayList<>();
     String status="Opening Parivahan…", monitorStatus="Connecting monitor…", monitorUrl;
     boolean canGoBack, foreground, showingMonitor, ready, monitoring, destroyed;
-    boolean protectedPage,pageLostProtected,sessionExpired,pageUnloaded,loggedInPage=true;String sessionExpiredHeader="",protectedStage="",protectedUrl="",lastPageReason="COV form missing";long lastVisibleAt=SystemClock.elapsedRealtime();
+    boolean protectedPage,pageLostProtected,sessionExpired,pageUnloaded,loggedInPage=true;String sessionExpiredHeader="",protectedStage="",protectedUrl="",lastPageReason="COV form missing";long protectedUntilElapsed,lastVisibleAt=SystemClock.elapsedRealtime();
+    long loginAtWallClockMs,loginAtElapsedMs;boolean loginRequiredObserved;
     boolean firstPageRecorded;int installAttempts;
     long bridgeLostAt;
     final long startupAt=SystemClock.elapsedRealtime();
@@ -68,6 +70,9 @@ final class BrowserEngine {
     JSONObject lastState=new JSONObject();
     BrowserEngine(MonitorService owner,int number){
       service=owner;profile=number;run=new MonitorRun(this);alerts=new PhoneAlerts(owner,number);
+      android.content.SharedPreferences loginPrefs=owner.getSharedPreferences("monitor",0);
+      loginAtWallClockMs=loginPrefs.getLong("loginAtWallClockMs"+number,0L);
+      loginAtElapsedMs=0L; // elapsedRealtime is process/boot-relative; never restore it from disk.
       extensionId=number==1?"sarathi-android@burhan.local":"sarathi-applicant"+number+"@burhan.local";assetPath=number==1?"extension/":"extension"+number+"/";
       if(sharedRuntime==null)sharedRuntime=GeckoRuntime.create(owner.getApplicationContext());
       runtime=sharedRuntime;
@@ -102,13 +107,71 @@ final class BrowserEngine {
       boolean protectedNow=state.optBoolean("protectPage")||state.optBoolean("calendarLock")||bookingStage;
       boolean hasProtectionInputs=state.has("protectPage")||state.has("calendarLock")||state.has("bookingStage");
       if(protectedNow){
-        protectedPage=true;protectedStage=stage;protectedUrl=safeLocation(state.optString("url",pageUrl));
+        String observedUrl=state.optString("url","");if(observedUrl.isEmpty())observedUrl=pageUrl;
+        protectedPage=true;protectedStage=stage;protectedUrl=safeLocation(observedUrl);
       }else if(hasProtectionInputs){
-        protectedPage=false;protectedStage="";protectedUrl="";
+        clearProtectedPage();pageLostProtected=false;
       }
-      if(state.has("loggedIn"))loggedInPage=state.optBoolean("loggedIn",true);
+      if(state.has("loggedIn")){loggedInPage=state.optBoolean("loggedIn",true);if(!loggedInPage){loginRequiredObserved=true;clearLoginAt();}}
       if(state.has("reason"))lastPageReason=state.optString("reason");
       activate();service.refreshForeground(false);
+    }
+    private void clearProtectedPage(){
+      protectedPage=false;protectedStage="";protectedUrl="";protectedUntilElapsed=0;
+      activate();
+    }
+    void beginProtectionRetentionAfterStop(long nowElapsed){
+      protectedUntilElapsed=protectedPage?nowElapsed+STOP_PAGE_PROTECTION_MAX_MS:0L;
+    }
+    boolean expireRetainedProtection(long nowElapsed){
+      if(!protectedPage||protectedUntilElapsed<=0L||nowElapsed<protectedUntilElapsed)return false;
+      String kind=protectedStage.contains("SMS")?"SMS":"calendar/booking";
+      clearProtectedPage();pageLostProtected=false;
+      service.record("Applicant "+profile+" retained "+kind+" page protection expired after 5-minute STOP maximum");
+      service.refreshForeground(true);return true;
+    }
+    void expireRetainedProtectionForNavigation(String nextUrl){
+      if(!protectedPage||protectedUntilElapsed<=0L)return;
+      String next=safeLocation(nextUrl);
+      if(!protectedUrl.isEmpty()&&!protectedUrl.equals(next)){
+        clearProtectedPage();pageLostProtected=false;
+        service.record("Applicant "+profile+" retained page protection expired after navigation away");
+        service.refreshForeground(true);
+      }
+    }
+    void markLoginAt(){
+      if(loginAtWallClockMs!=0L)return;
+      loginAtWallClockMs=System.currentTimeMillis();loginAtElapsedMs=SystemClock.elapsedRealtime();
+      service.getSharedPreferences("monitor",0).edit().putLong("loginAtWallClockMs"+profile,loginAtWallClockMs).remove("loginAtElapsedMs"+profile).apply();
+      sessionExpired=false;
+      service.record("Applicant "+profile+" loginAt="+loginAtWallClockMs+" (first COV page after login)");
+    }
+    void clearLoginAt(){
+      loginAtWallClockMs=0L;loginAtElapsedMs=0L;
+      service.getSharedPreferences("monitor",0).edit().remove("loginAtWallClockMs"+profile).remove("loginAtElapsedMs"+profile).apply();
+    }
+    void recordSessionExpiryEvidence(){
+      service.record(sessionExpiryEvidence(profile,loginAtWallClockMs,loginAtElapsedMs,System.currentTimeMillis(),SystemClock.elapsedRealtime(),pageUrl));
+    }
+    void setLoginAtForTest(long wall,long elapsed){loginAtWallClockMs=wall;loginAtElapsedMs=elapsed;}
+    void setPageUrlForTest(String url){pageUrl=url;}
+    static String sessionExpiryEvidence(int profile,long loginWall,long loginElapsed,long nowWall,long nowElapsed,String url){
+      String login=loginWall>0L?String.valueOf(loginWall):"unavailable";
+      String elapsed=loginElapsed>0L&&nowElapsed>=loginElapsed?String.valueOf(nowElapsed-loginElapsed):
+        loginWall>0L&&nowWall>=loginWall?String.valueOf(nowWall-loginWall):"unavailable";
+      return "SESSION_EVIDENCE applicant="+profile+" loginAtWallClockMs="+login+" expiredAtWallClockMs="+nowWall+" elapsedSinceLoginMs="+elapsed+
+        " endpoint="+safeOriginPathLabel(url)+" httpStatus=unavailable redirect=unavailable cookieExpiryTimestamps=unavailable";
+    }
+    static String safeOriginPathLabel(String raw){
+      if(raw==null||raw.isEmpty())return "unavailable";
+      try{
+        Uri uri=Uri.parse(raw);if(!"https".equalsIgnoreCase(uri.getScheme())||!"sarathi.parivahan.gov.in".equalsIgnoreCase(uri.getHost()))return "unavailable";
+        String path=uri.getPath()==null?"":uri.getPath().toLowerCase(Locale.US);
+        String label=path.contains("dlsltprev.do")?"SMS_VERIFICATION":
+          path.contains("fetchdltprevmnth.do")||path.contains("fetchdltnextmnth.do")?"CALENDAR":
+          path.contains("fetchdlslotdetinfo.do")?"QUOTA":path.contains("dispdlapcntdetform")?"COV_FORM":"SLOT_FLOW";
+        return "https://sarathi.parivahan.gov.in#"+label;
+      }catch(Exception ignored){return "unavailable";}
     }
     static long idleUnloadTimeoutMsForTest(int minutes){return Math.max(5,Math.min(180,minutes))*60000L;}
     private long idleUnloadTimeoutMs(){int minutes=service.getSharedPreferences("monitor",0).getInt("idleUnloadMinutes",60);return idleUnloadTimeoutMsForTest(minutes);}
@@ -123,6 +186,7 @@ final class BrowserEngine {
     }
     void shutdown(){
       destroyed=true;
+      if(protectedUntilElapsed>0L)clearProtectedPage();
       if(extension!=null){extension.setMessageDelegate(null,"sarathi");extension.setTabDelegate(null);}
       if(nativePort!=null)nativePort.disconnect();
       for(GeckoSession s:sessions)if(s.isOpen())s.close();
@@ -171,7 +235,7 @@ final class BrowserEngine {
     // Test-only instrumentation hook; production code must not call this method.
     void resetProtectionForTest(){
       if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Test reset must run on the main thread");
-      protectedPage=false;pageLostProtected=false;sessionExpired=false;sessionExpiredHeader="";loggedInPage=true;protectedStage="";protectedUrl="";
+      protectedPage=false;pageLostProtected=false;sessionExpired=false;sessionExpiredHeader="";loggedInPage=true;protectedStage="";protectedUrl="";protectedUntilElapsed=0L;
       lastPageReason="Test fixture reset";lastState=new JSONObject();monitoring=false;
       JSONObject protectionState = new JSONObject();
         try {
@@ -196,7 +260,7 @@ final class BrowserEngine {
       if(destroyed||!sessions.remove(session))return;
       boolean website=session==current,monitor=session==monitorSession;
       activeStates.remove(session);priorityHints.remove(session);
-      if(website){current=null;if(protectedPage){pageLostProtected=true;lastPageReason="A"+profile+": page lost during "+protectedStage+", restart the booking flow";status=lastPageReason;service.record(lastPageReason+" url="+protectedUrl);alerts.critical("PROTECTED_PAGE_LOST",lastPageReason);run.stopForBackground(lastPageReason);}else run.fail(reason+" — inspect Sarathi and press START");}
+      if(website){current=null;if(protectedPage&&protectedUntilElapsed>0L){clearProtectedPage();pageLostProtected=false;service.record("Applicant "+profile+" retained page protection cleared because the page session closed");}else if(protectedPage){pageLostProtected=true;lastPageReason="A"+profile+": page lost during "+protectedStage+", restart the booking flow";status=lastPageReason;service.record(lastPageReason+" url="+protectedUrl);alerts.critical("PROTECTED_PAGE_LOST",lastPageReason);run.stopForBackground(lastPageReason);}else run.fail(reason+" — inspect Sarathi and press START");}
       if(monitor){monitorSession=null;monitorReady=false;}
       if(session.isOpen())session.close();
       service.record("Applicant "+profile+" "+(website?"website":monitor?"dashboard":"unused page")+" closed; active="+run.armed);
@@ -245,7 +309,7 @@ final class BrowserEngine {
         case "ACK":
           finishNavigation(o.optString("id"));break;
         case "START_RESULT":if(o.optString("batch").equals(service.startBatch)){log("Start All: "+o.optString("reason"));service.record("Applicant "+profile+" Start All: "+o.optString("reason"));}break;
-        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;updateProtection(o);String reason=pageReadyReason(o.optString("reason"),o.optBoolean("calendarLock")||o.optBoolean("protectPage")&&o.optString("reason").toLowerCase(Locale.US).contains("calendar"),o.optString("reason").toLowerCase(Locale.US).contains("session expired"),o.optBoolean("covReady"));lastPageReason=reason;log("PAGE_READY: "+reason);}break;
+        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;updateProtection(o);if(o.optBoolean("covReady")&&loggedInPage&&(loginRequiredObserved||(!sessionExpired&&loginAtWallClockMs==0L))){markLoginAt();loginRequiredObserved=false;}String reason=pageReadyReason(o.optString("reason"),o.optBoolean("calendarLock")||o.optBoolean("protectPage")&&o.optString("reason").toLowerCase(Locale.US).contains("calendar"),o.optString("reason").toLowerCase(Locale.US).contains("session expired"),o.optBoolean("covReady"));lastPageReason=reason;log("PAGE_READY: "+reason);}break;
         case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"),o.optBoolean("terminal"),o.optString("reason","No verification details"));break;
         case "ERROR":log(o.optString("message"));break;
       }
@@ -406,6 +470,7 @@ final class BrowserEngine {
             @Override public void onPageStart(GeckoSession session, String url) {
                 if(!sessions.contains(session)||!session.isOpen()||session==monitorSession)return;
                 if(session!=current&&!run.armed)showSession(session);
+                if(session==current)expireRetainedProtectionForNavigation(url);
                 pageLoading=true;pageReady=false;pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
                 log("Loading " + safeLocation(url));
                 final String loadingId=pageQuery;service.handler.postDelayed(()->{if(!destroyed&&pageLoading&&loadingId.equals(pageQuery))log("Connection slow · waiting for Sarathi");},15000);

@@ -80,6 +80,26 @@ async def run():
   print('PASS: selected December 9 green date, verified radio+span quota 0, clicked Back')
   print('PASS: selected December 10 green date, verified radio+span quota 13, selected LMV/MCWG, BOOK SLOT once')
   print('PASS: stopped on manual SMS verification, OTP field not modified')
+  async def content_profile_fixture(html, path):
+   fixture=await browser.new_page()
+   await fixture.set_content(styles+html)
+   await fixture.evaluate('(code)=>{(0,eval)(code)}',mock)
+   await fixture.evaluate('(path)=>{window.__testPath=path}',path)
+   await fixture.evaluate('(code)=>{(0,eval)(code)}',rules)
+   await fixture.evaluate('(code)=>{(0,eval)(code)}',source)
+   await fixture.wait_for_function('typeof window.__listener==="function"',timeout=5000)
+   result=await fixture.evaluate("""() => new Promise(resolve => window.__listener({type:'SARATHI_PROFILE_QUERY'}, {}, resolve))""")
+   await fixture.close()
+   return result
+  sms_profile=await content_profile_fixture('<h1>SMS Verification</h1><label>SMS verification Code <input id="smsCode" type="text" autocomplete="one-time-code"></label>','/slots/dlsltprev.do')
+  assert sms_profile['protectPage'] is True and sms_profile['reason']=='SMS verification ready',sms_profile
+  calendar_profile=await content_profile_fixture('<div id="calview"><table><tbody><tr><td class="cal_green"><a href="#">9</a></td></tr></tbody></table></div>','/slots/fetchdltprevmnth.do')
+  assert calendar_profile['protectPage'] is True and calendar_profile['reason']=='Calendar detected',calendar_profile
+  cov_profile=await content_profile_fixture('<form id="dispdlapcntdetform"><table><tr><td><input id="cov-lmv" type="checkbox" name="iscov" value="4" checked><label for="cov-lmv">LMV</label></td></tr></table><button id="prcdbook" type="button">PROCEED</button></form>','/slots/bckdlappldet.do')
+  assert cov_profile['covReady'] is True and cov_profile['protectPage'] is False and cov_profile['reason']=='COV selection',cov_profile
+  print('PASS: real content.js SMS fixture reports protected SMS verification page')
+  print('PASS: real content.js calendar fixture reports protected calendar page')
+  print('PASS: real content.js normal COV fixture remains unprotected')
   await browser.close()
 if __name__=='__main__':asyncio.run(run())
 

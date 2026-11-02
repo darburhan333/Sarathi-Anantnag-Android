@@ -137,7 +137,7 @@ public final class MonitorService extends Service {
   synchronized(wake){if(needsCpu&&promoted&&(now>=renewAt||!wake.isHeld())){wake.acquire(120000);renewAt=now+30000;}}
   if(needsCpu&&promoted&&wifiLock!=null&&!wifiLock.isHeld())wifiLock.acquire();
   if(tickQueued.compareAndSet(false,true))handler.post(()->{tickQueued.set(false);if(destroying)return;mainBeat=SystemClock.elapsedRealtime();captureAudioMode();
-   for(BrowserEngine e:profiles)if(e!=null){e.run.tick();if(e.protectedPage)e.activate();}
+   for(BrowserEngine e:profiles)if(e!=null){e.expireRetainedProtection(SystemClock.elapsedRealtime());e.run.tick();if(e.protectedPage)e.activate();}
    trimIdle();
    if(promoted){refreshForeground(false);if(stopAfter>0&&SystemClock.elapsedRealtime()>=stopAfter&&!alerting()&&activeCount()==0&&protectedCount()==0){promoted=false;needsCpu=false;synchronized(wake){if(wake.isHeld())wake.release();}if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}}
   });clock.postDelayed(this,2000);

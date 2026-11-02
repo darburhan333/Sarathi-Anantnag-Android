@@ -248,7 +248,7 @@ public class MainActivity extends Activity {
         for(int i=0;i<controls.getChildCount();i++){Button control=(Button)controls.getChildAt(i);control.setTextSize(15);control.getLayoutParams().height=dp(64);}
         header.addView(controls);
         Button copyLogButton=button(utilities, "Copy log", Color.rgb(104,65,165), () -> {
-            String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.7.0 · SHA " + BuildConfig.GIT_SHA + "\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
+            String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.7.0 · SHA " + BuildConfig.GIT_SHA + "\nProtected page retention after STOP: " + BrowserEngine.STOP_PAGE_PROTECTION_MAX_MS + " ms (5 minutes)\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
                     + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics", report));

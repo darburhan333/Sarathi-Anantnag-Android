@@ -529,6 +529,71 @@ public class GeckoIntegrationTest {
    assertTrue("Protected page must retain PRIORITY_HIGH",protectedApplicant.isPriorityHighForTest(protectedApplicant.current));
   });
  }
+ @Test public void stopProtectionRetentionIsFiveMinutesForSmsAndCalendar()throws Exception{
+  BrowserEngine sms=readyApplicant(7),calendar=readyApplicant(8);
+  main(()->{
+   sms.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true,"url","https://sarathi.parivahan.gov.in/slots/dlsltprev.do"));
+   sms.run.stopByUser();
+   assertFalse("SMS STOP must disarm immediately",sms.run.armed);
+   assertTrue("SMS page remains protected after STOP",sms.protectedPage);
+   sms.beginProtectionRetentionAfterStop(100000L);
+   assertFalse("SMS protection remains at four minutes",sms.expireRetainedProtection(100000L+4L*60L*1000L));
+   assertTrue("SMS protection remains active at four minutes",sms.protectedPage);
+   assertTrue("SMS protection expires at five minutes",sms.expireRetainedProtection(100000L+BrowserEngine.STOP_PAGE_PROTECTION_MAX_MS));
+   assertFalse("SMS protection is cleared at five minutes",sms.protectedPage);
+   sms.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true,"url","https://sarathi.parivahan.gov.in/slots/dlsltprev.do"));
+   sms.beginProtectionRetentionAfterStop(300000L);
+   sms.expireRetainedProtectionForNavigation("https://sarathi.parivahan.gov.in/slots/bckdlappldet.do");
+   assertFalse("SMS protection clears immediately on navigation away",sms.protectedPage);
+   calendar.updateProtection(json("running",true,"bookingStage","CALENDAR DETECTED","calendarLock",true,"protectPage",true,"url","https://sarathi.parivahan.gov.in/slots/fetchdltprevmnth.do"));
+   calendar.run.stopByUser();
+   assertFalse("Calendar STOP must disarm immediately",calendar.run.armed);
+   assertTrue("Calendar page remains protected after STOP",calendar.protectedPage);
+   calendar.beginProtectionRetentionAfterStop(200000L);
+   assertFalse("Calendar protection remains at four minutes",calendar.expireRetainedProtection(200000L+4L*60L*1000L));
+   assertTrue("Calendar protection remains active at four minutes",calendar.protectedPage);
+   assertTrue("Calendar protection expires at five minutes",calendar.expireRetainedProtection(200000L+BrowserEngine.STOP_PAGE_PROTECTION_MAX_MS));
+   assertFalse("Calendar protection is cleared at five minutes",calendar.protectedPage);
+   calendar.updateProtection(json("running",true,"bookingStage","CALENDAR DETECTED","calendarLock",true,"protectPage",true,"url","https://sarathi.parivahan.gov.in/slots/fetchdltprevmnth.do"));
+   calendar.beginProtectionRetentionAfterStop(400000L);
+   org.mozilla.geckoview.GeckoSession closing=calendar.current;
+   calendar.pageLost(closing,"fixture session close");
+   assertFalse("Calendar protection clears immediately when its page session closes",calendar.protectedPage);
+   BrowserEngine normal=readyApplicant(9);
+   normal.updateProtection(json("running",true,"bookingStage","MONITORING","protectPage",false,"calendarLock",false));
+   normal.run.stopByUser();
+   assertFalse("Normal COV STOP must leave nothing protected",normal.protectedPage);
+   assertEquals("The single named retention constant must be five minutes",300000L,BrowserEngine.STOP_PAGE_PROTECTION_MAX_MS);
+  });
+ }
+ @Test public void simultaneousSessionExpiryEvidenceIsPerApplicantAndRedacted()throws Exception{
+  BrowserEngine first=readyApplicant(5),second=readyApplicant(6);
+  long wall=System.currentTimeMillis(),elapsed=android.os.SystemClock.elapsedRealtime();
+  main(()->{
+   first.setLoginAtForTest(wall-5000L,elapsed-5000L);
+   second.setLoginAtForTest(wall-11000L,elapsed-11000L);
+   first.setPageUrlForTest("https://sarathi.parivahan.gov.in/slots/dlsltprev.do/private-path?token=FAKE_SECRET#fragment");
+   second.setPageUrlForTest("https://sarathi.parivahan.gov.in/slots/fetchdltprevmnth.do/private-path?cookie=FAKE_COOKIE");
+   first.run.sessionExpired("simultaneous-one");
+   second.run.sessionExpired("simultaneous-two");
+  });
+  String report=fixtureService.diagnosticReport();
+  assertTrue("First applicant expiry evidence missing",report.contains("SESSION_EVIDENCE applicant=5 loginAtWallClockMs="+(wall-5000L)+" expiredAtWallClockMs="));
+  assertTrue("Second applicant expiry evidence missing",report.contains("SESSION_EVIDENCE applicant=6 loginAtWallClockMs="+(wall-11000L)+" expiredAtWallClockMs="));
+  assertTrue("First applicant elapsed time must be calculated at expiry",BrowserEngine.sessionExpiryEvidence(5,wall-5000L,elapsed-5000L,wall,elapsed,"https://sarathi.parivahan.gov.in/slots/dlsltprev.do").contains("elapsedSinceLoginMs=5000"));
+  assertTrue("Second applicant elapsed time must be calculated at expiry",BrowserEngine.sessionExpiryEvidence(6,wall-11000L,elapsed-11000L,wall,elapsed,"https://sarathi.parivahan.gov.in/slots/fetchdltprevmnth.do").contains("elapsedSinceLoginMs=11000"));
+  assertTrue("SMS endpoint must use a fixed redacted label",report.contains("endpoint=https://sarathi.parivahan.gov.in#SMS_VERIFICATION"));
+  assertTrue("Calendar endpoint must use a fixed redacted label",report.contains("endpoint=https://sarathi.parivahan.gov.in#CALENDAR"));
+  assertEquals("Expiry must clear applicant 5 loginAt",0L,first.loginAtWallClockMs);
+  assertEquals("Expiry must clear applicant 6 loginAt",0L,second.loginAtWallClockMs);
+  assertFalse("Session evidence must not contain URL secrets",report.contains("FAKE_SECRET")||report.contains("FAKE_COOKIE"));
+  String missing=BrowserEngine.sessionExpiryEvidence(4,0L,0L,wall,elapsed,"");
+  assertTrue("Missing login time must be unavailable",missing.contains("loginAtWallClockMs=unavailable"));
+  assertTrue("Missing elapsed time must be unavailable",missing.contains("elapsedSinceLoginMs=unavailable"));
+  assertTrue("Missing HTTP status must be unavailable",missing.contains("httpStatus=unavailable"));
+  assertTrue("Missing redirect must be unavailable",missing.contains("redirect=unavailable"));
+  assertTrue("Missing cookie expiry metadata must be unavailable",missing.contains("cookieExpiryTimestamps=unavailable"));
+ }
  @Test public void backAndHomeConfirmOnlyWhenPageProtected()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=service.engine;
   final org.mozilla.geckoview.WebExtension.Port[] savedPort=new org.mozilla.geckoview.WebExtension.Port[1];
