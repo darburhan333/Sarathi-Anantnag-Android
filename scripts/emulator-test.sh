@@ -2,7 +2,8 @@
 set +e
 result=0
 if [ "${1:-all}" != "release-only" ]; then
-  gradle -PtestAbi=x86_64 connectedDebugAndroidTest --stacktrace
+  read -r -a runner_args <<< "${SARATHI_TEST_RUNNER_ARGS:-}"
+  gradle -PtestAbi=x86_64 "${runner_args[@]}" connectedDebugAndroidTest --stacktrace
   result=$?
 fi
 mkdir -p ci-evidence

@@ -484,6 +484,7 @@ public class GeckoIntegrationTest {
    assertTrue("Protected SMS page must retain PRIORITY_HIGH",e.isPriorityHighForTest(e.current));
   });
  }
+ @QuarantinedNotificationStop
  @Test public void notificationStopWorksWithoutVisibleActivity()throws Exception{
   MonitorService service=fixtureService;BrowserEngine protectedApplicant=readyApplicant(5),normalApplicant=readyApplicant(6);
   main(()->{
