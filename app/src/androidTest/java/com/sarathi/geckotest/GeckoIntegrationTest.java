@@ -531,6 +531,7 @@ public class GeckoIntegrationTest {
  }
  @Test public void stopProtectionRetentionIsFiveMinutesForSmsAndCalendar()throws Exception{
   BrowserEngine sms=readyApplicant(7),calendar=readyApplicant(8);
+   BrowserEngine normal=readyApplicant(9);
   main(()->{
    sms.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true,"url","https://sarathi.parivahan.gov.in/slots/dlsltprev.do"));
    sms.run.stopByUser();
@@ -559,7 +560,6 @@ public class GeckoIntegrationTest {
    org.mozilla.geckoview.GeckoSession closing=calendar.current;
    calendar.pageLost(closing,"fixture session close");
    assertFalse("Calendar protection clears immediately when its page session closes",calendar.protectedPage);
-   BrowserEngine normal=readyApplicant(9);
    normal.updateProtection(json("running",true,"bookingStage","MONITORING","protectPage",false,"calendarLock",false));
    normal.run.stopByUser();
    assertFalse("Normal COV STOP must leave nothing protected",normal.protectedPage);
