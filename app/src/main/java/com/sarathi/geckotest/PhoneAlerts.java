@@ -140,15 +140,17 @@ final class PhoneAlerts {
   });
  }
  private void stopOnMain(){
-  if(criticalActive&&activity instanceof MonitorService){long elapsed=Math.max(0,SystemClock.elapsedRealtime()-criticalStartedAt);((MonitorService)activity).record("ALARM A"+profile+" ringDurationMs="+elapsed+" silenceAtWallClockMs="+System.currentTimeMillis());}
   audioGeneration++;handler.removeCallbacks(pulse);pulse=null;repeating=false;criticalActive=false;criticalStartedAt=0;
   if(tone!=null){ToneGenerator old=tone;tone=null;old.release();}
   if(vibrator!=null)vibrator.cancel();
  }
  void stop(){runAudioSync(this::stopOnMain);}
  void silence(){
-  synchronized(criticalKeys){criticalKeys.clear();}
-  stop();
+  runAudioSync(()->{
+   if(criticalActive&&activity instanceof MonitorService){long elapsed=Math.max(0,SystemClock.elapsedRealtime()-criticalStartedAt);((MonitorService)activity).record("ALARM A"+profile+" ringDurationMs="+elapsed+" silenceAtWallClockMs="+System.currentTimeMillis());}
+   synchronized(criticalKeys){criticalKeys.clear();}
+   stopOnMain();
+  });
   clearNotification();
  }
  private void cancelQueuedCriticalPosts(){
