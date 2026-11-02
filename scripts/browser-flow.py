@@ -67,7 +67,7 @@ async def run():
    print('DEBUG:',await page.evaluate('''() => ({stage:window.__data.bookingStage,status:window.__data.lastStatus,dates:window.__dateClicks,bookingClicks:window.__bookingClicks,scanChecked:window.__data.scanChecked,events:window.__events})'''))
    print('JS ERRORS:',errors)
    raise
-  result=json.loads(await page.evaluate('''() => JSON.stringify({stage:window.__data.bookingStage,running:window.__data.running,dates:window.__dateClicks,scanChecked:window.__data.scanChecked,clicks:window.__bookingClicks,otp:document.getElementById('smsCode')?.value,events:window.__events})'''))
+  result=json.loads(await page.evaluate('''() => JSON.stringify({stage:window.__data.bookingStage,running:window.__data.running,dates:window.__dateClicks,scanChecked:window.__data.scanChecked,clicks:window.__bookingClicks,autoBookingEnabled:window.__data.autoBookingEnabled,otp:document.getElementById('smsCode')?.value,events:window.__events})'''))
   print('FLOW RESULT:',result)
   assert result['dates']==['2026-12-09','2026-12-10'],result
   assert result['scanChecked']==['2026-12-09'],result  # rejected dates returned from; selected positive remains pending
