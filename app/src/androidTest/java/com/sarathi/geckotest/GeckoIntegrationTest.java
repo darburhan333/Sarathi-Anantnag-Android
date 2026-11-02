@@ -412,6 +412,22 @@ public class GeckoIntegrationTest {
   assertEquals("Each pending result completes once",20,completions.get());assertEquals("All waits cancelled",20,cancelled.get());
  }
 
+ @Test public void backgroundCriticalNativeFailureIsCaughtBeforeRemoteDelivery()throws Exception{
+  android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  String source;
+  try(java.io.InputStream in=context.getAssets().open("extension/background.js");
+      java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()){
+   byte[] buffer=new byte[4096];int count;while((count=in.read(buffer))!=-1)out.write(buffer,0,count);
+   source=out.toString("UTF-8");
+  }
+  int nativeCall=source.indexOf("const nativeCritical=await nativeRequest({type:'CRITICAL'");
+  int catchBlock=source.indexOf("} catch(error) {",nativeCall);
+  int smsDelivery=source.indexOf("if(msg.type==='SARATHI_SMS_READY')",catchBlock);
+  assertTrue("Background must wrap native CRITICAL in try/catch",nativeCall>=0&&catchBlock>nativeCall);
+  assertTrue("SMS desktop/Telegram delivery path must continue after native failure catch",smsDelivery>catchBlock);
+  assertTrue("SMS Telegram delivery must remain present after native alert failure",source.indexOf("sendTelegram(body)",smsDelivery)>smsDelivery);
+ }
+
  @Test public void normalMonitoringStartThenStopDoesNotRequireProtectionConfirmation()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=service.engine;
   logProtectionSnapshot(service,"test-start");

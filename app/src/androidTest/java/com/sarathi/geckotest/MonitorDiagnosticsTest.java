@@ -153,6 +153,31 @@ public class MonitorDiagnosticsTest {
             engine.run.diagnostics().contains("reason=Session expired"));
     }
 
+    @Test public void criticalDeliveryLogsPostedNotificationAndSilenceDuration() throws Exception {
+        MainActivity main = activity.getActivity();
+        long deadline = System.currentTimeMillis() + 30000;
+        while (main.serviceForTest() == null && System.currentTimeMillis() < deadline) Thread.sleep(200);
+        MonitorService service = main.serviceForTest();
+        assertNotNull(service);
+        PhoneAlerts alerts = service.profile(7).alerts;
+        alerts.silence();
+        alerts.critical("SMS_READY", "SMS verification ready", "diag-sms-evidence");
+        String postedId = String.valueOf(alerts.criticalNotificationId("SMS_READY"));
+        deadline = System.currentTimeMillis() + 5000;
+        String events = "";
+        while (System.currentTimeMillis() < deadline) {
+            events = service.getSharedPreferences("diagnostics", 0).getString("events", "");
+            if (events.contains("notification=posted id=" + postedId)) break;
+            Thread.sleep(50);
+        }
+        assertTrue("Log must record successful notification posting, not only queueing", events.contains("notification=posted id=" + postedId));
+        alerts.silence();
+        events = service.getSharedPreferences("diagnostics", 0).getString("events", "");
+        assertTrue("Silence must log alarm ring duration", events.contains("ringDurationMs="));
+        assertTrue("Silence must log its wall-clock time", events.contains("silenceAtWallClockMs="));
+        alerts.clearNotification();
+    }
+
     @Test public void diagnosticEventHistoryRemainsBounded() throws Exception {
         MainActivity main = activity.getActivity();
         long deadline = System.currentTimeMillis() + 30000;
