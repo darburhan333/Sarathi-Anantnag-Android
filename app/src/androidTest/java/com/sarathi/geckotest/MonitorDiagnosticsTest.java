@@ -106,10 +106,10 @@ public class MonitorDiagnosticsTest {
     }
 
     @Test public void diagnosticTrimmingKeepsWholeLinesAndNewestCompleteEvents() {
-        String trimmed = MonitorService.trimDiagnosticHistory("first-line\\nsecond-line\\nthird-line\\n", 23);
-        assertEquals("second-line\\nthird-line\\n", trimmed);
+        String trimmed = MonitorService.trimDiagnosticHistory("first-line\nsecond-line\nthird-line\n", 23);
+        assertEquals("second-line\nthird-line\n", trimmed);
         assertFalse("Trimmed history must not begin with a partial line", trimmed.startsWith("rst-line"));
-        assertTrue("Newest complete line must remain", trimmed.endsWith("third-line\\n"));
+        assertTrue("Newest complete line must remain", trimmed.endsWith("third-line\n"));
     }
 
     @Test public void repeatedActivityTransitionsAndHistoricalExitLinesAreCollapsed() throws Exception {

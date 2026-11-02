@@ -162,7 +162,7 @@ public final class MonitorService extends Service {
   if(value==null||value.isEmpty()||maxBytes<=0)return "";
   String[] lines=value.split("\\n",-1);java.util.ArrayDeque<String> kept=new java.util.ArrayDeque<>();int bytes=0;
   for(int i=lines.length-1;i>=0;i--){String line=lines[i];int size=line.getBytes(java.nio.charset.StandardCharsets.UTF_8).length+(kept.isEmpty()?0:1);if(bytes+size>maxBytes)break;kept.addFirst(line);bytes+=size;}
-  return String.join("\\n",kept);
+  return String.join("\n",kept);
  }
  synchronized void record(String message){
   android.content.SharedPreferences p=getSharedPreferences("diagnostics",0);String old=p.getString("events","");
@@ -170,8 +170,8 @@ public final class MonitorService extends Service {
   if(!marker.isEmpty()){String other=marker.equals("Screen OFF")?"Screen ON":marker.equals("Screen ON")?"Screen OFF":marker.equals("Activity paused")?"Activity resumed":"Activity paused";if(old.lastIndexOf(marker)>old.lastIndexOf(other))return;}
   if(message.startsWith("historicalExit")&&old.contains("historicalExit"))return;
   String line=new java.text.SimpleDateFormat("MM-dd HH:mm:ss",java.util.Locale.US).format(new java.util.Date())+" "+message;
-  if(isCriticalDiagnostic(message)){String critical=p.getString("criticalEvents","");p.edit().putString("criticalEvents",critical.isEmpty()?line:critical+"\\n"+line).apply();}
-  String next=trimDiagnosticHistory(old+"\\n"+line,65536);p.edit().putString("events",next).apply();
+  if(isCriticalDiagnostic(message)){String critical=p.getString("criticalEvents","");p.edit().putString("criticalEvents",critical.isEmpty()?line:critical+"\n"+line).apply();}
+  String next=trimDiagnosticHistory(old+"\n"+line,65536);p.edit().putString("events",next).apply();
  }
  static String audioModeNameForTest(int mode){if(mode==AudioManager.MODE_IN_CALL)return "IN_CALL";if(mode==AudioManager.MODE_RINGTONE)return "RINGTONE";if(mode==AudioManager.MODE_IN_COMMUNICATION)return "IN_COMMUNICATION";return mode==AudioManager.MODE_NORMAL?"NORMAL":"MODE_"+mode;}
  void recordAudioModeForTest(int mode){recordAudioMode(mode);}
