@@ -611,6 +611,16 @@ public class GeckoIntegrationTest {
   assertEquals(15L*60*1000,BrowserEngine.idleUnloadTimeoutMsForTest(15));
   assertEquals(180L*60*1000,BrowserEngine.idleUnloadTimeoutMsForTest(240));
  }
+ @Test public void sessionExpiredStateDisarmsRun()throws Exception{
+  BrowserEngine e=readyApplicant(7);
+  main(()->{
+   e.run.arm();
+   e.run.onState(json("running",true,"successWatch",false,"bookingStage","MONITORING"));
+   e.run.onState(json("running",false,"successWatch",false,"bookingStage","SESSION_EXPIRED","lastStatus","SESSION EXPIRED"));
+  });
+  assertFalse("SESSION_EXPIRED STATE must disarm the applicant",e.run.armed);
+  assertEquals("Session expired",e.run.lastReasonForTest());
+ }
  @Test public void sessionExpiredIsTerminalAndAppearsInNotificationAndCopyLog()throws Exception{
   BrowserEngine e=readyApplicant(9);MonitorService service=fixtureService;
   main(()->{

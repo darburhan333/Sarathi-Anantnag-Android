@@ -612,7 +612,7 @@
         if (bookingPaused || calendarLocked || sessionLocked) { await inspectPage(); await waitWhileRunning(1000,generation); continue; }
         if (EXPIRY_TEXT.test(pageText())) {
           sessionLocked = true; localStop = true;
-          await chrome.storage.local.set({running:false,successWatch:false,autoBookingEnabled:false,sessionLock:true,nextRetryAt:0,lastStatus:'SESSION EXPIRED — restart from slot booking home'});
+          await chrome.storage.local.set({running:false,successWatch:false,autoBookingEnabled:false,sessionLock:true,bookingStage:'SESSION_EXPIRED',nextRetryAt:0,lastStatus:'SESSION EXPIRED — restart from slot booking home'});
           chrome.runtime.sendMessage({type:'SARATHI_WARNING',sessionId:eventSession,kind:'SESSION_EXPIRED',message:'Sarathi session expired. Return to slot booking home page manually.'}).catch(()=>{});
           break;
         }

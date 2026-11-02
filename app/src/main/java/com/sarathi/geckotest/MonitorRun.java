@@ -81,11 +81,11 @@ final class MonitorRun {
   // COV-page retries. That is not a STOP command and must not revoke the native
   // foreground run. Explicit DISARM/STOP messages own user-requested shutdown.
   // Only terminal workflow states end the native run from a STATE update.
-  boolean terminal="APPOINTMENT CONFIRMED".equals(stage)||"MANUAL REVIEW REQUIRED".equals(stage);
+  boolean terminal="APPOINTMENT CONFIRMED".equals(stage)||"MANUAL REVIEW REQUIRED".equals(stage)||"SESSION_EXPIRED".equals(stage);
   if(armed){
    if(active)sawRunning=true;
    else if(sawRunning&&terminal){
-    lastReason="Extension reached terminal state: "+stage+" / "+state.optString("lastStatus");
+    lastReason="SESSION_EXPIRED".equals(stage)?"Session expired":"Extension reached terminal state: "+stage+" / "+state.optString("lastStatus");
     disarm(false);
     return;
    }
