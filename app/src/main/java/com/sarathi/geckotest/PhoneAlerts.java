@@ -64,7 +64,7 @@ final class PhoneAlerts {
     if(item==null){criticalDrainScheduled=false;return;}
    }
    if(item.generation==item.owner.notificationGeneration){
-    try{item.owner.postNotification(item.kind,item.message,"sarathi-critical-v36",item.id);}
+    try{item.owner.postNotification(item.kind,item.message,"sarathi-critical-v36",item.id);if(item.owner.activity instanceof MonitorService)((MonitorService)item.owner.activity).record("ALERT A"+item.owner.profile+" kind="+item.kind+" notification=posted id="+item.id);}
     catch(Exception ex){
      android.util.Log.e("PhoneAlerts","Critical notification delivery failed for applicant "+item.owner.profile+" kind="+item.kind,ex);
      if(item.owner.activity instanceof MonitorService)((MonitorService)item.owner.activity).record("ALERT A"+item.owner.profile+" kind="+item.kind+" notification=failed:"+ex.getClass().getSimpleName());
@@ -140,6 +140,7 @@ final class PhoneAlerts {
   });
  }
  private void stopOnMain(){
+  if(criticalActive&&activity instanceof MonitorService){long elapsed=Math.max(0,SystemClock.elapsedRealtime()-criticalStartedAt);((MonitorService)activity).record("ALARM A"+profile+" ringDurationMs="+elapsed+" silenceAtWallClockMs="+System.currentTimeMillis());}
   audioGeneration++;handler.removeCallbacks(pulse);pulse=null;repeating=false;criticalActive=false;criticalStartedAt=0;
   if(tone!=null){ToneGenerator old=tone;tone=null;old.release();}
   if(vibrator!=null)vibrator.cancel();

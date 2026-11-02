@@ -105,6 +105,54 @@ public class MonitorDiagnosticsTest {
         return count;
     }
 
+    @Test public void diagnosticTrimmingKeepsWholeLinesAndNewestCompleteEvents() {
+        String trimmed = MonitorService.trimDiagnosticHistory("first-line\\nsecond-line\\nthird-line\\n", 23);
+        assertEquals("second-line\\nthird-line\\n", trimmed);
+        assertFalse("Trimmed history must not begin with a partial line", trimmed.startsWith("rst-line"));
+        assertTrue("Newest complete line must remain", trimmed.endsWith("third-line\\n"));
+    }
+
+    @Test public void repeatedActivityTransitionsAndHistoricalExitLinesAreCollapsed() throws Exception {
+        MainActivity main = activity.getActivity();
+        long deadline = System.currentTimeMillis() + 30000;
+        while (main.serviceForTest() == null && System.currentTimeMillis() < deadline) Thread.sleep(200);
+        MonitorService service = main.serviceForTest();
+        assertNotNull(service);
+        android.content.SharedPreferences prefs = service.getSharedPreferences("diagnostics", 0);
+        String original = prefs.getString("events", "");
+        try {
+            prefs.edit().putString("events", "").commit();
+            service.record("Activity paused; first");
+            service.record("Activity paused; duplicate");
+            service.record("Activity resumed; first");
+            service.record("Activity resumed; duplicate");
+            service.record("historicalExit reason=1 first");
+            service.record("historicalExit reason=2 duplicate");
+            String events = prefs.getString("events", "");
+            assertTrue(events.contains("Activity paused; first"));
+            assertFalse(events.contains("Activity paused; duplicate"));
+            assertTrue(events.contains("Activity resumed; first"));
+            assertFalse(events.contains("Activity resumed; duplicate"));
+            assertTrue(events.contains("historicalExit reason=1 first"));
+            assertFalse(events.contains("historicalExit reason=2 duplicate"));
+        } finally { prefs.edit().putString("events", original).commit(); }
+    }
+
+    @Test public void disarmDiagnosticsUseTerminalReasonNotStalePageReason() throws Exception {
+        MainActivity main = activity.getActivity();
+        long deadline = System.currentTimeMillis() + 30000;
+        while (main.serviceForTest() == null && System.currentTimeMillis() < deadline) Thread.sleep(200);
+        MonitorService service = main.serviceForTest();
+        assertNotNull(service);
+        BrowserEngine engine = service.profile(9);
+        engine.lastPageReason = "COV selection ready";
+        java.lang.reflect.Field reason = MonitorRun.class.getDeclaredField("lastReason");
+        reason.setAccessible(true);
+        reason.set(engine.run, "Session expired");
+        assertTrue("DISARM diagnostics must report the terminal reason",
+            engine.run.diagnostics().contains("reason=Session expired"));
+    }
+
     @Test public void diagnosticEventHistoryRemainsBounded() throws Exception {
         MainActivity main = activity.getActivity();
         long deadline = System.currentTimeMillis() + 30000;

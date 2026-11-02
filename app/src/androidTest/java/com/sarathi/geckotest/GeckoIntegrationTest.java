@@ -486,6 +486,10 @@ public class GeckoIntegrationTest {
  }
  @QuarantinedNotificationStop
  @Test public void notificationStopWorksWithoutVisibleActivity()throws Exception{
+  shell("dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33");
+  android.content.Context target=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  android.os.PowerManager power=target.getSystemService(android.os.PowerManager.class);
+  assertTrue("Quarantined STOP fixture must grant battery-optimization exemption before START",power.isIgnoringBatteryOptimizations(target.getPackageName()));
   MonitorService service=fixtureService;BrowserEngine protectedApplicant=readyApplicant(5),normalApplicant=readyApplicant(6);
   main(()->{
    service.activity=activity.getActivity();service.visible=true;
