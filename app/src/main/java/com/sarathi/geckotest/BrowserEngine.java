@@ -182,7 +182,7 @@ final class BrowserEngine {
       if(!pressure&&now-lastVisibleAt<idleUnloadTimeoutMs())return;
       boolean unloaded=false;
       for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);priorityHints.remove(s);if(s.isOpen())s.close();if(s==current)current=null;unloaded=true;}
-      if(unloaded){pageUnloaded=true;String message="Applicant "+profile+" idle page closed; loggedIn="+loggedIn+(loggedIn?"; session retained":"; login will be needed");service.record(message+"; memoryPressure="+pressure+"; idleMs="+(now-lastVisibleAt));log(message);}
+      if(unloaded){pageUnloaded=true;String message="Applicant "+profile+" idle page closed; loggedIn="+loggedIn+"; login will be needed";service.record(message+"; memoryPressure="+pressure+"; idleMs="+(now-lastVisibleAt));log(message);}
     }
     void shutdown(){
       destroyed=true;

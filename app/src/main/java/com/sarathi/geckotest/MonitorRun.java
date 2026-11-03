@@ -60,7 +60,10 @@ final class MonitorRun {
  void stopByUser(){stopByUser(true);}
  void stopByUser(boolean recomputeProtection){
   engine.service.cancelStartBatch();lastReason="Stopped by user";disarm();engine.command("STOP");engine.command("SILENCE");engine.alerts.silence();
-  if(recomputeProtection){engine.updateProtection(engine.lastState);engine.beginProtectionRetentionAfterStop(SystemClock.elapsedRealtime());}
+  // STOP disarms monitoring; it must not recompute or clear the already-latched
+  // protected-page state from a possibly stale STATE snapshot. Retain the current
+  // SMS/calendar/booking page for the bounded five-minute grace period.
+  if(recomputeProtection)engine.beginProtectionRetentionAfterStop(SystemClock.elapsedRealtime());
  }
  void stopForBackground(String message){
   if(!armed)return;lastReason=message;engine.log(message);
