@@ -678,7 +678,7 @@
         const submittedAt=Date.now();
         const timing=await chrome.storage.local.get({lastSubmitStart:0,cycleTotal:0,cycleCount:0});
         const lastCycleMs=timing.lastSubmitStart?submittedAt-timing.lastSubmitStart:0;
-        if(lastCycleMs>0&&lastCycleMs<8000)continue;
+        if(lastCycleMs>0&&lastCycleMs<7000)continue;
         if(!await isRunning(generation)||!current.proceed.isConnected||current.proceed.disabled)continue;
         await chrome.storage.local.set({lastSubmitStart:submittedAt,lastCycleMs,cycleTotal:timing.cycleTotal+lastCycleMs,cycleCount:timing.cycleCount+(lastCycleMs>0?1:0),selectedCovCount:current.selected.length});
         if(!await isRunning(generation))break;
