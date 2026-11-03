@@ -507,10 +507,22 @@ public class GeckoIntegrationTest {
   android.os.PowerManager power=target.getSystemService(android.os.PowerManager.class);
   assertTrue("Quarantined STOP fixture must grant battery-optimization exemption before START",power.isIgnoringBatteryOptimizations(target.getPackageName()));
   MonitorService service=fixtureService;BrowserEngine protectedApplicant=readyApplicant(5),normalApplicant=readyApplicant(6);
+  // Wait for the extension's initial STATE snapshot before installing the SMS
+  // fixture. Otherwise a late startup STOPPED snapshot can overwrite the test
+  // fixture and make this test exercise a race in setup rather than notification STOP.
+  java.util.concurrent.atomic.AtomicBoolean initialStateReceived=new java.util.concurrent.atomic.AtomicBoolean();
+  long stateDeadline=System.currentTimeMillis()+10000;
+  while(!initialStateReceived.get()&&System.currentTimeMillis()<stateDeadline){
+   main(()->initialStateReceived.set(protectedApplicant.lastState.has("bookingStage")));
+   if(!initialStateReceived.get())Thread.sleep(50);
+  }
+  assertTrue("Protected applicant must publish its initial STATE before the SMS fixture",initialStateReceived.get());
   main(()->{
    service.activity=activity.getActivity();service.visible=true;
    protectedApplicant.run.arm();normalApplicant.run.arm();
-   protectedApplicant.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true));
+   org.json.JSONObject smsState=json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true);
+   protectedApplicant.lastState=smsState;
+   protectedApplicant.updateProtection(smsState);
    service.visible=false;service.activity=null;
   });
   android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
