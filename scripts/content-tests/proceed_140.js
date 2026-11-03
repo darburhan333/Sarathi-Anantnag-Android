@@ -1,5 +1,9 @@
 // Synthetic COV-page longevity test. Does not connect to Sarathi or perform bookings.
 const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');
+// The production PROCEED gate is 7 seconds; unrelated worker wait constants remain separate.
+const production=fs.readFileSync(path.join(__dirname,'..','content.js'),'utf8');
+assert.match(production,/if\s*\(lastCycleMs\s*>\s*0\s*&&\s*lastCycleMs\s*<\s*7000\)/,'PROCEED must enforce a 7-second minimum');
+assert.doesNotMatch(production,/if\s*\(lastCycleMs\s*>\s*0\s*&&\s*lastCycleMs\s*<\s*8000\)/,'old 8-second PROCEED gate must be removed');
 async function check(mode){
  let now=new Date(2026,9,20,10,0,0).getTime(),clicks=0;
  class Clock extends Date {constructor(...args){super(...(args.length?args:[now]))}static now(){return now}}
