@@ -29,6 +29,7 @@ import android.os.Bundle;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.PopupMenu;
 import android.widget.Toast;
 import org.mozilla.geckoview.GeckoRuntime;
 import org.mozilla.geckoview.GeckoSession;
@@ -85,6 +86,21 @@ public class MainActivity extends Activity {
     void selectApplicant(int number){if(engine==null||engine.profile==number)return;MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
     private boolean directCalls(){return getSharedPreferences("calling",0).getBoolean("direct",false);}
     private void openDialer(String phone){startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));}
+    private void showQuickMenu(View anchor){
+      PopupMenu menu=new PopupMenu(this,anchor);
+      menu.getMenu().add("Phone numbers").setOnMenuItemClickListener(item->{managePhones();return true;});
+      menu.getMenu().add("Logs").setOnMenuItemClickListener(item->{copyDiagnosticLog();return true;});
+      menu.getMenu().add("Background setup").setOnMenuItemClickListener(item->{batterySettings();return true;});
+      menu.getMenu().add("Alerts").setOnMenuItemClickListener(item->{manageApplicantAlerts();return true;});
+      menu.show();
+    }
+    private void copyDiagnosticLog(){
+      String report="App: MPARIVAHAN SLOT BOOKING -J&K 3.7.0 · SHA "+BuildConfig.GIT_SHA+"\nProtected page retention after STOP: "+BrowserEngine.STOP_PAGE_PROTECTION_MAX_MS+" ms (5 minutes)\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
+        +android.os.Build.VERSION.SDK_INT+"\n"+(engine==null?"Connecting":engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
+      ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+      cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics",report));
+      Toast.makeText(this,"Log copied",Toast.LENGTH_SHORT).show();
+    }
     private void applicantPhone(int number){
       try{String phone=ApplicantContacts.read(this,number);
         if(phone.isEmpty()){editApplicantPhone(number,false);return;}
@@ -219,7 +235,7 @@ public class MainActivity extends Activity {
         heading.setTextColor(Color.rgb(87,211,255));heading.setTextSize(19);
         heading.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         heading.setPadding(dp(4),dp(3),dp(4),dp(8));
-        android.widget.ImageView logo=new android.widget.ImageView(this);logo.setImageResource(R.drawable.ic_launcher_foreground);logo.setContentDescription("Driving test logo");
+        android.widget.ImageView logo=new android.widget.ImageView(this);logo.setImageResource(R.drawable.ic_launcher_foreground);logo.setContentDescription("Open quick menu");logo.setOnClickListener(v->showQuickMenu(logo));
         LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.addView(heading);TextView developer=new TextView(this);developer.setText("V3.7.0 · SHA " + BuildConfig.GIT_SHA + " · DEVELOPED BY BURHAN MOHIDIN");developer.setTextSize(10);developer.setTextColor(Color.rgb(89,225,167));developer.setPadding(dp(4),0,0,dp(5));names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,-2,1));header.addView(brand);
         for(int group=0;group<2;group++){LinearLayout applicants=new LinearLayout(this);for(int k=0;k<4;k++){final int n=group*4+k+1;applicantButtons[n-1]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->selectApplicant(n));applicantButtons[n-1].setOnLongClickListener(v->{applicantPhone(n);return true;});}header.addView(applicants);}
         LinearLayout utilities=new LinearLayout(this);
@@ -247,16 +263,10 @@ public class MainActivity extends Activity {
         stopButton.setOnLongClickListener(v->{if(engine!=null){engine.service.stopAll();Toast.makeText(this,"All applicants stopped",Toast.LENGTH_SHORT).show();}return true;});
         for(int i=0;i<controls.getChildCount();i++){Button control=(Button)controls.getChildAt(i);control.setTextSize(15);control.getLayoutParams().height=dp(64);}
         header.addView(controls);
-        Button copyLogButton=button(utilities, "Copy log", Color.rgb(104,65,165), () -> {
-            String report = "App: MPARIVAHAN SLOT BOOKING -J&K 3.7.0 · SHA " + BuildConfig.GIT_SHA + "\nProtected page retention after STOP: " + BrowserEngine.STOP_PAGE_PROTECTION_MAX_MS + " ms (5 minutes)\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
-                    + android.os.Build.VERSION.SDK_INT + "\n" + (engine==null?"Connecting":engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
-            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics", report));
-            Toast.makeText(this, "Log copied", Toast.LENGTH_SHORT).show();
-        });
-        copyLogButton.setOnLongClickListener(v->{manageApplicantAlerts();return true;});
-        batteryButton.setOnLongClickListener(v->{if(engine!=null)engine.home();return true;});
-        TextView holdHints=new TextView(this);holdHints.setText("Background setup · hold: Home   |   Copy log · hold: Alerts");holdHints.setTextColor(0xFF9DB1C9);holdHints.setTextSize(10);header.addView(holdHints);
+        Button copyLogButton=button(utilities, "Copy log", Color.rgb(104,65,165), this::copyDiagnosticLog);
+        copyLogButton.setOnLongClickListener(v->{if(engine!=null)engine.home();return true;});
+        batteryButton.setOnLongClickListener(v->{manageApplicantAlerts();return true;});
+        TextView holdHints=new TextView(this);holdHints.setText("Tap logo: Phone numbers · Logs · Background setup · Alerts   |   Hold Background setup: Alerts · Hold Copy log: Home");holdHints.setTextColor(0xFF9DB1C9);holdHints.setTextSize(10);header.addView(holdHints);
         LinearLayout details=new LinearLayout(this);details.setOrientation(LinearLayout.VERTICAL);details.setPadding(dp(9),dp(6),dp(9),dp(6));
         GradientDrawable card=new GradientDrawable();card.setColor(Color.rgb(21,43,66));card.setCornerRadius(dp(10));details.setBackground(card);
         status.setTextColor(Color.rgb(125,211,252));monitorStatus.setTextColor(Color.rgb(110,231,183));details.addView(status);details.addView(monitorStatus);header.addView(details);
