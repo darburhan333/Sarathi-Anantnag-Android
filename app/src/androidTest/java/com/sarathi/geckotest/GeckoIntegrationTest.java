@@ -606,6 +606,19 @@ public class GeckoIntegrationTest {
   assertTrue("Missing redirect must be unavailable",missing.contains("redirect=unavailable"));
   assertTrue("Missing cookie expiry metadata must be unavailable",missing.contains("cookieExpiryTimestamps=unavailable"));
  }
+ @Test public void applicantSettingsLockAndVisibilityDoNotStopOtherApplicants()throws Exception{
+  MainActivity a=activity.getActivity();MonitorService service=fixtureService;int originalLock=a.lockedApplicantForTest();boolean originalVisibility=a.applicantsVisibleForTest();
+  BrowserEngine first=service.profile(1),second=service.profile(2);
+  main(()->{
+   service.activity=a;service.visible=true;first.run.arm();second.run.arm();a.selectApplicant(2);
+   assertEquals("Selected applicant must become the persistent UI lock",2,a.lockedApplicantForTest());
+   assertTrue("Selecting applicant 2 must not stop applicant 1",first.run.armed);
+   assertTrue("Selected applicant 2 remains armed",second.run.armed);
+   a.setApplicantsVisibleForTest(false);assertFalse("Developer hide option hides all applicant buttons",a.applicantsVisibleForTest());
+   a.setApplicantsVisibleForTest(true);assertTrue("Show option restores all applicant buttons",a.applicantsVisibleForTest());
+   service.stopAll();a.selectApplicant(originalLock);a.setApplicantsVisibleForTest(originalVisibility);
+  });
+ }
  @Test public void backAndHomeConfirmOnlyWhenPageProtected()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=service.engine;
   final org.mozilla.geckoview.WebExtension.Port[] savedPort=new org.mozilla.geckoview.WebExtension.Port[1];

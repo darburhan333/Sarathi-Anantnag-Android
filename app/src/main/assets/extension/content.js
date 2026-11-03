@@ -57,10 +57,10 @@
     } catch (_) { ownsTab = false; return false; }
   }
   let cycle = 0;
-  // Read the persisted submission count so navigation does not reset it.
-  // Daily attempts are counted only between 09:00 and 21:00 local time.
-  const dayKey = () => {const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
-  chrome.storage.local.get({attempts:0,attemptDay:''}).then(d=>{cycle=d.attemptDay===dayKey()?(Number(d.attempts)||0):0;}).catch(()=>{});
+  // Rolling 24-hour count of dispatched PROCEED clicks; persists across page/app restarts.
+  const ATTEMPT_WINDOW_MS=24*60*60*1000;
+  const recentAttemptTimes=value=>Array.isArray(value)?value.filter(t=>Number.isFinite(t)&&t>Date.now()-ATTEMPT_WINDOW_MS&&t<=Date.now()):[];
+  chrome.storage.local.get({attemptTimestamps:[],lastAttemptAt:0}).then(d=>{const times=recentAttemptTimes(d.attemptTimestamps);if(!times.length&&Number.isFinite(d.lastAttemptAt)&&d.lastAttemptAt>Date.now()-ATTEMPT_WINDOW_MS)times.push(d.lastAttemptAt);cycle=times.length;chrome.storage.local.set({attemptTimestamps:times,attempts:cycle}).catch(()=>{});}).catch(()=>{});
   let popupHandledAt = 0;
   let lastNetworkOnline = navigator.onLine;
   // A heartbeat reports that the monitored page script is alive, not that a slot check succeeded.
@@ -669,10 +669,8 @@
         // Background verifies session/tab and gates the next PROCEED before counting.
         if(!await actionAllowed('PROCEED'))break;
         if(!(await isRunning(generation)) || !current.proceed.isConnected || !visible(current.proceed))break;
-        const saved = await chrome.storage.local.get({attempts:0,attemptDay:'',sessionAttempts:0,sessionCounterId:''});
-        const now=new Date(),today=dayKey();
-        cycle=saved.attemptDay===today?(Number(saved.attempts)||0):0;
-        if(now.getHours()>=9 && now.getHours()<21) cycle++;
+        const saved = await chrome.storage.local.get({attemptTimestamps:[],sessionAttempts:0,sessionCounterId:''});
+        const timestamps=recentAttemptTimes(saved.attemptTimestamps);
         if(!await isRunning(generation) || !await actionAllowed('PROCEED_CONFIRM') || !await isRunning(generation))break;
         if(current.proceed.disabled || !current.proceed.isConnected || !visible(current.proceed) || current.selected.some(el=>!el.checked||el.disabled||!el.isConnected))continue;
         const submittedAt=Date.now();
@@ -684,8 +682,9 @@
         if(!await isRunning(generation))break;
         current.proceed.click();
         // Count dispatched clicks, not reservations; navigation may still reject a submission.
-        await chrome.storage.local.set({attempts:cycle,attemptDay:today,lastAttemptAt:Date.now(),sessionCounterId:sessionId,sessionAttempts:(saved.sessionCounterId===sessionId?(Number(saved.sessionAttempts)||0):0)+1});
-        setStatus(`Proceed click dispatched (attempt ${cycle})`);
+        timestamps.push(submittedAt);cycle=timestamps.length;
+        await chrome.storage.local.set({attempts:cycle,attemptTimestamps:timestamps,lastAttemptAt:submittedAt,sessionCounterId:sessionId,sessionAttempts:(saved.sessionCounterId===sessionId?(Number(saved.sessionAttempts)||0):0)+1});
+        setStatus(`Proceed click dispatched (rolling 24h attempt ${cycle})`);
         lastLoopProgress=Date.now();
 
         // Watch promptly for the server's popup; navigation may destroy this script,
