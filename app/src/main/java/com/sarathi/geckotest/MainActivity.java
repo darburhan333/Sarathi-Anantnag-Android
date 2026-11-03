@@ -53,10 +53,10 @@ public class MainActivity extends Activity {
     private int lockedApplicant=1;
     private final android.content.ServiceConnection connection=new android.content.ServiceConnection(){
       public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
-        engine=((MonitorService.LocalBinder)binder).getService().engine;
+        MonitorService service=((MonitorService.LocalBinder)binder).getService();
         lockedApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,getSharedPreferences("monitor",0).getInt("lockedApplicant",1)));
         if(getIntent().hasExtra("applicant"))lockedApplicant=notificationApplicant;
-        if(getIntent().hasExtra("applicant")){engine=engine.service.profile(notificationApplicant);engine.service.engine=engine;}
+        engine=service.profile(lockedApplicant);service.engine=engine;
         engine.service.activity=MainActivity.this;engine.service.visible=visible;engine.attach(MainActivity.this);engine.foreground=visible;engine.foregroundState();
       }
       public void onServiceDisconnected(android.content.ComponentName name){engine=null;status.setText("Service disconnected — reopen the app");}
