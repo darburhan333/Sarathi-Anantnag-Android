@@ -23,6 +23,7 @@ final class PhoneAlerts {
  private static final java.util.ArrayDeque<QueuedCritical> CRITICAL_QUEUE=new java.util.ArrayDeque<>();
  private static final Handler CRITICAL_HANDLER=new Handler(Looper.getMainLooper());
  private static boolean criticalDrainScheduled;
+ private static long nextCriticalPostUptime;
  private static final class CriticalStamp {
   final String eventKey;final long at;
   CriticalStamp(String key,long time){eventKey=key;at=time;}
@@ -51,24 +52,29 @@ final class PhoneAlerts {
  private void enqueueCriticalNotification(String kind,String message,int id){
   synchronized(CRITICAL_QUEUE_LOCK){
    CRITICAL_QUEUE.addLast(new QueuedCritical(this,notificationGeneration,kind,message,id));
-   if(!criticalDrainScheduled){criticalDrainScheduled=true;CRITICAL_HANDLER.post(PhoneAlerts::drainCriticalQueue);}
+   if(!criticalDrainScheduled){criticalDrainScheduled=true;CRITICAL_HANDLER.postDelayed(PhoneAlerts::drainCriticalQueue,Math.max(0L,nextCriticalPostUptime-SystemClock.uptimeMillis()));}
   }
  }
  private static void drainCriticalQueue(){
-  // Drain the complete batch in one main-thread turn. A fixed delay per item
-  // could leave early critical alerts waiting behind unrelated applicants.
-  while(true){
-   QueuedCritical item;
-   synchronized(CRITICAL_QUEUE_LOCK){
-    item=CRITICAL_QUEUE.pollFirst();
-    if(item==null){criticalDrainScheduled=false;return;}
-   }
+  QueuedCritical item;
+  synchronized(CRITICAL_QUEUE_LOCK){
+   do{item=CRITICAL_QUEUE.pollFirst();}while(item!=null&&item.generation!=item.owner.notificationGeneration);
+   if(item==null){criticalDrainScheduled=false;return;}
+  }
+  try{
    if(item.generation==item.owner.notificationGeneration){
-    try{item.owner.postNotification(item.kind,item.message,"sarathi-critical-v36",item.id);if(item.owner.activity instanceof MonitorService)((MonitorService)item.owner.activity).record("ALERT A"+item.owner.profile+" kind="+item.kind+" notification=posted id="+item.id);}
-    catch(Exception ex){
-     android.util.Log.e("PhoneAlerts","Critical notification delivery failed for applicant "+item.owner.profile+" kind="+item.kind,ex);
-     if(item.owner.activity instanceof MonitorService)((MonitorService)item.owner.activity).record("ALERT A"+item.owner.profile+" kind="+item.kind+" notification=failed:"+ex.getClass().getSimpleName());
-    }
+    item.owner.postNotification(item.kind,item.message,"sarathi-critical-v36",item.id);
+    if(item.owner.activity instanceof MonitorService)((MonitorService)item.owner.activity).record("ALERT A"+item.owner.profile+" kind="+item.kind+" notification=posted id="+item.id);
+   }
+  }catch(Exception ex){
+   android.util.Log.e("PhoneAlerts","Critical notification delivery failed for applicant "+item.owner.profile+" kind="+item.kind,ex);
+   if(item.owner.activity instanceof MonitorService)((MonitorService)item.owner.activity).record("ALERT A"+item.owner.profile+" kind="+item.kind+" notification=failed:"+ex.getClass().getSimpleName());
+  }finally{
+   synchronized(CRITICAL_QUEUE_LOCK){
+    // Space critical posts across batches too: an empty queue must not reset the rate gate.
+    nextCriticalPostUptime=SystemClock.uptimeMillis()+CRITICAL_POST_GAP_MS;
+    if(CRITICAL_QUEUE.isEmpty())criticalDrainScheduled=false;
+    else CRITICAL_HANDLER.postDelayed(PhoneAlerts::drainCriticalQueue,CRITICAL_POST_GAP_MS);
    }
   }
  }

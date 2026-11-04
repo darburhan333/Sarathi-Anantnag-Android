@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
     private final LinearLayout[] applicantRows=new LinearLayout[2];
     private int lockedApplicant=1;
     private AlertDialog applicantSettingsDialog;
+    private String pendingMonitorPanel;
     private FrameLayout websitePages;
     private final Button[] settingsApplicantButtons=new Button[MonitorService.PROFILE_COUNT];
     private final android.content.ServiceConnection connection=new android.content.ServiceConnection(){
@@ -90,6 +91,7 @@ public class MainActivity extends Activity {
       if(engine.current!=null&&engine.current.isOpen()&&view.getSession()!=engine.current){view.releaseSession();view.setSession(engine.current);engine.activeStates.remove(engine.current);}
       if(engine.monitorSession!=null&&engine.monitorSession.isOpen()&&monitorView.getSession()!=engine.monitorSession){monitorView.releaseSession();monitorView.setSession(engine.monitorSession);engine.activeStates.remove(engine.monitorSession);}
       monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);
+      if(pendingMonitorPanel!=null&&engine.monitorSession!=null){String panel=pendingMonitorPanel;pendingMonitorPanel=null;engine.monitorSession.loadUri(engine.monitorUrl+"#"+panel);}
       monitorButton.setText(engine.showingMonitor?"Website":"Monitor");monitorButton.setContentDescription(engine.showingMonitor?"Switch to website":"Switch to monitor");
       if(applicantPicker!=null&&applicantPicker.getSelectedItemPosition()!=engine.profile-1)applicantPicker.setSelection(engine.profile-1);
       if(activeSummary!=null)activeSummary.setText(engine.service.activeCount()+" of 9 monitoring");
@@ -133,7 +135,7 @@ public class MainActivity extends Activity {
     private void showApplicantSettings(){showApplicantSettings("settings");}
     private void showApplicantSettings(String panelName){
       if(engine==null||applicantSettingsDialog!=null)return;
-      engine.showingMonitor=true;engine.prepareMonitor();if(engine.monitorSession!=null)engine.monitorSession.loadUri(engine.monitorUrl+"#"+panelName);render();engine.activate();
+      pendingMonitorPanel=panelName;engine.showingMonitor=true;engine.prepareMonitor();render();engine.activate();
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setBackgroundColor(0xFF0B1426);panel.setPadding(dp(8),dp(8),dp(8),dp(8));
       TextView summary=new TextView(this);summary.setText("LOCKED · Applicant "+lockedApplicant+" · Other applicants continue independently");summary.setTextColor(0xFF6EE7B7);summary.setTextSize(15);summary.setTypeface(Typeface.DEFAULT,Typeface.BOLD);panel.addView(summary);
       android.widget.HorizontalScrollView picker=new android.widget.HorizontalScrollView(this);LinearLayout entries=new LinearLayout(this);picker.addView(entries);panel.addView(picker);
@@ -146,7 +148,7 @@ public class MainActivity extends Activity {
       android.view.ViewGroup parent=(android.view.ViewGroup)monitorView.getParent();if(parent!=null)parent.removeView(monitorView);panel.addView(monitorView,new LinearLayout.LayoutParams(-1,0,1));
       AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Applicant settings · A"+lockedApplicant).setView(panel).setNegativeButton("Done",null).create();applicantSettingsDialog=dialog;
       for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){final int number=n;BrowserEngine profile=engine.service.profiles[n-1];Button choose=new Button(this);choose.setAllCaps(false);choose.setText("Applicant "+n+(profile!=null&&profile.run.armed?" ● RUNNING":" ○ STOPPED")+(n==lockedApplicant?" · LOCKED":""));choose.setTextColor(n==lockedApplicant?0xFF0F766E:0xFF254167);choose.setOnClickListener(v->{dialog.dismiss();selectApplicant(number);showApplicantSettings();});settingsApplicantButtons[n-1]=choose;entries.addView(choose);}
-      dialog.setOnDismissListener(d->{panel.removeView(monitorView);websitePages.addView(monitorView,1,new FrameLayout.LayoutParams(-1,-1));applicantSettingsDialog=null;java.util.Arrays.fill(settingsApplicantButtons,null);if(engine!=null&&engine.monitorSession!=null)engine.monitorSession.loadUri(engine.monitorUrl+"#monitor");render();if(engine!=null){engine.activeStates.clear();engine.activate();}});
+      dialog.setOnDismissListener(d->{panel.removeView(monitorView);websitePages.addView(monitorView,1,new FrameLayout.LayoutParams(-1,-1));applicantSettingsDialog=null;pendingMonitorPanel=null;java.util.Arrays.fill(settingsApplicantButtons,null);if(engine!=null&&engine.monitorSession!=null)engine.monitorSession.loadUri(engine.monitorUrl+"#monitor");render();if(engine!=null){engine.activeStates.clear();engine.activate();}});
       dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);engine.activeStates.clear();engine.activate();
     }
     private void copyDiagnosticLog(){
@@ -197,7 +199,7 @@ public class MainActivity extends Activity {
       android.widget.SeekBar idleTimeout=new android.widget.SeekBar(this);idleTimeout.setMax(175);idleTimeout.setProgress(Math.max(0,Math.min(175,idleMinutes-5)));panel.addView(idleTimeout);
       idleTimeout.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(android.widget.SeekBar bar,int progress,boolean fromUser){idleLabel.setText("Unload unprotected idle pages after "+(progress+5)+" minutes (logged-in pages are retained unless Android reports real memory pressure)");}public void onStartTrackingTouch(android.widget.SeekBar bar){}public void onStopTrackingTouch(android.widget.SeekBar bar){getSharedPreferences("monitor",0).edit().putInt("idleUnloadMinutes",bar.getProgress()+5).apply();}});
 
-      android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(350)));
+      android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(240)));
       for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){
         final int number=n;LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.VERTICAL);
         TextView label=new TextView(this);label.setText("Applicant "+n);row.addView(label);
@@ -206,9 +208,10 @@ public class MainActivity extends Activity {
         modes.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> v){}public void onItemSelected(android.widget.AdapterView<?> v,View child,int position,long id){getSharedPreferences("monitor",0).edit().putString("alertMode"+number,PhoneAlerts.MODES[position]).apply();service.refreshForeground(true);render();}});row.addView(modes);
         Button test=new Button(this);test.setText("Test alert");test.setOnClickListener(v->{BrowserEngine existing=service.profiles[number-1];PhoneAlerts alerts=existing==null?new PhoneAlerts(service,number):existing.alerts;alerts.testOnce();});row.addView(test);rows.addView(row);
       }
-      Button telegram=new Button(this);telegram.setText("Telegram settings · Applicant "+engine.profile);telegram.setOnClickListener(v->showApplicantSettings("telegram"));panel.addView(telegram);
+      final int telegramApplicant=engine.profile;Button telegram=new Button(this);telegram.setText("Telegram settings · Applicant "+telegramApplicant);telegram.setOnClickListener(v->{selectApplicant(telegramApplicant);showApplicantSettings("telegram");});panel.addView(telegram,0);
       Button export=new Button(this);export.setText("Export encrypted settings");export.setOnClickListener(v->transferSettings(true));panel.addView(export);Button restore=new Button(this);restore.setText("Import encrypted settings");restore.setOnClickListener(v->transferSettings(false));panel.addView(restore);
-      new AlertDialog.Builder(this).setTitle("Applicant alert settings").setView(panel).setPositiveButton("Done",null).setNeutralButton("Silence all now",(d,w)->service.silenceAll()).show();
+      android.widget.ScrollView alertsScroll=new android.widget.ScrollView(this);alertsScroll.addView(panel);
+      new AlertDialog.Builder(this).setTitle("Applicant alert settings").setView(alertsScroll).setPositiveButton("Done",null).setNeutralButton("Silence all now",(d,w)->service.silenceAll()).show();
     }
     private void managePhones(){
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(12),dp(8),dp(12),dp(8));
