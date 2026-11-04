@@ -12,6 +12,7 @@ profile_generator=(root/'scripts/prepare-profiles.py').read_text()
 assert "$('autoBookingEnabled').addEventListener('change'" in ui and 'autoBookingEnabled:false' in ui
 assert 'MANUAL_BOOKING_ONLY' not in ui+content+background+profile+profile_generator
 assert "if(booking && (!d.calendarLock||!d.autoBookingEnabled))" in background
+subprocess.run(['python3',str(root/'scripts/test-capture-diagnostics.py')],check=True)
 manifest=json.loads((ext/'manifest.json').read_text())
 assert not any('127.0.0.1' in x for x in manifest['permissions'])
 subprocess.run(['node',str(root/'scripts/cov-row-tests.js')],check=True)

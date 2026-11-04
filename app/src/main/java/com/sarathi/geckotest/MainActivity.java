@@ -51,6 +51,9 @@ public class MainActivity extends Activity {
     private android.widget.ScrollView headerScroll;
     private final LinearLayout[] applicantRows=new LinearLayout[2];
     private int lockedApplicant=1;
+    private AlertDialog applicantSettingsDialog;
+    private FrameLayout websitePages;
+    private final Button[] settingsApplicantButtons=new Button[MonitorService.PROFILE_COUNT];
     private final android.content.ServiceConnection connection=new android.content.ServiceConnection(){
       public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
         MonitorService service=((MonitorService.LocalBinder)binder).getService();
@@ -64,6 +67,9 @@ public class MainActivity extends Activity {
     // Test-only instrumentation hooks; production code must not call these methods.
  public boolean monitorReadyForTest(){return engine!=null&&engine.monitorReady;}
  public int lockedApplicantForTest(){return lockedApplicant;}
+ public void openApplicantSettingsForTest(){showApplicantSettings();}
+ public void closeApplicantSettingsForTest(){if(applicantSettingsDialog!=null)applicantSettingsDialog.dismiss();}
+ public boolean applicantSettingsOpenForTest(){return applicantSettingsDialog!=null&&applicantSettingsDialog.isShowing();}
  public void setApplicantsVisibleForTest(boolean show){getSharedPreferences("monitor",0).edit().putBoolean("showApplicants",show).apply();applyApplicantVisibility(show);}
  public boolean applicantsVisibleForTest(){return applicantRows[0]!=null&&applicantRows[0].getVisibility()==View.VISIBLE&&applicantButtons[8]!=null&&applicantButtons[8].getVisibility()==View.VISIBLE;}
     public String smokeResultForTest(){return engine==null?"":engine.smokeResult;}
@@ -79,10 +85,11 @@ public class MainActivity extends Activity {
       if(engine.current!=null&&engine.current.isOpen()&&view.getSession()!=engine.current){view.releaseSession();view.setSession(engine.current);engine.activeStates.remove(engine.current);}
       if(engine.monitorSession!=null&&engine.monitorSession.isOpen()&&monitorView.getSession()!=engine.monitorSession){monitorView.releaseSession();monitorView.setSession(engine.monitorSession);engine.activeStates.remove(engine.monitorSession);}
       monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);
-      monitorButton.setText(engine.showingMonitor?"Website":"Monitor");
+      monitorButton.setText(engine.showingMonitor?"Website\nStart all: hold":"Monitor\nStart all: hold");
       monitorButton.setBackgroundTintList(ColorStateList.valueOf(engine.showingMonitor?0xFF0F766E:0xFF2563EB));
-      for(int i=0;i<MonitorService.PROFILE_COUNT;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];boolean running=e!=null&&e.run.armed;String label="Applicant "+(i+1)+"\n"+(running?"● RUNNING":"○ STOPPED");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);applicantButtons[i].setAlpha(lockedApplicant==i+1?1f:0.72f);}
-      applyApplicantVisibility(getSharedPreferences("monitor",0).getBoolean("showApplicants",true));
+      for(int i=0;i<MonitorService.PROFILE_COUNT;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];boolean running=e!=null&&e.run.armed;String label="Applicant "+(i+1)+"\n"+(running?"● RUNNING":"○ STOPPED");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);applicantButtons[i].setAlpha(lockedApplicant==i+1?1f:0.72f);applicantButtons[i].setBackgroundTintList(ColorStateList.valueOf(lockedApplicant==i+1?0xFF0F766E:0xFF254167));}
+      for(int i=0;i<settingsApplicantButtons.length;i++)if(settingsApplicantButtons[i]!=null){BrowserEngine profile=engine.service.profiles[i];settingsApplicantButtons[i].setText("Applicant "+(i+1)+(profile!=null&&profile.run.armed?" ● RUNNING":" ○ STOPPED")+(i+1==lockedApplicant?" · LOCKED":""));}
+      applyApplicantVisibility(getSharedPreferences("monitor",0).getBoolean("showApplicants",false));
       if(!status.getText().toString().equals(engine.status))status.setText(engine.status);
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
@@ -97,29 +104,45 @@ public class MainActivity extends Activity {
     private void showQuickMenu(View anchor){
       PopupMenu menu=new PopupMenu(this,anchor);
       menu.getMenu().add("Phone numbers").setOnMenuItemClickListener(item->{managePhones();return true;});
-      menu.getMenu().add("Logs").setOnMenuItemClickListener(item->{copyDiagnosticLog();return true;});
+      menu.getMenu().add("Logs").setOnMenuItemClickListener(item->{showLogs();return true;});
+      menu.getMenu().add("Start all ready applicants").setOnMenuItemClickListener(item->{if(engine!=null)engine.service.startAllReady();return true;});
       menu.getMenu().add("Background setup").setOnMenuItemClickListener(item->{batterySettings();return true;});
       menu.getMenu().add("Alerts").setOnMenuItemClickListener(item->{manageApplicantAlerts();return true;});
       menu.getMenu().add("Applicant settings").setOnMenuItemClickListener(item->{showApplicantSettings();return true;});
-      menu.getMenu().add(getSharedPreferences("monitor",0).getBoolean("showApplicants",true)?"Developer: Hide applicants":"Developer: Show applicants").setOnMenuItemClickListener(item->{toggleApplicantsVisibility();return true;});
+      menu.getMenu().add(getSharedPreferences("monitor",0).getBoolean("showApplicants",false)?"Developer: Hide applicants":"Developer: Show applicants").setOnMenuItemClickListener(item->{toggleApplicantsVisibility();return true;});
       menu.show();
     }
-    private void applyApplicantVisibility(boolean show){for(LinearLayout row:applicantRows)if(row!=null)row.setVisibility(show?View.VISIBLE:View.GONE);if(applicantButtons[8]!=null)applicantButtons[8].setVisibility(show?View.VISIBLE:View.GONE);}
-    private void toggleApplicantsVisibility(){boolean show=!getSharedPreferences("monitor",0).getBoolean("showApplicants",true);getSharedPreferences("monitor",0).edit().putBoolean("showApplicants",show).apply();applyApplicantVisibility(show);Toast.makeText(this,show?"Applicants shown":"Applicants hidden — open logo menu to restore",Toast.LENGTH_SHORT).show();}
-    private void showApplicantSettings(){
+    private void applyApplicantVisibility(boolean show){for(LinearLayout row:applicantRows)if(row!=null)row.setVisibility(show?View.VISIBLE:View.GONE);if(applicantButtons[8]!=null){applicantButtons[8].setVisibility(show?View.VISIBLE:View.GONE);if(applicantButtons[8].getParent() instanceof View)((View)applicantButtons[8].getParent()).setVisibility(show?View.VISIBLE:View.GONE);}}
+    private void toggleApplicantsVisibility(){boolean show=!getSharedPreferences("monitor",0).getBoolean("showApplicants",false);getSharedPreferences("monitor",0).edit().putBoolean("showApplicants",show).apply();applyApplicantVisibility(show);Toast.makeText(this,show?"Applicants shown":"Applicants hidden — open logo menu to restore",Toast.LENGTH_SHORT).show();}
+    private void showLogs(){
       if(engine==null)return;
-      LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(14),dp(8),dp(14),dp(8));
-      TextView summary=new TextView(this);summary.setText("Selected and locked applicant: "+lockedApplicant+". Each applicant keeps its own session and monitoring state; selecting one does not stop the others.");summary.setTextColor(Color.WHITE);summary.setTextSize(14);panel.addView(summary);
-      android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout entries=new LinearLayout(this);entries.setOrientation(LinearLayout.VERTICAL);scroll.addView(entries);panel.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-      AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Applicant settings · A"+lockedApplicant).setView(panel).setNegativeButton("Done",null).create();
-      for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){final int number=n;BrowserEngine profile=engine.service.profiles[n-1];boolean running=profile!=null&&profile.run.armed;Button choose=new Button(this);choose.setAllCaps(false);choose.setText((number==lockedApplicant?"🔒 ":"")+"Applicant "+number+" · "+(running?"RUNNING":"STOPPED")+(number==lockedApplicant?" · SELECTED":""));choose.setOnClickListener(v->{selectApplicant(number);dialog.dismiss();showApplicantSettings();});entries.addView(choose);}
-      Button alerts=new Button(this);alerts.setAllCaps(false);alerts.setText("Alerts and monitoring settings");alerts.setOnClickListener(v->{dialog.dismiss();manageApplicantAlerts();});panel.addView(alerts);
-      Button phones=new Button(this);phones.setAllCaps(false);phones.setText("Applicant phone numbers");phones.setOnClickListener(v->{dialog.dismiss();managePhones();});panel.addView(phones);
-      Button background=new Button(this);background.setAllCaps(false);background.setText("Background setup");background.setOnClickListener(v->{dialog.dismiss();batterySettings();});panel.addView(background);
+      LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(12),dp(8),dp(12),dp(8));
+      TextView hint=new TextView(this);hint.setText("Tap an applicant to lock it and open its settings.");panel.addView(hint);
+      android.widget.HorizontalScrollView picker=new android.widget.HorizontalScrollView(this);LinearLayout choices=new LinearLayout(this);picker.addView(choices);panel.addView(picker);
+      android.widget.ScrollView scroll=new android.widget.ScrollView(this);TextView report=new TextView(this);report.setText(engine.service.diagnosticReport());report.setTextSize(11);report.setTextIsSelectable(true);scroll.addView(report);panel.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+      AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Logs · Applicant "+lockedApplicant).setView(panel).setPositiveButton("Copy log",(d,w)->copyDiagnosticLog()).setNeutralButton("Home",(d,w)->engine.home()).setNegativeButton("Close",null).create();
+      for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){final int number=n;Button choose=new Button(this);choose.setText("Applicant "+n);choose.setOnClickListener(v->{dialog.dismiss();selectApplicant(number);showApplicantSettings();});choices.addView(choose);}
       dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
     }
+    private void showApplicantSettings(){
+      if(engine==null||applicantSettingsDialog!=null)return;
+      engine.showingMonitor=true;engine.prepareMonitor();render();engine.activate();
+      LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setBackgroundColor(0xFF0B1426);panel.setPadding(dp(8),dp(8),dp(8),dp(8));
+      TextView summary=new TextView(this);summary.setText("LOCKED · Applicant "+lockedApplicant+" · Other applicants continue independently");summary.setTextColor(0xFF6EE7B7);summary.setTextSize(15);summary.setTypeface(Typeface.DEFAULT,Typeface.BOLD);panel.addView(summary);
+      android.widget.HorizontalScrollView picker=new android.widget.HorizontalScrollView(this);LinearLayout entries=new LinearLayout(this);picker.addView(entries);panel.addView(picker);
+      LinearLayout shortcuts=new LinearLayout(this);button(shortcuts,"Alerts",0xFF7C3AED,this::manageApplicantAlerts);button(shortcuts,"Phone numbers",0xFF0E7490,this::managePhones);button(shortcuts,"Background setup",0xFF23534C,this::batterySettings);panel.addView(shortcuts);
+      LinearLayout actions=new LinearLayout(this);
+      Button stop=button(actions,"Stop",0xFFBE2A42,()->{if(engine!=null)engine.stopFromUi();});stop.setOnLongClickListener(v->{if(engine!=null)engine.service.stopAll();return true;});
+      Button silence=button(actions,"Silence",0xFF8D4C0F,()->{if(engine!=null)engine.alerts.silence();command("SILENCE");});silence.setOnLongClickListener(v->{if(engine!=null)engine.service.silenceAll();return true;});
+      button(actions,"Home",0xFF0F766E,()->{if(applicantSettingsDialog!=null)applicantSettingsDialog.dismiss();if(engine!=null)engine.home();});panel.addView(actions);
+      android.view.ViewGroup parent=(android.view.ViewGroup)monitorView.getParent();if(parent!=null)parent.removeView(monitorView);panel.addView(monitorView,new LinearLayout.LayoutParams(-1,0,1));
+      AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Applicant settings · A"+lockedApplicant).setView(panel).setNegativeButton("Done",null).create();applicantSettingsDialog=dialog;
+      for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){final int number=n;BrowserEngine profile=engine.service.profiles[n-1];Button choose=new Button(this);choose.setAllCaps(false);choose.setText("Applicant "+n+(profile!=null&&profile.run.armed?" ● RUNNING":" ○ STOPPED")+(n==lockedApplicant?" · LOCKED":""));choose.setTextColor(n==lockedApplicant?0xFF0F766E:0xFF254167);choose.setOnClickListener(v->{dialog.dismiss();selectApplicant(number);showApplicantSettings();});settingsApplicantButtons[n-1]=choose;entries.addView(choose);}
+      dialog.setOnDismissListener(d->{panel.removeView(monitorView);websitePages.addView(monitorView,1,new FrameLayout.LayoutParams(-1,-1));applicantSettingsDialog=null;java.util.Arrays.fill(settingsApplicantButtons,null);render();if(engine!=null){engine.activeStates.clear();engine.activate();}});
+      dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);engine.activeStates.clear();engine.activate();
+    }
     private void copyDiagnosticLog(){
-      String report="App: MPARIVAHAN SLOT BOOKING -J&K 3.7.0 · SHA "+BuildConfig.GIT_SHA+"\nProtected page retention after STOP: "+BrowserEngine.STOP_PAGE_PROTECTION_MAX_MS+" ms (5 minutes)\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
+      String report="App: MPARIVAHAN SLOT BOOKING -J&K "+BuildConfig.VERSION_NAME+" · SHA "+BuildConfig.GIT_SHA+"\nProtected page retention after STOP: "+BrowserEngine.STOP_PAGE_PROTECTION_MAX_MS+" ms (5 minutes)\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
         +android.os.Build.VERSION.SDK_INT+"\n"+(engine==null?"Connecting":engine.service.diagnosticReport()+"\nManufacturer: "+android.os.Build.MANUFACTURER+"\nDoze exemption: "+getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())+"\nNotifications: "+(getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()?"ALLOWED":"REQUIRED")+"\nBattery Saver: "+getSystemService(android.os.PowerManager.class).isPowerSaveMode()+"\nActive applicants: "+engine.service.activeCount());
       ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
       cm.setPrimaryClip(ClipData.newPlainText("Sarathi diagnostics",report));
@@ -260,10 +283,10 @@ public class MainActivity extends Activity {
         heading.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         heading.setPadding(dp(4),dp(3),dp(4),dp(8));
         android.widget.ImageView logo=new android.widget.ImageView(this);logo.setImageResource(R.drawable.ic_launcher_foreground);logo.setContentDescription("Tap for quick menu; hold for applicant settings");logo.setOnClickListener(v->showQuickMenu(logo));logo.setOnLongClickListener(v->{showApplicantSettings();return true;});
-        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.addView(heading);TextView developer=new TextView(this);developer.setText("V3.7.0 · SHA " + BuildConfig.GIT_SHA + " · DEVELOPED BY BURHAN MOHIDIN");developer.setTextSize(10);developer.setTextColor(Color.rgb(89,225,167));developer.setPadding(dp(4),0,0,dp(5));names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,-2,1));header.addView(brand);
-        for(int group=0;group<2;group++){LinearLayout applicants=new LinearLayout(this);applicantRows[group]=applicants;for(int k=0;k<4;k++){final int n=group*4+k+1;applicantButtons[n-1]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->selectApplicant(n));applicantButtons[n-1].setOnLongClickListener(v->{applicantPhone(n);return true;});}header.addView(applicants);}
+        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.addView(heading);TextView developer=new TextView(this);developer.setText("V" + BuildConfig.VERSION_NAME + " · SHA " + BuildConfig.GIT_SHA + " · DEVELOPED BY BURHAN MOHIDIN");developer.setTextSize(10);developer.setTextColor(Color.rgb(89,225,167));developer.setPadding(dp(4),0,0,dp(5));names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,-2,1));header.addView(brand);
+        for(int group=0;group<2;group++){LinearLayout applicants=new LinearLayout(this);applicantRows[group]=applicants;for(int k=0;k<4;k++){final int n=group*4+k+1;applicantButtons[n-1]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->{selectApplicant(n);showApplicantSettings();});applicantButtons[n-1].setOnLongClickListener(v->{applicantPhone(n);return true;});}header.addView(applicants);}
         LinearLayout utilities=new LinearLayout(this);
-        applicantButtons[8]=button(utilities,"Applicant 9",Color.rgb(37,65,103),()->selectApplicant(9));
+        applicantButtons[8]=button(utilities,"Applicant 9",Color.rgb(37,65,103),()->{selectApplicant(9);showApplicantSettings();});
         applicantButtons[8].setOnLongClickListener(v->{applicantPhone(9);return true;});
         batteryButton=button(utilities,"Background\nsetup",Color.rgb(35,53,76),this::batterySettings);
         button(utilities,"Phone\nnumbers",Color.rgb(14,116,144),this::managePhones);
@@ -280,26 +303,30 @@ public class MainActivity extends Activity {
         LinearLayout controls=new LinearLayout(this);
         monitorButton=button(controls,"Monitor",Color.rgb(37,99,235),this::toggleMonitor);
         monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);monitorButton.setTextSize(12);
-        button(controls,"Start All",Color.rgb(5,150,105),()->{if(engine!=null)engine.service.startAllReady();});
+        monitorButton.setOnLongClickListener(v->{if(engine!=null)engine.service.startAllReady();return true;});
+        monitorButton.setContentDescription("Monitor; hold to start all ready applicants");
         Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.stopFromUi();});
         Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.silence();command("SILENCE");});
         silenceButton.setOnLongClickListener(v->{if(engine!=null){engine.service.silenceAll();Toast.makeText(this,"All applicant alarms silenced",Toast.LENGTH_SHORT).show();}return true;});
         stopButton.setOnLongClickListener(v->{if(engine!=null){engine.service.stopAll();Toast.makeText(this,"All applicants stopped",Toast.LENGTH_SHORT).show();}return true;});
+        button(controls,"Home",0xFF0F766E,()->{if(engine!=null)engine.home();});
         for(int i=0;i<controls.getChildCount();i++){Button control=(Button)controls.getChildAt(i);control.setTextSize(15);control.getLayoutParams().height=dp(64);}
         header.addView(controls);
         Button copyLogButton=button(utilities, "Copy log", Color.rgb(104,65,165), this::copyDiagnosticLog);
         copyLogButton.setOnLongClickListener(v->{if(engine!=null)engine.home();return true;});
         batteryButton.setOnLongClickListener(v->{manageApplicantAlerts();return true;});
-        TextView holdHints=new TextView(this);holdHints.setText("Tap logo: quick menu · Hold logo: applicant settings · Left ⚙: settings · Hold Background setup: Alerts · Hold Copy log: Home");holdHints.setTextColor(0xFF9DB1C9);holdHints.setTextSize(10);header.addView(holdHints);
+        utilities.setVisibility(View.GONE);
+        TextView holdHints=new TextView(this);holdHints.setText("Logo: menu · Hold Monitor: Start all · Hold Stop: Stop all · Hold Silence: Silence all");holdHints.setTextColor(0xFF9DB1C9);holdHints.setTextSize(10);header.addView(holdHints);
         LinearLayout details=new LinearLayout(this);details.setOrientation(LinearLayout.VERTICAL);details.setPadding(dp(9),dp(6),dp(9),dp(6));
         GradientDrawable card=new GradientDrawable();card.setColor(Color.rgb(21,43,66));card.setCornerRadius(dp(10));details.setBackground(card);
-        status.setTextColor(Color.rgb(125,211,252));monitorStatus.setTextColor(Color.rgb(110,231,183));details.addView(status);details.addView(monitorStatus);header.addView(details);
+        status.setTextColor(Color.rgb(125,211,252));monitorStatus.setTextColor(Color.rgb(110,231,183));details.addView(status);details.addView(monitorStatus);header.addView(details,header.indexOfChild(controls));
         view = new GeckoView(this);
-        FrameLayout pages=new FrameLayout(this);
+        FrameLayout pages=new FrameLayout(this);websitePages=pages;
         pages.addView(view,new FrameLayout.LayoutParams(-1,-1));
         monitorView=new GeckoView(this);monitorView.setVisibility(View.GONE);
         pages.addView(monitorView,new FrameLayout.LayoutParams(-1,-1));
-        TextView settingsHandle=new TextView(this);settingsHandle.setText("⚙");settingsHandle.setTextSize(18);settingsHandle.setTextColor(Color.WHITE);settingsHandle.setGravity(Gravity.CENTER);settingsHandle.setBackgroundColor(0xCC2563EB);settingsHandle.setContentDescription("Open applicant settings");settingsHandle.setOnClickListener(v->showApplicantSettings());FrameLayout.LayoutParams handleParams=new FrameLayout.LayoutParams(dp(30),dp(76),Gravity.LEFT|Gravity.CENTER_VERTICAL);handleParams.leftMargin=dp(2);pages.addView(settingsHandle,handleParams);
+        TextView settingsHandle=new TextView(this);settingsHandle.setText("⚙");settingsHandle.setTextSize(18);settingsHandle.setTextColor(Color.WHITE);settingsHandle.setGravity(Gravity.CENTER);settingsHandle.setBackgroundColor(0xCC2563EB);settingsHandle.setContentDescription("Open applicant settings");settingsHandle.setOnClickListener(v->showApplicantSettings());FrameLayout.LayoutParams handleParams=new FrameLayout.LayoutParams(dp(30),dp(76),Gravity.LEFT|Gravity.CENTER_VERTICAL);handleParams.leftMargin=dp(24);pages.addView(settingsHandle,handleParams);
+        settingsHandle.setOnTouchListener(new View.OnTouchListener(){float startX,startY;public boolean onTouch(View v,android.view.MotionEvent event){if(event.getAction()==android.view.MotionEvent.ACTION_DOWN){startX=event.getX();startY=event.getY();return true;}if(event.getAction()==android.view.MotionEvent.ACTION_UP){if(event.getX()-startX>dp(30)&&Math.abs(event.getY()-startY)<dp(60))showApplicantSettings();else v.performClick();return true;}return true;}});
         root.addView(pages,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
         bound=bindService(new Intent(this,MonitorService.class),connection,BIND_AUTO_CREATE);
@@ -326,6 +353,7 @@ public class MainActivity extends Activity {
       if(engine!=null){BrowserEngine e=engine;e.service.handler.post(()->{e.activeStates.clear();e.activate();});}
     }
     @Override protected void onDestroy(){
+      if(applicantSettingsDialog!=null)applicantSettingsDialog.dismiss();
       view.releaseSession();monitorView.releaseSession();
       if(engine!=null){engine.activeStates.clear();engine.detach(this);if(engine.service.activity==this)engine.service.activity=null;engine.activate();}
       if(bound)unbindService(connection);

@@ -39,6 +39,7 @@ public class GeckoIntegrationTest {
   StringBuilder report=new StringBuilder("DIAG-START\nMPARIVAHAN MONITOR DIAGNOSTICS\n").append(label).append('\n');
   try{if(fixtureService!=null)report.append(fixtureService.diagnosticReport());else report.append("MonitorService unavailable\n");}
   catch(Exception e){report.append("diagnosticReport failed: ").append(e).append('\n');}
+  if(report.length()>0&&report.charAt(report.length()-1)!='\n')report.append('\n');
   report.append("DIAG-END\n");
   // Mirror the complete report to logcat as ordered DIAG-tagged text lines for CI fallback.
   for(String diagnosticLine:report.toString().split("\n",-1))android.util.Log.i("DIAG",diagnosticLine);
@@ -56,7 +57,7 @@ public class GeckoIntegrationTest {
    for(int offset=0;offset<encoded.length();offset+=8000){
     String chunk=encoded.substring(offset,Math.min(encoded.length(),offset+8000));
     String redirect=offset==0?">":">>";
-    String command="printf '%s' '"+chunk+"' | base64 -d "+redirect+" /data/local/tmp/monitor-copy-log.txt";
+    String command="sh -c \"printf '%s' '"+chunk+"' | base64 -d "+redirect+" /data/local/tmp/monitor-copy-log.txt\"";
     try(android.os.ParcelFileDescriptor fd=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
         InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){while(in.read()!=-1){}}
    }
@@ -619,6 +620,21 @@ public class GeckoIntegrationTest {
    a.setApplicantsVisibleForTest(false);assertFalse("Developer hide option hides all applicant buttons",a.applicantsVisibleForTest());
    a.setApplicantsVisibleForTest(true);assertTrue("Show option restores all applicant buttons",a.applicantsVisibleForTest());
    service.stopAll();a.selectApplicant(originalLock);a.setApplicantsVisibleForTest(originalVisibility);
+  });
+ }
+ @Test public void fullScreenSettingsPreserveWebsiteSession()throws Exception{
+  MainActivity a=activity.getActivity();MonitorService service=fixtureService;
+  final BrowserEngine[] selected=new BrowserEngine[1];
+  final org.mozilla.geckoview.GeckoSession[] website=new org.mozilla.geckoview.GeckoSession[1];
+  main(()->{
+   a.selectApplicant(1);selected[0]=service.engine;website[0]=selected[0].current;
+   a.openApplicantSettingsForTest();
+   assertTrue("Applicant settings must be visible full screen",a.applicantSettingsOpenForTest());
+   assertSame("Opening settings must not replace the website session",website[0],selected[0].current);
+   a.closeApplicantSettingsForTest();
+   assertFalse("Done must close settings",a.applicantSettingsOpenForTest());
+   assertSame("Closing settings must restore the same website session",website[0],selected[0].current);
+   assertTrue("Website must stay open across settings reparenting",website[0].isOpen());
   });
  }
  @Test public void backAndHomeConfirmOnlyWhenPageProtected()throws Exception{

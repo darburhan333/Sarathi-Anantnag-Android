@@ -38,10 +38,34 @@ adb('shell','pm','grant',PACKAGE,'android.permission.POST_NOTIFICATIONS')
 adb('shell','am','force-stop',PACKAGE)
 adb('shell','am','start','-W','-n',PACKAGE+'/com.sarathi.geckotest.MainActivity')
 root=wait_ready(1)
-for number in [2,3,4,5,6,7,8,9,1]:
- node=next(n for n in root.iter('node') if n.get('text')=='Applicant '+str(number))
+def tap_node(node):
  x1,y1,x2,y2=map(int,re.findall(r'\d+',node.get('bounds')))
- adb('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2));root=wait_ready(number)
+ adb('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2));time.sleep(0.5)
+def tap_text(text):
+ end=time.monotonic()+15
+ while time.monotonic()<end:
+  current=snapshot()
+  node=next((n for n in current.iter('node') if n.get('text','').casefold()==text.casefold()),None)
+  if node is not None:tap_node(node);return
+  time.sleep(0.5)
+ raise AssertionError('Required release UI control missing: '+text)
+def logo_menu():
+ current=snapshot()
+ logo=next(n for n in current.iter('node') if n.get('content-desc')=='Tap for quick menu; hold for applicant settings')
+ tap_node(logo)
+assert any(n.get('text')=='Home' for n in root.iter('node')),'Home must be directly available'
+logo_menu();tap_text('Developer: Show applicants')
+for number in [2,3,4,5,6,7,8,9,1]:
+ root=snapshot()
+ node=next(n for n in root.iter('node') if n.get('content-desc')=='Applicant '+str(number))
+ tap_node(node)
+ settings=snapshot()
+ assert any(n.get('text','').startswith('LOCKED · Applicant '+str(number)+' ·') for n in settings.iter('node')),'Applicant settings must open full screen for selected applicant'
+ tap_text('Done')
+ root=wait_ready(number)
+logo_menu();tap_text('Developer: Hide applicants')
+root=snapshot()
+assert not any(n.get('content-desc')=='Applicant 1' for n in root.iter('node')),'Hide must restore clean main screen'
 adb('shell','screencap','-p','/data/local/tmp/release-preview.png')
 adb('pull','/data/local/tmp/release-preview.png','release-preview.png')
 adb('pull','/sdcard/release-ui.xml','release-ui.xml')
