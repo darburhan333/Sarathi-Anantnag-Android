@@ -59,7 +59,7 @@ if [ "$CAPTURED" != true ]; then
     collecting {
       line=$0
       sub(/^.* I DIAG    : /, "", line)
-      report=report line "\\n"
+      report=report line "\n"
       if (line == "DIAG-END") { last=report; collecting=0 }
     }
     END { if (last != "") printf "%s", last }
