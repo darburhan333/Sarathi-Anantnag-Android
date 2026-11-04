@@ -50,6 +50,22 @@ if [ "$CAPTURED" != true ]; then
   adb pull /data/local/tmp/monitor-copy-log.txt monitor-copy-log.txt.tmp >> emulator-diagnostic-capture-status.txt 2>&1
   if [ -s monitor-copy-log.txt.tmp ]; then try_diagnostic_route "instrumentation shell handoff" || true; else rm -f monitor-copy-log.txt.tmp; fi
 fi
+# Android's instrumentation runner uninstalls the target and test APKs when it
+# exits. The test teardown therefore also mirrors the exact report to DIAG logcat.
+# Recover the last complete report from that durable log before declaring failure.
+if [ "$CAPTURED" != true ]; then
+  awk '
+    / I DIAG    : DIAG-START$/ { collecting=1; report="" }
+    collecting {
+      line=$0
+      sub(/^.* I DIAG    : /, "", line)
+      report=report line "\\n"
+      if (line == "DIAG-END") { last=report; collecting=0 }
+    }
+    END { if (last != "") printf "%s", last }
+  ' emulator-logcat.txt > monitor-copy-log.txt.tmp
+  if [ -s monitor-copy-log.txt.tmp ]; then try_diagnostic_route "instrumentation DIAG logcat" || true; else rm -f monitor-copy-log.txt.tmp; fi
+fi
 if [ "$CAPTURED" != true ]; then
   {
     echo "Package visibility diagnostic:"

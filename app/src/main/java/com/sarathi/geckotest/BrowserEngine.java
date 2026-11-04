@@ -110,7 +110,12 @@ final class BrowserEngine {
         String observedUrl=state.optString("url","");if(observedUrl.isEmpty())observedUrl=pageUrl;
         protectedPage=true;protectedStage=stage;protectedUrl=safeLocation(observedUrl);
       }else if(hasProtectionInputs){
-        clearProtectedPage();pageLostProtected=false;
+        // STOP disarms monitoring, but the extension may asynchronously publish a
+        // stale STOPPED snapshot after native code has latched manual-page protection.
+        // Keep that page protected for the bounded grace period; actual navigation
+        // away is handled separately by expireRetainedProtectionForNavigation().
+        boolean retainedStopSnapshot=protectedPage&&protectedUntilElapsed>0L&&"STOPPED".equals(stage);
+        if(!retainedStopSnapshot){clearProtectedPage();pageLostProtected=false;}
       }
       if(state.has("loggedIn")){loggedInPage=state.optBoolean("loggedIn",true);if(!loggedInPage){loginRequiredObserved=true;clearLoginAt();}}
       if(state.has("reason"))lastPageReason=state.optString("reason");
