@@ -55,12 +55,18 @@ fi
 # Recover the last complete report from that durable log before declaring failure.
 if [ "$CAPTURED" != true ]; then
   awk '
-    / I DIAG    : DIAG-START$/ { collecting=1; report="" }
+    / I DIAG    : DIAG-START$/ { collecting=1; report="DIAG-START\\n"; next }
     collecting {
       line=$0
       sub(/^.* I DIAG    : /, "", line)
-      report=report line "\n"
-      if (line == "DIAG-END") { last=report; collecting=0 }
+      if (line ~ /DIAG-END$/) {
+        sub(/DIAG-END$/, "", line)
+        if (line != "") report=report line "\\n"
+        last=report "DIAG-END\\n"
+        collecting=0
+      } else {
+        report=report line "\\n"
+      }
     }
     END { if (last != "") printf "%s", last }
   ' emulator-logcat.txt > monitor-copy-log.txt.tmp
