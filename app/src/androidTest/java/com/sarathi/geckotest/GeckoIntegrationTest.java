@@ -608,8 +608,10 @@ public class GeckoIntegrationTest {
  }
  @Test public void applicantSettingsLockAndVisibilityDoNotStopOtherApplicants()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;int originalLock=a.lockedApplicantForTest();boolean originalVisibility=a.applicantsVisibleForTest();
-  BrowserEngine first=service.profile(1),second=service.profile(2);
+  final BrowserEngine[] profiles=new BrowserEngine[2];
   main(()->{
+   profiles[0]=service.profile(1);profiles[1]=service.profile(2);
+   BrowserEngine first=profiles[0],second=profiles[1];
    service.activity=a;service.visible=true;first.run.arm();second.run.arm();a.selectApplicant(2);
    assertEquals("Selected applicant must become the persistent UI lock",2,a.lockedApplicantForTest());
    assertTrue("Selecting applicant 2 must not stop applicant 1",first.run.armed);
@@ -707,7 +709,7 @@ public class GeckoIntegrationTest {
    e.unloadIdle(now,true);
    assertNull("Real memory pressure may unload an unprotected logged-in page",e.current);
    assertTrue("Unload state must be retained for next open",e.pageUnloaded);
-   assertTrue("Diagnostic must record login requirement",fixtureService.diagnosticReport().contains("Applicant 8 page unloaded, login will be needed"));
+   assertTrue("Diagnostic must record login requirement",fixtureService.diagnosticReport().contains("Applicant 8 idle page closed; loggedIn=true; login will be needed"));
    e.foreground=true;e.ensureUsable();
    assertFalse("Opening the applicant must consume the unload banner state",e.pageUnloaded);
    assertTrue("Unloaded applicant must reopen a usable home page",e.current!=null&&e.current.isOpen());
