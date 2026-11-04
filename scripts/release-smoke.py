@@ -54,7 +54,19 @@ def logo_menu():
  logo=next(n for n in current.iter('node') if n.get('content-desc')=='Tap for quick menu; hold for applicant settings')
  tap_node(logo)
 assert any(n.get('text')=='Home' for n in root.iter('node')),'Home must be directly available'
-logo_menu();tap_text('Developer: Show applicants')
+def toggle_applicant_grid():
+ current=snapshot()
+ logo=next(n for n in current.iter('node') if n.get('content-desc')=='Tap for quick menu; hold for applicant settings')
+ x1,y1,x2,y2=map(int,re.findall(r'\d+',logo.get('bounds')))
+ x,y=str((x1+x2)//2),str((y1+y2)//2)
+ adb('shell','input','swipe',x,y,x,y,'900')
+ tap_text('Show / hide applicants');tap_text('Done')
+logo_menu()
+menu=snapshot()
+for label in ['Phone numbers','Alerts','Logs','Background setup']:
+ assert any(n.get('text')==label for n in menu.iter('node')),'Hamburger settings missing: '+label
+adb('shell','input','keyevent','KEYCODE_BACK')
+toggle_applicant_grid()
 for number in [2,3,4,5,6,7,8,9,1]:
  root=snapshot()
  node=next(n for n in root.iter('node') if n.get('content-desc')=='Applicant '+str(number))
@@ -63,9 +75,27 @@ for number in [2,3,4,5,6,7,8,9,1]:
  assert any(n.get('text','').startswith('LOCKED · Applicant '+str(number)+' ·') for n in settings.iter('node')),'Applicant settings must open full screen for selected applicant'
  tap_text('Done')
  root=wait_ready(number)
-logo_menu();tap_text('Developer: Hide applicants')
+toggle_applicant_grid()
 root=snapshot()
 assert not any(n.get('content-desc')=='Applicant 1' for n in root.iter('node')),'Hide must restore clean main screen'
+root=snapshot()
+labels=['Website','Start All','Silence All','Stop All','Home','Call A1']
+for label in labels:
+ assert any(n.get('text')==label for n in root.iter('node')),'Signature control missing: '+label
+control_nodes=[next(n for n in root.iter('node') if n.get('text')==label) for label in labels]
+rects=[list(map(int,re.findall(r'\d+',n.get('bounds')))) for n in control_nodes]
+assert len({r[1] for r in rects[:3]})==1 and len({r[1] for r in rects[3:]})==1,'Controls must occupy exactly two aligned rows'
+assert rects[0][1]<rects[3][1],'Control rows must keep the approved sequence'
+assert rects[0][0]<rects[1][0]<rects[2][0] and rects[3][0]<rects[4][0]<rects[5][0],'Control column order changed'
+picker=next(n for n in root.iter('node') if n.get('content-desc')=='Choose applicant')
+tap_node(picker);tap_text('Applicant 2');root=wait_ready(2)
+assert any(n.get('text')=='Call A2' for n in root.iter('node')),'Quick call must follow selected applicant'
+tap_text('Website');root=snapshot()
+assert any(n.get('text')=='Monitor' for n in root.iter('node')),'Monitor button must toggle views'
+tap_text('Monitor');root=snapshot()
+assert any(n.get('text')=='Website' for n in root.iter('node')),'Website button must toggle back'
+picker=next(n for n in root.iter('node') if n.get('content-desc')=='Choose applicant')
+tap_node(picker);tap_text('Applicant 1');root=wait_ready(1)
 adb('shell','screencap','-p','/data/local/tmp/release-preview.png')
 adb('pull','/data/local/tmp/release-preview.png','release-preview.png')
 adb('pull','/sdcard/release-ui.xml','release-ui.xml')

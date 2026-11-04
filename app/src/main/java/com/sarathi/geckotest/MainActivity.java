@@ -47,7 +47,10 @@ public class MainActivity extends Activity {
     private boolean bound,visible;private final Button[] applicantButtons=new Button[MonitorService.PROFILE_COUNT];
     private GeckoView view,monitorView;
     private TextView status,monitorStatus;
-    private Button monitorButton,batteryButton;
+    private Button monitorButton,batteryButton,callButton;
+    private android.widget.Spinner applicantPicker;
+    private TextView activeSummary;
+    private final Button[] signatureButtons=new Button[6];
     private android.widget.ScrollView headerScroll;
     private final LinearLayout[] applicantRows=new LinearLayout[2];
     private int lockedApplicant=1;
@@ -59,10 +62,10 @@ public class MainActivity extends Activity {
         MonitorService service=((MonitorService.LocalBinder)binder).getService();
         lockedApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,getSharedPreferences("monitor",0).getInt("lockedApplicant",1)));
         if(getIntent().hasExtra("applicant"))lockedApplicant=notificationApplicant;
-        engine=service.profile(lockedApplicant);service.engine=engine;
+        engine=service.profile(lockedApplicant);service.engine=engine;if(engine.monitorSession==null)engine.showingMonitor=true;
         engine.service.activity=MainActivity.this;engine.service.visible=visible;engine.attach(MainActivity.this);engine.foreground=visible;engine.foregroundState();
       }
-      public void onServiceDisconnected(android.content.ComponentName name){engine=null;status.setText("Service disconnected — reopen the app");}
+      public void onServiceDisconnected(android.content.ComponentName name){engine=null;status.setText("Service disconnected — reopen the app");status.setVisibility(View.VISIBLE);}
     };
     // Test-only instrumentation hooks; production code must not call these methods.
  public boolean monitorReadyForTest(){return engine!=null&&engine.monitorReady;}
@@ -74,9 +77,11 @@ public class MainActivity extends Activity {
  public boolean applicantsVisibleForTest(){return applicantRows[0]!=null&&applicantRows[0].getVisibility()==View.VISIBLE&&applicantButtons[8]!=null&&applicantButtons[8].getVisibility()==View.VISIBLE;}
     public String smokeResultForTest(){return engine==null?"":engine.smokeResult;}
     public void runSmokeForTest(){if(engine!=null){engine.smokeResult="";engine.smokePhase="";engine.command("SMOKE_RUN");}}
-    public void openMonitorForTest(){if(engine!=null)engine.toggleMonitor();}
+    public void openMonitorForTest(){if(engine!=null&&!engine.showingMonitor)engine.toggleMonitor();}
     public boolean extensionReadyForTest(){return engine!=null&&engine.ready;}
     public String monitorStateForTest(){return monitorStatus.getText().toString();}
+    public String signatureControlLabelForTest(int index){return signatureButtons[index].getText().toString();}
+    public void clickSignatureControlForTest(int index){signatureButtons[index].performClick();}
     public MonitorService serviceForTest(){return engine==null?null:engine.service;}
     private void command(String type){if(engine!=null)engine.command(type);}
     private void toggleMonitor(){if(engine!=null)engine.toggleMonitor();}
@@ -85,31 +90,32 @@ public class MainActivity extends Activity {
       if(engine.current!=null&&engine.current.isOpen()&&view.getSession()!=engine.current){view.releaseSession();view.setSession(engine.current);engine.activeStates.remove(engine.current);}
       if(engine.monitorSession!=null&&engine.monitorSession.isOpen()&&monitorView.getSession()!=engine.monitorSession){monitorView.releaseSession();monitorView.setSession(engine.monitorSession);engine.activeStates.remove(engine.monitorSession);}
       monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);
-      monitorButton.setText(engine.showingMonitor?"Website\nHold: All":"Monitor\nHold: All");
-      monitorButton.setBackgroundTintList(ColorStateList.valueOf(engine.showingMonitor?0xFF0F766E:0xFF2563EB));
+      monitorButton.setText(engine.showingMonitor?"Website":"Monitor");monitorButton.setContentDescription(engine.showingMonitor?"Switch to website":"Switch to monitor");
+      if(applicantPicker!=null&&applicantPicker.getSelectedItemPosition()!=engine.profile-1)applicantPicker.setSelection(engine.profile-1);
+      if(activeSummary!=null)activeSummary.setText(engine.service.activeCount()+" of 9 monitoring");
+      if(callButton!=null){callButton.setText("Call A"+engine.profile);callButton.setContentDescription("Call Applicant "+engine.profile);}
+      monitorButton.setBackgroundTintList(ColorStateList.valueOf(0xFFB4F1DA));
       for(int i=0;i<MonitorService.PROFILE_COUNT;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];boolean running=e!=null&&e.run.armed;String label="Applicant "+(i+1)+"\n"+(running?"● RUNNING":"○ STOPPED");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);applicantButtons[i].setAlpha(lockedApplicant==i+1?1f:0.72f);applicantButtons[i].setBackgroundTintList(ColorStateList.valueOf(lockedApplicant==i+1?0xFF0F766E:0xFF254167));}
       for(int i=0;i<settingsApplicantButtons.length;i++)if(settingsApplicantButtons[i]!=null){BrowserEngine profile=engine.service.profiles[i];settingsApplicantButtons[i].setText("Applicant "+(i+1)+(profile!=null&&profile.run.armed?" ● RUNNING":" ○ STOPPED")+(i+1==lockedApplicant?" · LOCKED":""));}
       applyApplicantVisibility(getSharedPreferences("monitor",0).getBoolean("showApplicants",false));
-      if(!status.getText().toString().equals(engine.status))status.setText(engine.status);
+      if(!status.getText().toString().equals(engine.status))status.setText(engine.status);status.setVisibility(engine.showingMonitor?View.GONE:View.VISIBLE);
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
       if(batteryButton!=null)batteryButton.setText((exempt&&android.provider.Settings.canDrawOverlays(this)&&!power.isPowerSaveMode()&&getSystemService(android.app.NotificationManager.class).areNotificationsEnabled())?"Background\nsetup ✓":"Background\nsetup !");
-      String text="Applicant "+engine.profile+" · "+engine.monitorStatus+engine.run.diagnostics()+engine.service.routineWarning();if(!monitorStatus.getText().toString().equals(text))monitorStatus.setText(text);
+      String text=engine.ready?"Applicant "+engine.profile+" · "+(engine.monitoring?"RUNNING":"STOPPED")+engine.service.routineWarning():"Connecting Applicant "+engine.profile+"…";if(!monitorStatus.getText().toString().equals(text))monitorStatus.setText(text);
       if(visible&&engine.monitoring)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
       else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
-    void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){render();return;}MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
+    void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){render();return;}MonitorService service=engine.service;view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);if(engine.monitorSession==null)engine.showingMonitor=true;engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;engine.attach(this);engine.foregroundState();}
     private boolean directCalls(){return getSharedPreferences("calling",0).getBoolean("direct",false);}
+    static Intent applicantCallIntent(String phone,boolean direct,boolean permitted){return new Intent(direct&&permitted?Intent.ACTION_CALL:Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null));}
     private void openDialer(String phone){startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));}
     private void showQuickMenu(View anchor){
       PopupMenu menu=new PopupMenu(this,anchor);
       menu.getMenu().add("Phone numbers").setOnMenuItemClickListener(item->{managePhones();return true;});
-      menu.getMenu().add("Logs").setOnMenuItemClickListener(item->{showLogs();return true;});
-      menu.getMenu().add("Start all ready applicants").setOnMenuItemClickListener(item->{if(engine!=null)engine.service.startAllReady();return true;});
-      menu.getMenu().add("Background setup").setOnMenuItemClickListener(item->{batterySettings();return true;});
       menu.getMenu().add("Alerts").setOnMenuItemClickListener(item->{manageApplicantAlerts();return true;});
-      menu.getMenu().add("Applicant settings").setOnMenuItemClickListener(item->{showApplicantSettings();return true;});
-      menu.getMenu().add(getSharedPreferences("monitor",0).getBoolean("showApplicants",false)?"Developer: Hide applicants":"Developer: Show applicants").setOnMenuItemClickListener(item->{toggleApplicantsVisibility();return true;});
+      menu.getMenu().add("Logs").setOnMenuItemClickListener(item->{showLogs();return true;});
+      menu.getMenu().add("Background setup").setOnMenuItemClickListener(item->{batterySettings();return true;});
       menu.show();
     }
     private void applyApplicantVisibility(boolean show){for(LinearLayout row:applicantRows)if(row!=null)row.setVisibility(show?View.VISIBLE:View.GONE);if(applicantButtons[8]!=null){applicantButtons[8].setVisibility(show?View.VISIBLE:View.GONE);if(applicantButtons[8].getParent() instanceof View)((View)applicantButtons[8].getParent()).setVisibility(show?View.VISIBLE:View.GONE);}}
@@ -124,12 +130,14 @@ public class MainActivity extends Activity {
       for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){final int number=n;Button choose=new Button(this);choose.setText("Applicant "+n);choose.setOnClickListener(v->{dialog.dismiss();selectApplicant(number);showApplicantSettings();});choices.addView(choose);}
       dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
     }
-    private void showApplicantSettings(){
+    private void showApplicantSettings(){showApplicantSettings("settings");}
+    private void showApplicantSettings(String panelName){
       if(engine==null||applicantSettingsDialog!=null)return;
-      engine.showingMonitor=true;engine.prepareMonitor();render();engine.activate();
+      engine.showingMonitor=true;engine.prepareMonitor();if(engine.monitorSession!=null)engine.monitorSession.loadUri(engine.monitorUrl+"#"+panelName);render();engine.activate();
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setBackgroundColor(0xFF0B1426);panel.setPadding(dp(8),dp(8),dp(8),dp(8));
       TextView summary=new TextView(this);summary.setText("LOCKED · Applicant "+lockedApplicant+" · Other applicants continue independently");summary.setTextColor(0xFF6EE7B7);summary.setTextSize(15);summary.setTypeface(Typeface.DEFAULT,Typeface.BOLD);panel.addView(summary);
       android.widget.HorizontalScrollView picker=new android.widget.HorizontalScrollView(this);LinearLayout entries=new LinearLayout(this);picker.addView(entries);panel.addView(picker);
+      LinearLayout visibilityRow=new LinearLayout(this);button(visibilityRow,"Show / hide applicants",0xFF173B32,this::toggleApplicantsVisibility);panel.addView(visibilityRow);
       LinearLayout shortcuts=new LinearLayout(this);button(shortcuts,"Alerts",0xFF7C3AED,this::manageApplicantAlerts);button(shortcuts,"Phone numbers",0xFF0E7490,this::managePhones);button(shortcuts,"Background setup",0xFF23534C,this::batterySettings);panel.addView(shortcuts);
       LinearLayout actions=new LinearLayout(this);
       Button stop=button(actions,"Stop",0xFFBE2A42,()->{if(engine!=null)engine.stopFromUi();});stop.setOnLongClickListener(v->{if(engine!=null)engine.service.stopAll();return true;});
@@ -138,7 +146,7 @@ public class MainActivity extends Activity {
       android.view.ViewGroup parent=(android.view.ViewGroup)monitorView.getParent();if(parent!=null)parent.removeView(monitorView);panel.addView(monitorView,new LinearLayout.LayoutParams(-1,0,1));
       AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Applicant settings · A"+lockedApplicant).setView(panel).setNegativeButton("Done",null).create();applicantSettingsDialog=dialog;
       for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){final int number=n;BrowserEngine profile=engine.service.profiles[n-1];Button choose=new Button(this);choose.setAllCaps(false);choose.setText("Applicant "+n+(profile!=null&&profile.run.armed?" ● RUNNING":" ○ STOPPED")+(n==lockedApplicant?" · LOCKED":""));choose.setTextColor(n==lockedApplicant?0xFF0F766E:0xFF254167);choose.setOnClickListener(v->{dialog.dismiss();selectApplicant(number);showApplicantSettings();});settingsApplicantButtons[n-1]=choose;entries.addView(choose);}
-      dialog.setOnDismissListener(d->{panel.removeView(monitorView);websitePages.addView(monitorView,1,new FrameLayout.LayoutParams(-1,-1));applicantSettingsDialog=null;java.util.Arrays.fill(settingsApplicantButtons,null);render();if(engine!=null){engine.activeStates.clear();engine.activate();}});
+      dialog.setOnDismissListener(d->{panel.removeView(monitorView);websitePages.addView(monitorView,1,new FrameLayout.LayoutParams(-1,-1));applicantSettingsDialog=null;java.util.Arrays.fill(settingsApplicantButtons,null);if(engine!=null&&engine.monitorSession!=null)engine.monitorSession.loadUri(engine.monitorUrl+"#monitor");render();if(engine!=null){engine.activeStates.clear();engine.activate();}});
       dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);engine.activeStates.clear();engine.activate();
     }
     private void copyDiagnosticLog(){
@@ -152,7 +160,7 @@ public class MainActivity extends Activity {
       try{String phone=ApplicantContacts.read(this,number);
         if(phone.isEmpty()){editApplicantPhone(number,false);return;}
         if(directCalls()&&checkSelfPermission(Manifest.permission.CALL_PHONE)==PackageManager.PERMISSION_GRANTED){
-          try{startActivity(new Intent(Intent.ACTION_CALL,Uri.fromParts("tel",phone,null)));}
+          try{startActivity(applicantCallIntent(phone,true,true));}
           catch(SecurityException|android.content.ActivityNotFoundException e){openDialer(phone);}
         }else openDialer(phone);
       }catch(android.content.ActivityNotFoundException e){Toast.makeText(this,"No calling app is available",Toast.LENGTH_LONG).show();}
@@ -198,12 +206,13 @@ public class MainActivity extends Activity {
         modes.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> v){}public void onItemSelected(android.widget.AdapterView<?> v,View child,int position,long id){getSharedPreferences("monitor",0).edit().putString("alertMode"+number,PhoneAlerts.MODES[position]).apply();service.refreshForeground(true);render();}});row.addView(modes);
         Button test=new Button(this);test.setText("Test alert");test.setOnClickListener(v->{BrowserEngine existing=service.profiles[number-1];PhoneAlerts alerts=existing==null?new PhoneAlerts(service,number):existing.alerts;alerts.testOnce();});row.addView(test);rows.addView(row);
       }
+      Button telegram=new Button(this);telegram.setText("Telegram settings · Applicant "+engine.profile);telegram.setOnClickListener(v->showApplicantSettings("telegram"));panel.addView(telegram);
       Button export=new Button(this);export.setText("Export encrypted settings");export.setOnClickListener(v->transferSettings(true));panel.addView(export);Button restore=new Button(this);restore.setText("Import encrypted settings");restore.setOnClickListener(v->transferSettings(false));panel.addView(restore);
       new AlertDialog.Builder(this).setTitle("Applicant alert settings").setView(panel).setPositiveButton("Done",null).setNeutralButton("Silence all now",(d,w)->service.silenceAll()).show();
     }
     private void managePhones(){
       LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(12),dp(8),dp(12),dp(8));
-      android.widget.Switch direct=new android.widget.Switch(this);direct.setText("Direct call on long-press");direct.setTextSize(14);direct.setMinHeight(dp(48));
+      android.widget.Switch direct=new android.widget.Switch(this);direct.setText("Direct call from Call button");direct.setTextSize(14);direct.setMinHeight(dp(48));
       direct.setChecked(directCalls()&&checkSelfPermission(Manifest.permission.CALL_PHONE)==PackageManager.PERMISSION_GRANTED);panel.addView(direct);
       TextView hint=new TextView(this);hint.setText("OFF: opens dialer. ON: calls immediately. Your phone may show its call screen.");hint.setTextSize(12);panel.addView(hint);
       android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout entries=new LinearLayout(this);entries.setOrientation(LinearLayout.VERTICAL);scroll.addView(entries);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(340)));
@@ -223,7 +232,7 @@ public class MainActivity extends Activity {
     private void editApplicantPhone(int number,boolean returnToList){
       android.widget.EditText input=new android.widget.EditText(this);input.setInputType(android.text.InputType.TYPE_CLASS_PHONE);input.setSingleLine(true);input.setHint("Phone number, e.g. +91…");
       try{input.setText(ApplicantContacts.read(this,number));}catch(Exception ignored){}
-      AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Applicant "+number+" phone number").setMessage("Long-press this applicant to use the saved number.").setView(input)
+      AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Applicant "+number+" phone number").setMessage("Use Call on this applicant’s main screen. Direct calling can be enabled in Phone numbers.").setView(input)
        .setPositiveButton("Save",null).setNeutralButton("Remove",null).setNegativeButton("Cancel",null).create();
       dialog.setOnDismissListener(unused->{if(returnToList&&!isFinishing()&&!isDestroyed())managePhones();});
       dialog.setOnShowListener(unused->{
@@ -264,26 +273,34 @@ public class MainActivity extends Activity {
         row.addView(b,params);
         return b;
     }
+    private Button signatureButton(LinearLayout row,String label,int fill,int ink,Runnable action){
+      Button result=button(row,label,fill,action);result.setTextColor(ink);result.setTextSize(12);result.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));result.setMinHeight(dp(48));result.setMinimumHeight(dp(48));result.setPadding(dp(4),dp(8),dp(4),dp(8));result.getLayoutParams().height=Math.max(dp(52),(int)Math.ceil(getResources().getDisplayMetrics().scaledDensity*30)+dp(12));return result;
+    }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);notificationApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,getIntent().getIntExtra("applicant",1)));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(11,20,38));
-        getWindow().setStatusBarColor(Color.rgb(11,20,38));
-        getWindow().setNavigationBarColor(Color.rgb(11,20,38));
+        root.setBackgroundColor(0xFF0B1420);
+        getWindow().setStatusBarColor(0xFF0B1420);
+        getWindow().setNavigationBarColor(0xFF132131);
         LinearLayout header=new LinearLayout(this);header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(dp(9),dp(6),dp(9),dp(8));
         headerScroll=new android.widget.ScrollView(this);headerScroll.setFillViewport(false);headerScroll.addView(header);
         boolean landscape=getResources().getConfiguration().orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE;
         root.addView(headerScroll,new LinearLayout.LayoutParams(-1,landscape?Math.round(getResources().getDisplayMetrics().heightPixels*0.44f):-2));
-        TextView heading = new TextView(this);
-        heading.setText("MPARIVAHAN SLOT BOOKING -J&K");
-        heading.setTextColor(Color.rgb(87,211,255));heading.setTextSize(19);
-        heading.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        heading.setPadding(dp(4),dp(3),dp(4),dp(8));
-        android.widget.ImageView logo=new android.widget.ImageView(this);logo.setImageResource(R.drawable.ic_launcher_foreground);logo.setContentDescription("Tap for quick menu; hold for applicant settings");logo.setOnClickListener(v->showQuickMenu(logo));logo.setOnLongClickListener(v->{showApplicantSettings();return true;});
-        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.addView(logo,new LinearLayout.LayoutParams(dp(42),dp(42)));LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.addView(heading);TextView developer=new TextView(this);developer.setText("V" + BuildConfig.VERSION_NAME + " · SHA " + BuildConfig.GIT_SHA + " · DEVELOPED BY BURHAN MOHIDIN");developer.setTextSize(10);developer.setTextColor(Color.rgb(89,225,167));developer.setPadding(dp(4),0,0,dp(5));names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,-2,1));header.addView(brand);
+        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);brand.setPadding(dp(5),dp(5),dp(5),dp(6));
+        android.widget.ImageView logo=new android.widget.ImageView(this);logo.setImageResource(R.drawable.ic_launcher_foreground);logo.setContentDescription("Tap for quick menu; hold for applicant settings");logo.setOnClickListener(v->showQuickMenu(logo));logo.setOnLongClickListener(v->{showApplicantSettings();return true;});brand.addView(logo,new LinearLayout.LayoutParams(dp(36),dp(36)));
+        LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.setPadding(dp(9),0,dp(4),0);
+        TextView heading=new TextView(this);heading.setText("MPARIVAHAN · J&K");heading.setTextColor(0xFFB4F1DA);heading.setTextSize(18);heading.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));heading.setLetterSpacing(0.01f);names.addView(heading);
+        TextView developer=new TextView(this);developer.setText("By Burhan Mohidin");developer.setTextColor(0xFF80E2BF);developer.setTextSize(11);developer.setPadding(0,dp(2),0,0);names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,-2,1));
+        Button settingsMenu=new Button(this);settingsMenu.setText("☰");settingsMenu.setTextSize(23);settingsMenu.setAllCaps(false);settingsMenu.setTextColor(0xFFEDF4FA);settingsMenu.setBackgroundColor(Color.TRANSPARENT);settingsMenu.setPadding(0,0,0,0);settingsMenu.setMinWidth(0);settingsMenu.setMinimumWidth(0);settingsMenu.setContentDescription("Open all settings");settingsMenu.setOnClickListener(v->showQuickMenu(settingsMenu));brand.addView(settingsMenu,new LinearLayout.LayoutParams(dp(44),dp(44)));header.addView(brand);
+        LinearLayout selection=new LinearLayout(this);selection.setGravity(Gravity.CENTER_VERTICAL);selection.setPadding(dp(5),dp(7),dp(5),dp(5));
+        applicantPicker=new android.widget.Spinner(this);String[] applicants=new String[MonitorService.PROFILE_COUNT];for(int n=0;n<applicants.length;n++)applicants[n]="Applicant "+(n+1);
+        android.widget.ArrayAdapter<String> applicantAdapter=new android.widget.ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,applicants){@Override public View getView(int position,View converted,android.view.ViewGroup parent){TextView text=(TextView)super.getView(position,converted,parent);text.setTextColor(0xFFEDF4FA);text.setTextSize(14);text.setPadding(dp(9),dp(9),dp(9),dp(9));return text;}};
+        applicantPicker.setAdapter(applicantAdapter);applicantPicker.setContentDescription("Choose applicant");selection.addView(applicantPicker,new LinearLayout.LayoutParams(0,dp(46),1));
+        applicantPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> parent){}public void onItemSelected(android.widget.AdapterView<?> parent,View item,int position,long id){if(engine!=null&&engine.profile!=position+1)selectApplicant(position+1);}});
+        activeSummary=new TextView(this);activeSummary.setText("0 of 9 monitoring");activeSummary.setTextSize(11);activeSummary.setTextColor(0xFFA5B6C7);selection.addView(activeSummary);header.addView(selection);
         for(int group=0;group<2;group++){LinearLayout applicants=new LinearLayout(this);applicantRows[group]=applicants;for(int k=0;k<4;k++){final int n=group*4+k+1;applicantButtons[n-1]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->{selectApplicant(n);showApplicantSettings();});applicantButtons[n-1].setOnLongClickListener(v->{applicantPhone(n);return true;});}header.addView(applicants);}
         LinearLayout utilities=new LinearLayout(this);
         applicantButtons[8]=button(utilities,"Applicant 9",Color.rgb(37,65,103),()->{selectApplicant(9);showApplicantSettings();});
@@ -300,34 +317,23 @@ public class MainActivity extends Activity {
         monitorStatus.setTextColor(Color.rgb(223,234,248));
         monitorStatus.setPadding(dp(4),0,dp(4),dp(5));
         monitorStatus.setText("Connecting monitor… website opens independently");
-        LinearLayout controls=new LinearLayout(this);
-        monitorButton=button(controls,"Monitor",Color.rgb(37,99,235),this::toggleMonitor);
-        monitorButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);monitorButton.setTextSize(12);
-        monitorButton.setOnLongClickListener(v->{if(engine!=null)engine.service.startAllReady();return true;});
-        monitorButton.setContentDescription("Monitor; hold to start all ready applicants");
-        Button stopButton=button(controls,"Stop",Color.rgb(190,42,66),()->{if(engine!=null)engine.stopFromUi();});
-        Button silenceButton=button(controls,"Silence",Color.rgb(141,76,15),()->{if(engine!=null)engine.alerts.silence();command("SILENCE");});
-        silenceButton.setOnLongClickListener(v->{if(engine!=null){engine.service.silenceAll();Toast.makeText(this,"All applicant alarms silenced",Toast.LENGTH_SHORT).show();}return true;});
-        stopButton.setOnLongClickListener(v->{if(engine!=null){engine.service.stopAll();Toast.makeText(this,"All applicants stopped",Toast.LENGTH_SHORT).show();}return true;});
-        button(controls,"Home",0xFF0F766E,()->{if(engine!=null)engine.home();});
-        for(int i=0;i<controls.getChildCount();i++){Button control=(Button)controls.getChildAt(i);control.setTextSize(15);control.getLayoutParams().height=dp(64);}
-        header.addView(controls);
-        Button copyLogButton=button(utilities, "Copy log", Color.rgb(104,65,165), this::copyDiagnosticLog);
-        copyLogButton.setOnLongClickListener(v->{if(engine!=null)engine.home();return true;});
-        batteryButton.setOnLongClickListener(v->{manageApplicantAlerts();return true;});
+        monitorStatus.setTextSize(11);monitorStatus.setMaxLines(1);monitorStatus.setTextColor(0xFFA5B6C7);monitorStatus.setPadding(dp(9),0,dp(9),dp(3));header.addView(monitorStatus);header.addView(status);
         utilities.setVisibility(View.GONE);
-        TextView holdHints=new TextView(this);holdHints.setText("Logo: menu · Hold Monitor: Start all · Hold Stop: Stop all · Hold Silence: Silence all");holdHints.setTextColor(0xFF9DB1C9);holdHints.setTextSize(10);header.addView(holdHints);
-        LinearLayout details=new LinearLayout(this);details.setOrientation(LinearLayout.VERTICAL);details.setPadding(dp(9),dp(6),dp(9),dp(6));
-        GradientDrawable card=new GradientDrawable();card.setColor(Color.rgb(21,43,66));card.setCornerRadius(dp(10));details.setBackground(card);
-        status.setTextColor(Color.rgb(125,211,252));monitorStatus.setTextColor(Color.rgb(110,231,183));details.addView(status);details.addView(monitorStatus);header.addView(details,header.indexOfChild(controls));
         view = new GeckoView(this);
         FrameLayout pages=new FrameLayout(this);websitePages=pages;
         pages.addView(view,new FrameLayout.LayoutParams(-1,-1));
         monitorView=new GeckoView(this);monitorView.setVisibility(View.GONE);
         pages.addView(monitorView,new FrameLayout.LayoutParams(-1,-1));
-        TextView settingsHandle=new TextView(this);settingsHandle.setText("⚙");settingsHandle.setTextSize(18);settingsHandle.setTextColor(Color.WHITE);settingsHandle.setGravity(Gravity.CENTER);settingsHandle.setBackgroundColor(0xCC2563EB);settingsHandle.setContentDescription("Open applicant settings");settingsHandle.setOnClickListener(v->showApplicantSettings());FrameLayout.LayoutParams handleParams=new FrameLayout.LayoutParams(dp(30),dp(76),Gravity.LEFT|Gravity.CENTER_VERTICAL);handleParams.leftMargin=dp(24);pages.addView(settingsHandle,handleParams);
-        settingsHandle.setOnTouchListener(new View.OnTouchListener(){float startX,startY;public boolean onTouch(View v,android.view.MotionEvent event){if(event.getAction()==android.view.MotionEvent.ACTION_DOWN){startX=event.getX();startY=event.getY();return true;}if(event.getAction()==android.view.MotionEvent.ACTION_UP){if(event.getX()-startX>dp(30)&&Math.abs(event.getY()-startY)<dp(60))showApplicantSettings();else v.performClick();return true;}return true;}});
         root.addView(pages,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout controls=new LinearLayout(this);controls.setOrientation(LinearLayout.VERTICAL);controls.setBackgroundColor(0xFF132131);controls.setPadding(dp(10),dp(7),dp(10),dp(8));
+        LinearLayout firstRow=new LinearLayout(this),secondRow=new LinearLayout(this);controls.addView(firstRow);controls.addView(secondRow);
+        monitorButton=signatureButton(firstRow,"Monitor",0xFFB4F1DA,0xFF092F24,this::toggleMonitor);signatureButtons[0]=monitorButton;
+        signatureButtons[1]=signatureButton(firstRow,"Start All",0xFF192B3D,0xFFEDF4FA,()->{if(engine!=null)engine.service.startAllReady();});
+        signatureButtons[2]=signatureButton(firstRow,"Silence All",0xFF192B3D,0xFFEDF4FA,()->{if(engine!=null)engine.service.silenceAll();});
+        signatureButtons[3]=signatureButton(secondRow,"Stop All",0xFF35212C,0xFFFFACB8,()->{if(engine!=null)engine.service.stopAll();});
+        signatureButtons[4]=signatureButton(secondRow,"Home",0xFF192B3D,0xFFEDF4FA,()->{if(engine!=null)engine.home();});
+        callButton=signatureButton(secondRow,"Call",0xFF173B32,0xFF80E2BF,()->{if(engine!=null)applicantPhone(engine.profile);});signatureButtons[5]=callButton;
+        root.addView(controls,new LinearLayout.LayoutParams(-1,-2));
         setContentView(root);
         bound=bindService(new Intent(this,MonitorService.class),connection,BIND_AUTO_CREATE);
         if(android.os.Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
@@ -340,7 +346,7 @@ public class MainActivity extends Activity {
        headerScroll.setLayoutParams(params);
       }
     }
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);notificationApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,intent.getIntExtra("applicant",1)));if(engine!=null&&intent.hasExtra("applicant"))selectApplicant(notificationApplicant);}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);notificationApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,intent.getIntExtra("applicant",1)));if(engine!=null&&intent.hasExtra("applicant")){if(applicantSettingsDialog!=null)applicantSettingsDialog.dismiss();selectApplicant(notificationApplicant);}}
     @Override public void onBackPressed(){
       if(engine!=null&&engine.showingMonitor)toggleMonitor();
       else if(engine!=null&&engine.current!=null&&engine.canGoBack)engine.navigate("Go Back",()->engine.current.goBack());

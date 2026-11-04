@@ -637,11 +637,41 @@ public class GeckoIntegrationTest {
    assertTrue("Website must stay open across settings reparenting",website[0].isOpen());
   });
  }
+ @Test public void signatureControlsKeepGlobalAndSelectedActionsSeparate()throws Exception{
+  MainActivity a=activity.getActivity();MonitorService service=fixtureService;
+  BrowserEngine first=readyApplicant(1),second=readyApplicant(2);
+  main(()->{
+   service.activity=a;service.visible=true;first.run.arm();second.run.arm();a.selectApplicant(2);
+   assertEquals("Start All must be the second control","Start All",a.signatureControlLabelForTest(1));
+   assertEquals("Silence All must be the third control","Silence All",a.signatureControlLabelForTest(2));
+   assertEquals("Stop All must start the second row","Stop All",a.signatureControlLabelForTest(3));
+   assertEquals("Home must be the fifth control","Home",a.signatureControlLabelForTest(4));
+   assertEquals("Quick call must follow the selected applicant","Call A2",a.signatureControlLabelForTest(5));
+   a.clickSignatureControlForTest(2);
+   assertTrue("Silence All must not stop applicant 1",first.run.armed);
+   assertTrue("Silence All must not stop applicant 2",second.run.armed);
+   a.clickSignatureControlForTest(3);
+   assertFalse("Stop All must stop applicant 1 regardless of selection",first.run.armed);
+   assertFalse("Stop All must stop applicant 2",second.run.armed);
+   boolean previous=second.showingMonitor;a.clickSignatureControlForTest(0);
+   assertEquals("Monitor control must only toggle the selected view",!previous,second.showingMonitor);
+   assertFalse("Changing views must not start monitoring",second.run.armed);
+   a.selectApplicant(1);
+  });
+ }
+ @Test public void quickCallRequiresBothDirectPreferenceAndPhonePermission(){
+  String phone="+910000000000";
+  assertEquals(android.content.Intent.ACTION_CALL,MainActivity.applicantCallIntent(phone,true,true).getAction());
+  assertEquals(android.content.Intent.ACTION_DIAL,MainActivity.applicantCallIntent(phone,true,false).getAction());
+  assertEquals(android.content.Intent.ACTION_DIAL,MainActivity.applicantCallIntent(phone,false,true).getAction());
+  assertEquals("tel",MainActivity.applicantCallIntent(phone,true,true).getData().getScheme());
+  assertEquals(phone,MainActivity.applicantCallIntent(phone,true,true).getData().getSchemeSpecificPart());
+ }
  @Test public void backAndHomeConfirmOnlyWhenPageProtected()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=service.engine;
   final org.mozilla.geckoview.WebExtension.Port[] savedPort=new org.mozilla.geckoview.WebExtension.Port[1];
   main(()->{
-   a.selectApplicant(1);service.activity=a;service.visible=false;savedPort[0]=e.nativePort;e.nativePort=null;e.protectedPage=false;e.pageLostProtected=false;e.canGoBack=true;
+   a.selectApplicant(1);service.activity=a;service.visible=false;savedPort[0]=e.nativePort;e.nativePort=null;e.protectedPage=false;e.pageLostProtected=false;e.canGoBack=true;e.showingMonitor=false;
    a.onBackPressed();
    assertNotNull("Back without protection must follow the existing immediate navigation path",e.pendingId);
    assertFalse("Back on an unprotected page must not request confirmation",e.alerts.isRepeating());
