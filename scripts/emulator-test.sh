@@ -55,17 +55,17 @@ fi
 # Recover the last complete report from that durable log before declaring failure.
 if [ "$CAPTURED" != true ]; then
   awk '
-    / I DIAG    : DIAG-START$/ { collecting=1; report="DIAG-START\\n"; next }
+    / I DIAG    : DIAG-START$/ { collecting=1; report="DIAG-START\n"; next }
     collecting {
       line=$0
       sub(/^.* I DIAG    : /, "", line)
       if (line ~ /DIAG-END$/) {
         sub(/DIAG-END$/, "", line)
-        if (line != "") report=report line "\\n"
-        last=report "DIAG-END\\n"
+        if (line != "") report=report line "\n"
+        last=report "DIAG-END\n"
         collecting=0
       } else {
-        report=report line "\\n"
+        report=report line "\n"
       }
     }
     END { if (last != "") printf "%s", last }
