@@ -19,21 +19,28 @@ def snapshot():
   xml=adb('shell','cat','/sdcard/release-ui.xml')
   open('release-ui.xml','w').write(xml)
   root=ET.fromstring(xml)
+  failures=[n.get('text','') for n in root.iter('node') if ("isn't responding" in n.get('text','') or 'keeps stopping' in n.get('text','')) and n.get('text') not in {"Quickstep isn't responding","System UI isn't responding"}]
+  assert not failures,'Target app or unexpected process failure: '+repr(failures)
   if snapshot_count==0:print('Initial release UI: '+repr([n.get('text','') for n in root.iter('node') if n.get('text')])[:1800],flush=True)
   snapshot_count+=1
   if not recover_system_anr(root):return root
  raise AssertionError('Emulator launcher/System UI remains unresponsive after bounded Wait recovery')
 def recover_system_anr(root):
- # On a slow CI emulator, recover from either launcher or System UI ANR without force-closing apps.
+ # Recover only named Android fixture processes. Never dismiss an app-under-test ANR.
  anr_titles={"Quickstep isn't responding","System UI isn't responding"}
  nodes=[n for n in root.iter('node') if n.get('text') in anr_titles]
  if not nodes:return False
- wait=next((n for n in root.iter('node') if n.get('text')=='Wait'),None)
- if wait is None:return False
- bounds=list(map(int,re.findall(r'\d+',wait.get('bounds',''))))
+ launcher=any(n.get('text')=="Quickstep isn't responding" for n in nodes)
+ action='Close app' if launcher else 'Wait'
+ control=next((n for n in root.iter('node') if n.get('text')==action),None)
+ if control is None:return False
+ bounds=list(map(int,re.findall(r'\d+',control.get('bounds',''))))
  if len(bounds)==4:
   adb('shell','input','tap',str((bounds[0]+bounds[2])//2),str((bounds[1]+bounds[3])//2))
   time.sleep(4)
+  if launcher:
+   print('Closed frozen emulator launcher; reopening target Activity before assertions',flush=True)
+   adb('shell','am','start','-W','-n',PACKAGE+'/com.sarathi.geckotest.MainActivity')
   return True
  return False
 def wait_ready(number):
