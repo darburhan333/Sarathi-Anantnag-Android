@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - 'build/**'
+    paths-ignore:
+      - '.github/workflows/integration-forensics.yml'
+      - 'diagnostics/**'
   workflow_dispatch:
 concurrency:
   group: sarathi-${{ github.ref }}

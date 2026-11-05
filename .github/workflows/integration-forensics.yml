@@ -1,0 +1,29 @@
+name: Inspect integration evidence
+on:
+  push:
+    branches: ['build/**']
+    paths: ['diagnostics/inspect-request.json']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - id: request
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          value=json.load(open('diagnostics/inspect-request.json'))
+          print('run_id='+str(int(value['run_id'])))
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: Gecko-integration-results
+          run-id: ${{ steps.request.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: previous-integration
+      - name: Print first failure and main-thread evidence
+        run: python3 diagnostics/inspect.py
