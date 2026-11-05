@@ -24,6 +24,7 @@ jobs:
       - name: Compile debug app and Android tests
         run: gradle :app:compileDebugJavaWithJavac :app:compileDebugAndroidTestJavaWithJavac
   apk:
+    timeout-minutes: 30
     needs: compile
     runs-on: ubuntu-24.04
     steps:
@@ -56,11 +57,12 @@ jobs:
           echo "Production signing key loaded for $GITHUB_REF"
       - name: Baseline regression tests and Android adapter tests
         run: python3 scripts/verify.py
+      - name: Install offline browser test library
+        run: timeout 5m python3 -m pip install playwright==1.58.0
+      - name: Install Chromium fixture browser
+        run: timeout 10m python3 -m playwright install --with-deps chromium
       - name: Browser DOM integration (offline fixtures only)
-        run: |
-          python3 -m pip install playwright==1.58.0
-          python3 -m playwright install --with-deps chromium
-          python3 scripts/browser-flow.py
+        run: timeout 3m python3 -u scripts/browser-flow.py
       - name: Build release APK and lint
         env:
           RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release-key.jks
@@ -98,11 +100,13 @@ jobs:
           cp "$(dirname "$(dirname "$tools")")/zipalign" signing-tools/
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: Android-signing-utilities
           path: signing-tools/
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: MParivahan-JK-3.9.1-midnight-teal-ARM64-UNVERIFIED
           path: |
             app/build/outputs/apk/release/*.apk
@@ -121,12 +125,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+      - name: Build signed minified smoke APK before emulator boot
+        run: bash scripts/build-smoke-release.sh
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SARATHI_PREBUILT_SMOKE_APK: '1'
         with:
           api-level: 36
           arch: x86_64
@@ -137,6 +145,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: Release-UI-preflight-evidence
           path: |
             release-*.png
@@ -157,6 +166,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+      - name: Build signed minified smoke APK before emulator boot
+        run: bash scripts/build-smoke-release.sh
+      - name: Build debug instrumentation APKs before emulator boot
+        run: gradle -PtestAbi=x86_64 assembleDebug assembleDebugAndroidTest
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -164,6 +177,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - uses: reactivecircus/android-emulator-runner@v2
         env:
+          SARATHI_PREBUILT_SMOKE_APK: '1'
           SARATHI_TEST_RUNNER_ARGS: -Pandroid.testInstrumentationRunnerArguments.notAnnotation=com.sarathi.geckotest.QuarantinedNotificationStop
         with:
           api-level: 36
@@ -175,6 +189,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: Gecko-integration-results
           path: |
             app/build/reports/androidTests/
@@ -258,6 +273,7 @@ jobs:
           path: verified
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: MParivahan-JK-3.9.1-midnight-teal-ARM64-TESTS-PASSED
           path: verified/
           if-no-files-found: error

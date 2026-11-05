@@ -37,10 +37,12 @@ window.chrome.runtime={onMessage:{addListener:cb=>window.__listener=cb},sendMess
 
 async def run():
  async with async_playwright() as pw:
+  print('Starting offline browser flow',flush=True)
   browser=await pw.chromium.launch(headless=True,args=['--no-sandbox'])
   page=await browser.new_page()
   errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)))
+  print('Chromium started; preparing calendar fixture',flush=True)
   await page.set_content(styles+calendar)
   await page.evaluate('(code)=>{(0,eval)(code)}',mock)
   await page.evaluate('''({calendar,quota,otp})=>{
@@ -81,6 +83,7 @@ async def run():
   print('PASS: selected December 10 green date, verified radio+span quota 13, selected LMV/MCWG, BOOK SLOT once')
   print('PASS: stopped on manual SMS verification, OTP field not modified')
   async def content_profile_fixture(html, path):
+   print('Checking profile fixture: '+path,flush=True)
    fixture=await browser.new_page()
    await fixture.set_content(styles+html)
    await fixture.evaluate('(code)=>{(0,eval)(code)}',mock)
@@ -88,8 +91,8 @@ async def run():
    await fixture.evaluate('(code)=>{(0,eval)(code)}',rules)
    await fixture.evaluate('(code)=>{(0,eval)(code)}',source)
    await fixture.wait_for_function('typeof window.__listener==="function"',timeout=5000)
-   result=await fixture.evaluate("""() => new Promise(resolve => window.__listener({type:'SARATHI_PROFILE_QUERY'}, {}, resolve))""")
-   await fixture.close()
+   result=await asyncio.wait_for(fixture.evaluate("""() => new Promise(resolve => window.__listener({type:'SARATHI_PROFILE_QUERY'}, {}, resolve))"""),timeout=8)
+   await asyncio.wait_for(fixture.close(),timeout=10)
    return result
   sms_profile=await content_profile_fixture('<h1>SMS Verification</h1><label>SMS verification Code <input id="smsCode" type="text" autocomplete="one-time-code"></label>','/slots/dlsltprev.do')
   assert sms_profile['protectPage'] is True and sms_profile['reason']=='SMS verification ready',sms_profile
@@ -100,6 +103,6 @@ async def run():
   print('PASS: real content.js SMS fixture reports protected SMS verification page')
   print('PASS: real content.js calendar fixture reports protected calendar page')
   print('PASS: real content.js normal COV fixture remains unprotected')
-  await browser.close()
+  await asyncio.wait_for(browser.close(),timeout=10)
 if __name__=='__main__':asyncio.run(run())
 

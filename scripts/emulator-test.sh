@@ -21,23 +21,9 @@ fi
 if [ "$result" -eq 0 ]; then
   # The emulator job intentionally has no production signing secrets. Create a disposable
   # CI-only key so the minified release APK can be installed and exercised by the smoke test.
-  SMOKE_KEYSTORE="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/release-smoke.jks"
-  SMOKE_STORE_PASSWORD='smoke-store-pass'
-  SMOKE_KEY_PASSWORD='smoke-key-pass'
-  SMOKE_KEY_ALIAS='release-smoke'
-  keytool -genkeypair -noprompt -storetype JKS \
-    -keystore "$SMOKE_KEYSTORE" \
-    -storepass "$SMOKE_STORE_PASSWORD" \
-    -keypass "$SMOKE_KEY_PASSWORD" \
-    -alias "$SMOKE_KEY_ALIAS" \
-    -keyalg RSA -keysize 2048 -validity 2 \
-    -dname 'CN=CI Release Smoke Test, OU=Testing, O=Local CI, L=NA, ST=NA, C=US' || exit 1
-
-  RELEASE_KEYSTORE_PATH="$SMOKE_KEYSTORE" \
-  ANDROID_KEYSTORE_PASSWORD="$SMOKE_STORE_PASSWORD" \
-  ANDROID_KEY_ALIAS="$SMOKE_KEY_ALIAS" \
-  ANDROID_KEY_PASSWORD="$SMOKE_KEY_PASSWORD" \
-    gradle -PtestAbi=x86_64 -PsmokeRelease assembleRelease --stacktrace || exit 1
+  if [ "${SARATHI_PREBUILT_SMOKE_APK:-0}" != "1" ]; then
+    bash scripts/build-smoke-release.sh || exit 1
+  fi
 
   # Prefer the signed release output. Never silently fall back to an unsigned APK because
   # Android correctly rejects unsigned APKs with INSTALL_PARSE_FAILED_NO_CERTIFICATES.
