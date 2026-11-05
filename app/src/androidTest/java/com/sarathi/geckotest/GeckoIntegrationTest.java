@@ -634,7 +634,7 @@ public class GeckoIntegrationTest {
    a.closeApplicantSettingsForTest();
    assertFalse("Done must close settings",a.applicantSettingsOpenForTest());
    assertSame("Closing settings must restore the same website session",website[0],selected[0].current);
-   assertTrue("Website must stay open across settings reparenting",website[0].isOpen());
+   assertTrue("Website must stay open while viewing Alerts",website[0].isOpen());
   });
  }
  @Test public void signatureControlsKeepGlobalAndSelectedActionsSeparate()throws Exception{
@@ -657,6 +657,17 @@ public class GeckoIntegrationTest {
    assertEquals("Monitor control must only toggle the selected view",!previous,second.showingMonitor);
    assertFalse("Changing views must not start monitoring",second.run.armed);
    a.selectApplicant(1);
+  });
+ }
+ @Test public void compactLayoutKeepsActionsAboveMonitorAndLogsSeparate()throws Exception{
+  MainActivity a=activity.getActivity();readyApplicant(1);
+  main(()->a.openMonitorForTest());androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+  main(()->{
+   assertTrue("Logo must not contain a second settings menu",a.logoIsBrandingOnlyForTest());
+   assertTrue("Both action rows must be above the monitor content",a.controlsAboveMonitorForTest());
+   int applicant=a.lockedApplicantForTest();a.openLogsForTest();
+   assertFalse("Logs must never embed the Monitor or a browser",a.logsHaveBrowserForTest());
+   assertEquals("Reading Logs must not change the selected applicant",applicant,a.lockedApplicantForTest());a.closeLogsForTest();
   });
  }
  @Test public void quickCallRequiresBothDirectPreferenceAndPhonePermission(){

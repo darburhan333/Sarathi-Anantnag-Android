@@ -54,35 +54,47 @@ def tap_text(text):
   if node is not None:tap_node(node);return
   time.sleep(0.5)
  raise AssertionError('Required release UI control missing: '+text)
-def logo_menu():
+def settings_menu():
  current=snapshot()
- logo=next(n for n in current.iter('node') if n.get('content-desc')=='Tap for quick menu; hold for applicant settings')
- tap_node(logo)
+ tap_node(next(n for n in current.iter('node') if n.get('content-desc')=='Open all settings'))
+def wait_text(label):
+ end=time.monotonic()+15
+ while time.monotonic()<end:
+  current=snapshot()
+  if any(n.get('text')==label for n in current.iter('node')):return current
+  time.sleep(.5)
+ raise AssertionError('Required page content missing: '+label)
+def choose_applicant(number):
+ current=snapshot();tap_node(next(n for n in current.iter('node') if n.get('content-desc')=='Choose applicant'))
+ tap_text('Applicant '+str(number));return wait_ready(number)
 assert any(n.get('text')=='Home' for n in root.iter('node')),'Home must be directly available'
-def toggle_applicant_grid():
- current=snapshot()
- logo=next(n for n in current.iter('node') if n.get('content-desc')=='Tap for quick menu; hold for applicant settings')
- x1,y1,x2,y2=map(int,re.findall(r'\d+',logo.get('bounds')))
- x,y=str((x1+x2)//2),str((y1+y2)//2)
- adb('shell','input','swipe',x,y,x,y,'900')
- tap_text('Show / hide applicants');tap_text('Done')
-logo_menu()
-menu=snapshot()
+logo=next(n for n in root.iter('node') if n.get('content-desc')=='MPARIVAHAN app logo')
+assert logo.get('clickable')=='false' and logo.get('long-clickable')=='false','Only hamburger may open Settings'
+settings_menu();menu=snapshot()
 for label in ['Phone numbers','Alerts','Logs','Background setup']:
  assert any(n.get('text')==label for n in menu.iter('node')),'Hamburger settings missing: '+label
-adb('shell','input','keyevent','KEYCODE_BACK')
-toggle_applicant_grid()
+adb('shell','screencap','-p','/data/local/tmp/release-settings.png');adb('pull','/data/local/tmp/release-settings.png','release-settings.png')
+tap_text('Close')
 for number in [2,3,4,5,6,7,8,9,1]:
- root=snapshot()
- node=next(n for n in root.iter('node') if n.get('content-desc')=='Applicant '+str(number))
- tap_node(node)
- settings=snapshot()
- assert any(n.get('text','').startswith('LOCKED · Applicant '+str(number)+' ·') for n in settings.iter('node')),'Applicant settings must open full screen for selected applicant'
- tap_text('Done')
- root=wait_ready(number)
-toggle_applicant_grid()
+ root=choose_applicant(number)
+ assert not any(n.get('text','').startswith('Alerts · Applicant ') for n in root.iter('node')),'Selecting an applicant must not open Settings'
+ settings_menu();tap_text('Alerts');wait_text('Alerts · Applicant '+str(number))
+ alerts=wait_text('Chat ID 2 · optional')
+ for label in ['Bot token','Chat ID 1','Chat ID 2 · optional','Save settings','Test Telegram']:
+  assert any(n.get('text')==label for n in alerts.iter('node')),'Alerts must expose '+label
+ assert not any(n.get('text') in ['LIVE MONITOR','Start this applicant','Ready to monitor'] for n in alerts.iter('node')),'Alerts must not contain the Monitor'
+ if number==1:
+  adb('shell','screencap','-p','/data/local/tmp/release-alerts.png');adb('pull','/data/local/tmp/release-alerts.png','release-alerts.png')
+ tap_text('Back');root=wait_ready(number);wait_text('LIVE MONITOR')
 root=snapshot()
-assert not any(n.get('content-desc')=='Applicant 1' for n in root.iter('node')),'Hide must restore clean main screen'
+assert not any(n.get('content-desc')=='Applicant 1' for n in root.iter('node')),'Compact selector must keep the legacy applicant grid hidden'
+settings_menu();tap_text('Logs');logs=wait_text('Activity & diagnostics')
+assert not any(n.get('class','').endswith('GeckoView') for n in logs.iter('node')),'Logs must not contain a browser'
+assert not any(n.get('text') in ['Start this applicant','LIVE MONITOR','Bot token'] for n in logs.iter('node')),'Logs must only contain activity and diagnostics'
+filter_node=next(n for n in logs.iter('node') if n.get('content-desc')=='Filter logs by applicant');tap_node(filter_node);tap_text('Applicant 9')
+adb('shell','screencap','-p','/data/local/tmp/release-logs.png');adb('pull','/data/local/tmp/release-logs.png','release-logs.png')
+tap_text('Close');root=wait_ready(1)
+assert any(n.get('text')=='Call A1' for n in root.iter('node')),'Log filtering must not switch the active applicant'
 root=snapshot()
 labels=['Website','Start All','Silence All','Stop All','Home','Call A1']
 adb('shell','screencap','-p','/data/local/tmp/release-preview.png')
@@ -98,6 +110,9 @@ rects=[list(map(int,re.findall(r'\d+',n.get('bounds')))) for n in control_nodes]
 print('Native Signature control bounds: '+repr(dict(zip(labels,rects))),flush=True)
 assert len({r[1] for r in rects[:3]})==1 and len({r[1] for r in rects[3:]})==1,'Controls must occupy exactly two aligned rows: '+repr(dict(zip(labels,rects)))
 assert rects[0][1]<rects[3][1],'Control rows must keep the approved sequence'
+monitor_heading=next(n for n in root.iter('node') if n.get('text')=='LIVE MONITOR')
+heading_bounds=list(map(int,re.findall(r'\d+',monitor_heading.get('bounds'))))
+assert max(r[3] for r in rects)<=heading_bounds[1],'Both control rows must be ABOVE the live monitor'
 assert rects[0][0]<rects[1][0]<rects[2][0] and rects[3][0]<rects[4][0]<rects[5][0],'Control column order changed'
 picker=next(n for n in root.iter('node') if n.get('content-desc')=='Choose applicant')
 tap_node(picker);tap_text('Applicant 2');root=wait_ready(2)

@@ -187,12 +187,13 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
 
 // Fragment navigation changes this extension UI only; it never navigates Sarathi.
 function applyFocusRoute(){
- const panel=String(globalThis.location?.hash||'#monitor').slice(1);const settings=panel!=='monitor';document.body?.classList.toggle('settings-mode',settings);
- const targetPanel=panel==='settings'?'monitor':panel;
- if(['monitor','standby','telegram','alerts','history'].includes(targetPanel)){
-  document.querySelectorAll('[data-panel]').forEach(b=>b.classList.toggle('active',b.dataset.panel===targetPanel));
-  ['monitor','standby','telegram','alerts','history'].forEach(id=>$(id)?.classList.toggle('hidden',id!==targetPanel));
- }
+ const route=String(globalThis.location?.hash||'#monitor').slice(1);
+ const alertsPage=['alerts-settings','telegram','alerts','settings'].includes(route);
+ document.body?.classList.toggle('settings-mode',alertsPage);
+ // Alerts owns only credentials and phone alert options; the monitor never moves into it.
+ $('monitor')?.classList.toggle('hidden',alertsPage);
+ $('telegram')?.classList.toggle('hidden',!alertsPage);
+ $('alerts')?.classList.toggle('hidden',!alertsPage);
 }
 window.addEventListener('hashchange',applyFocusRoute);
 applyFocusRoute();

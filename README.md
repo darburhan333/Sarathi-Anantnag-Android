@@ -1,3 +1,11 @@
+## 3.9.0 compact UI
+
+The main applicant selector is separate from the two compact action rows. Their order is Monitor/Website, Start All, Silence All; then Stop All, Home, Call. Both rows sit above the monitoring content. The main Monitor page contains assisted booking, seven-stage progress, connection details and recent activity.
+
+The hamburger is the only Settings entry. Alerts opens an applicant-specific page containing masked bot token, Chat ID 1, optional Chat ID 2, Save/Test Telegram, phone notifications, sound/vibration and volume. Device options retain native alert modes and encrypted import/export. Logs contains only diagnostics; its filter does not select or start an applicant. The logo has no tap or long-press settings action.
+
+Package, signing certificate, extension IDs, KeepAlive and booking/session safety remain unchanged. SMS verification, CAPTCHA and final confirmation stay manual. Release verification covers all nine applicant bridges, the actual credential fields, clean page routing, both rows above the monitor, view toggling, quick-call selection and rotation.
+
 # MPARIVAHAN SLOT BOOKING -J&K 3.4
 
 This update keeps the v3.3 package (`com.sarathi.anantnag.gecko.v33`) and repository release signing secrets. Version code: 341. Version name: `3.4-v11.47-recovery2`. All nine embedded extensions use version `3.4.1`, ensuring GeckoView recognizes the upgrade from v3.3.

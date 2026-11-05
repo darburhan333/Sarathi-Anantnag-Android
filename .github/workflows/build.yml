@@ -1,4 +1,4 @@
-name: Build and test MParivahan 3.8.2-signature
+name: Build and test MParivahan 3.9.0-compact
 on:
   push:
     branches:
@@ -103,7 +103,7 @@ jobs:
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: MParivahan-JK-3.8.2-signature-ARM64-UNVERIFIED
+          name: MParivahan-JK-3.9.0-compact-ARM64-UNVERIFIED
           path: |
             app/build/outputs/apk/release/*.apk
             apk-certificate.txt
@@ -139,7 +139,7 @@ jobs:
         with:
           name: Release-UI-preflight-evidence
           path: |
-            release-preview.png
+            release-*.png
             release-ui.xml
             release-smoke-failure.txt
           if-no-files-found: warn
@@ -185,7 +185,7 @@ jobs:
             ci-evidence/
             monitor-copy-log.txt
             monitor-preview.png
-            release-preview.png
+            release-*.png
             release-ui.xml
             service-state.txt
             emulator-diagnostic-capture-status.txt
@@ -255,10 +255,10 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: MParivahan-JK-3.8.2-signature-ARM64-UNVERIFIED
+          name: MParivahan-JK-3.9.0-compact-ARM64-UNVERIFIED
           path: verified
       - uses: actions/upload-artifact@v4
         with:
-          name: MParivahan-JK-3.8.2-signature-ARM64-TESTS-PASSED
+          name: MParivahan-JK-3.9.0-compact-ARM64-TESTS-PASSED
           path: verified/
           if-no-files-found: error

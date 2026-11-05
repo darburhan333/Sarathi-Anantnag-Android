@@ -21,6 +21,7 @@ subprocess.run(['node',str(root/'scripts/telegram-delivery-tests.js')],check=Tru
 subprocess.run(['node',str(root/'scripts/adapter-tests.js')],check=True)
 subprocess.run(['node',str(root/'scripts/ui-native-stop.js')],check=True)
 subprocess.run(['node',str(root/'scripts/bridge-silence-tests.js')],check=True)
+subprocess.run(['node',str(root/'scripts/compact-route-tests.js')],check=True)
 subprocess.run(['node',str(root/'scripts/background-lifecycle.js')],check=True)
 with tempfile.TemporaryDirectory() as tmp:
  work=Path(tmp)/'extension';work.mkdir()
