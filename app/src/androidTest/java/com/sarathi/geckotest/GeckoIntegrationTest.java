@@ -667,6 +667,32 @@ public class GeckoIntegrationTest {
   assertEquals("tel",MainActivity.applicantCallIntent(phone,true,true).getData().getScheme());
   assertEquals(phone,MainActivity.applicantCallIntent(phone,true,true).getData().getSchemeSpecificPart());
  }
+ @Test public void delayedNativeSilenceCannotCancelANewerCriticalAlert()throws Exception{
+  BrowserEngine e=readyApplicant(5);
+  android.app.NotificationManager manager=fixtureService.getSystemService(android.app.NotificationManager.class);
+  int id=e.alerts.criticalNotificationId("SMS_READY");
+  try{
+   main(()->{
+    e.alerts.silence();
+    // This native command travels asynchronously through the real extension bridge.
+    e.command("SILENCE");
+    e.alerts.critical("SMS_READY","New alert after native Silence","silence-race-new-event");
+   });
+   long deliveryDeadline=System.currentTimeMillis()+3000;boolean delivered=false;
+   while(System.currentTimeMillis()<deliveryDeadline&&!delivered){
+    for(android.service.notification.StatusBarNotification notification:manager.getActiveNotifications())if(notification.getId()==id)delivered=true;
+    if(!delivered)Thread.sleep(50);
+   }
+   assertTrue("New SMS notification must be delivered after native Silence",delivered);
+   long observationDeadline=System.currentTimeMillis()+5000;
+   while(System.currentTimeMillis()<observationDeadline){
+    main(()->assertTrue("A delayed bridge acknowledgement must not stop the newer critical alarm",e.alerts.isRepeating()));
+    boolean present=false;for(android.service.notification.StatusBarNotification notification:manager.getActiveNotifications())if(notification.getId()==id)present=true;
+    assertTrue("A delayed bridge acknowledgement must not remove the newer SMS notification",present);
+    Thread.sleep(200);
+   }
+  }finally{main(()->e.alerts.silence());}
+ }
  @Test public void backAndHomeConfirmOnlyWhenPageProtected()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=service.engine;
   final org.mozilla.geckoview.WebExtension.Port[] savedPort=new org.mozilla.geckoview.WebExtension.Port[1];

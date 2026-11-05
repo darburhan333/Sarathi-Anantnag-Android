@@ -194,6 +194,11 @@ final class PhoneAlerts {
   return buildAlarmEnvironmentWarning(current,max,blocks);
  }
  void clearNotification(){
+  if(BuildConfig.DEBUG){
+   StringBuilder origin=new StringBuilder();StackTraceElement[] frames=new Throwable().getStackTrace();
+   for(int i=1;i<Math.min(frames.length,5);i++){if(origin.length()>0)origin.append(" <- ");origin.append(frames[i].getClassName()).append('.').append(frames[i].getMethodName());}
+   android.util.Log.i("PhoneAlerts","clear applicant="+profile+" owner="+System.identityHashCode(this)+" via="+origin);
+  }
   cancelQueuedCriticalPosts();
   NotificationManager nm=activity.getSystemService(NotificationManager.class);
   nm.cancel(1100+profile);
@@ -210,6 +215,7 @@ final class PhoneAlerts {
   Notification n=new Notification.Builder(activity,channel).setSmallIcon(R.drawable.ic_notification)
    .setContentTitle("Applicant "+profile+" · "+title).setContentText(message).setStyle(new Notification.BigTextStyle().bigText(message))
    .setCategory(Notification.CATEGORY_ALARM).setContentIntent(open).setAutoCancel(true).build();
+  if(BuildConfig.DEBUG&&channel.equals("sarathi-critical-v36"))android.util.Log.i("PhoneAlerts","post applicant="+profile+" id="+notificationId+" owner="+System.identityHashCode(this));
   nm.notify(notificationId,n);
  }
 }

@@ -1,0 +1,18 @@
+// Exercise the real Android bridge: native Silence must not echo a destructive ACK.
+const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
+(async()=>{
+ const data={},nativeCalls=[],states=[];let receive;
+ const port={onMessage:{addListener:f=>receive=f},onDisconnect:{addListener(){}},postMessage:m=>states.push(m)};
+ const chrome={storage:{local:{get:async defaults=>({...defaults,...data}),set:async values=>Object.assign(data,values)},onChanged:{addListener(){}}},runtime:{onMessage:{addListener(){}},sendMessage:async()=>({ok:true})},tabs:{sendMessage:async()=>({ok:true}),query:async()=>[]}};
+ const ctx={chrome,browser:{runtime:{connectNative:()=>port,getURL:p=>'moz-extension://fixture/'+p}},nativeRequest:async m=>{nativeCalls.push(m);if(m.type==='RESTORE')return {ok:true,armed:false};if(m.type==='SETTINGS_GET')return {ok:true,values:{}};return {ok:true}},inGateQueue:async work=>work(),setTimeout:()=>1,clearTimeout(){},Date,Math,console};
+ vm.createContext(ctx);vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../app/src/main/assets/extension/android-bridge.js'),'utf8'),ctx);
+ for(let i=0;i<100&&!receive;i++)await Promise.resolve();
+ assert(receive,'Real bridge must connect before receiving native commands');
+ nativeCalls.length=0;data.alarmActive=true;
+ receive({type:'SILENCE',id:'silence-fixture'});
+ for(let i=0;i<100&&!states.some(m=>m.type==='ACK'&&m.id==='silence-fixture');i++)await Promise.resolve();
+ assert(states.some(m=>m.type==='ACK'&&m.id==='silence-fixture'),'Native command must complete its normal acknowledgement');
+ assert.equal(data.alarmActive,false,'Native Silence must still clear the extension alarm flag');
+ assert(!nativeCalls.some(m=>m.type==='ACK_ALERT'),'Native Silence was already applied: a delayed ACK_ALERT would cancel a newer critical alarm');
+ console.log('PASS: native Silence updates extension state without echoing a destructive alert acknowledgement');
+})().catch(e=>{console.error(e);process.exitCode=1});

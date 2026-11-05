@@ -44,6 +44,10 @@ const root=path.resolve(__dirname,'../app/src/main/assets/extension');
  assert(native.some(m=>m.type==='NOTIFY'),'Desktop notification must still be attempted after native CRITICAL failure');
  assert(fetchCalls>=2,'Telegram must still be delivered to both configured recipients after native CRITICAL failure');
  assert.equal(data.smsAlertKey,'s1:7:/sms');
+ const acknowledgementCount=native.filter(m=>m.type==='ACK_ALERT').length;
+ const silenceReply=await new Promise(resolve=>listeners[0]({type:'AUDIO_CONTROL',action:'STOP'},{url:'moz-extension://test/monitor.html'},resolve));
+ assert.equal(silenceReply.ok,true,'Explicit UI alarm acknowledgement must still succeed');
+ assert.equal(native.filter(m=>m.type==='ACK_ALERT').length,acknowledgementCount+1,'An explicit user Silence action must still acknowledge native alarms');
  console.log('PASS: Firefox injection, native audio/notification, document-bound reservation, service authorization, stopped cleanup, remote alerts survive native CRITICAL failure');
 })().catch(e=>{console.error(e);process.exitCode=1});
 

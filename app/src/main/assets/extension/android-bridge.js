@@ -42,7 +42,8 @@
    // Visibility is independent of service authorization. Minimize/lock keeps the run alive.
   } else if(m.type==='STOP'){await chrome.storage.local.set({androidServiceReady:false});await stop('Stopped by user');await nativeRequest({type:'DISARM'});}
   else if(m.type==='SAFE_STOP'){await chrome.storage.local.set({androidServiceReady:false});await stop(m.reason||'Monitoring stopped — press START');}
-  else if(m.type==='SILENCE'){await nativeRequest({type:'ACK_ALERT'});await chrome.storage.local.set({alarmActive:false});}
+  // Native callers have already silenced PhoneAlerts synchronously. Never echo an ACK that could erase a newer alert.
+  else if(m.type==='SILENCE'){await chrome.storage.local.set({alarmActive:false});}
   else if(m.type==='FAILURE'){
    await chrome.storage.local.set({androidServiceReady:false});
    const d=await chrome.storage.local.get({monitorSessionId:'',monitoredTabId:null});
