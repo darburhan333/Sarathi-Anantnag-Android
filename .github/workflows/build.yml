@@ -1,4 +1,4 @@
-name: Build and test MParivahan 3.9.0-compact
+name: Build and test MParivahan 3.9.1-midnight-teal
 on:
   push:
     branches:
@@ -103,7 +103,7 @@ jobs:
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: MParivahan-JK-3.9.0-compact-ARM64-UNVERIFIED
+          name: MParivahan-JK-3.9.1-midnight-teal-ARM64-UNVERIFIED
           path: |
             app/build/outputs/apk/release/*.apk
             apk-certificate.txt
@@ -196,7 +196,6 @@ jobs:
     needs: compile
     runs-on: ubuntu-24.04
     timeout-minutes: 55
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -250,15 +249,15 @@ jobs:
           PY
 
   verified-release:
-    needs: [apk, gecko-integration-main]
+    needs: [apk, gecko-integration-main, gecko-notification-stop]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: MParivahan-JK-3.9.0-compact-ARM64-UNVERIFIED
+          name: MParivahan-JK-3.9.1-midnight-teal-ARM64-UNVERIFIED
           path: verified
       - uses: actions/upload-artifact@v4
         with:
-          name: MParivahan-JK-3.9.0-compact-ARM64-TESTS-PASSED
+          name: MParivahan-JK-3.9.1-midnight-teal-ARM64-TESTS-PASSED
           path: verified/
           if-no-files-found: error

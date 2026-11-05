@@ -364,7 +364,7 @@ chrome.tabs?.onRemoved?.addListener(tabId=>{
 
 
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
- if(m?.type!=='SECURE_PROXY'||!sender.url?.startsWith(browser.runtime.getURL(''))||!['SECURE_GET','SECURE_SET','SECURE_REMOVE','SECURE_IMPORT'].includes(m.request?.type))return;
+ if(m?.type!=='SECURE_PROXY'||!sender.url?.startsWith(browser.runtime.getURL(''))||!['SECURE_GET','SECURE_SET','SECURE_REMOVE','SECURE_IMPORT','TELEGRAM_LOCK_STATUS','TELEGRAM_UNLOCK','TELEGRAM_PASSWORD','TELEGRAM_LOCK','TELEGRAM_EDIT','TELEGRAM_OPTIONS_SET'].includes(m.request?.type))return;
  nativeRequest(m.request).then(reply).catch(e=>reply({ok:false,error:String(e.message||e)}));return true;
 });
 

@@ -1,4 +1,4 @@
-const $=id=>document.getElementById(id);const on=(id,fn)=>{const el=$(id);if(el)el.addEventListener('click',fn);};const feedback=t=>{const el=$('feedback');if(el)el.textContent=t;};
+const $=id=>document.getElementById(id);const on=(id,fn)=>{const el=$(id);if(el)el.addEventListener('click',(...args)=>{try{const r=fn(...args);if(r?.catch)r.catch(e=>feedback(e.message||'Action failed'));}catch(e){feedback(e.message||'Action failed');}});};const feedback=t=>{const el=$('feedback');if(el)el.textContent=t;};
 const PRIMARY_CHAT_ID = '';
 const time=t=>t?new Date(t).toLocaleTimeString():'—';
 document.querySelectorAll('[data-panel]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-panel]').forEach(b=>b.classList.toggle('active',b===btn));['monitor','standby','telegram','alerts','history'].forEach(id=>{const el=$(id);if(el)el.classList.toggle('hidden',id!==btn.dataset.panel);});}));
@@ -65,9 +65,9 @@ on('enableAlarm',async()=>{if(await soundCommand('ARM'))feedback('Android sound 
 on('testSound',async()=>{if(await soundCommand('TEST'))feedback('Android sound and vibration test requested.');});
 on('stopAlarm',async()=>{await chrome.storage.local.set({alarmActive:false});await soundCommand('STOP');feedback('Alarm silenced. Monitoring state is unchanged.');});
 async function syncAlarm(d){$('alarmMessage').textContent=d.audioError?'Sound needs attention: '+d.audioError:d.alarmActive?'ALERT — background alarm active; click STOP ALARM to silence':'Android alarm ready. Background monitoring uses the ongoing notification.';}
-on('desktopEnabled',()=>{});['desktopEnabled','soundEnabled'].forEach(id=>$(id).addEventListener('change',async()=>{await chrome.storage.local.set({[id]:$(id).checked});refresh();}));if($('telegramEnabled'))$('telegramEnabled').addEventListener('change',async()=>{await chrome.storage.local.set({telegramEnabled:$('telegramEnabled').checked});refresh();});$('volume').addEventListener('input',async()=>{$('volumeValue').textContent=$('volume').value+'%';await chrome.storage.local.set({volume:Number($('volume').value)});});
+on('desktopEnabled',()=>{});['desktopEnabled','soundEnabled'].forEach(id=>$(id).addEventListener('change',async()=>{await chrome.storage.local.set({[id]:$(id).checked});refresh();}));if($('telegramEnabled'))$('telegramEnabled').addEventListener('change',async()=>{try{await chrome.storage.local.set({telegramEnabled:$('telegramEnabled').checked});}catch(e){feedback(e.message);}refresh();});$('volume').addEventListener('input',async()=>{$('volumeValue').textContent=$('volume').value+'%';await chrome.storage.local.set({volume:Number($('volume').value)});});
 on('exportHistory',async()=>{const d=await chrome.storage.local.get({history:[]});const lines=['Time,Type,Message',...d.history.map(x=>[new Date(x.time).toISOString(),x.kind,x.message].map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(','))];await chrome.runtime.sendMessage({type:'ANDROID_EXPORT',text:lines.join('\n')});});
-const progressLabels=['COV selection','Calendar detected','Green date selected','Quota selected','BOOK SLOT submitted','SMS verification (manual)','Appointment confirmed'];
+const progressLabels=['COV','Calendar','Green date','Quota','Submit','SMS · manual','Confirmed'];
 let previousTrackerStage=0;
 function renderBookingSteps(stage){
  const text=String(stage||'').toUpperCase();
@@ -82,7 +82,7 @@ function renderBookingSteps(stage){
  const root=$('bookingSteps');if(!root)return;
  root.replaceChildren(...progressLabels.map((label,i)=>{
    const el=document.createElement('div');el.className='booking-step '+(i<active?'done':i===active?'current':'');
-   el.textContent=(i<active?'✓ ':i===active?'● ':'○ ')+(i+1)+'. '+label;return el;
+   el.textContent=(i<active?'✓ ':i===active?'● ':'○ ')+label;return el;
  }));
 }
 // V11.34.1: storage changes are applied to a single in-memory view snapshot.
@@ -166,7 +166,7 @@ document.querySelectorAll('[data-panel]').forEach(btn=>btn.addEventListener('cli
 init().then(()=>{if(chrome.runtime?.sendMessage)return chrome.runtime.sendMessage({type:'ANDROID_UI_READY'});}).catch(e=>feedback('Monitor setup failed: '+e.message));
 setInterval(()=>{if(!document.hidden)tickStatus();},1000);
 
-$('telegramStatusEnabled')?.addEventListener('change',async()=>{await chrome.storage.local.set({telegramStatusEnabled:$('telegramStatusEnabled').checked,telegramStatusSince:Date.now(),telegramStatusError:''});refresh();});
+$('telegramStatusEnabled')?.addEventListener('change',async()=>{try{await chrome.storage.local.set({telegramStatusEnabled:$('telegramStatusEnabled').checked,telegramStatusSince:Date.now(),telegramStatusError:''});}catch(e){feedback(e.message);}refresh();});
 
 
 if(globalThis.PROFILE_MODE){document.title='Applicant '+globalThis.APPLICANT+' · MPARIVAHAN SLOT BOOKING -J&K';const heading=document.querySelector('header b');if(heading)heading.textContent+=' · Applicant '+globalThis.APPLICANT;}
@@ -197,3 +197,32 @@ function applyFocusRoute(){
 }
 window.addEventListener('hashchange',applyFocusRoute);
 applyFocusRoute();
+
+const telegramEditIds=['botToken','chatId','chatId2','telegramEnabled','telegramStatusEnabled','saveTelegram','removeTelegram','importTelegram'];
+let lockStatusBusy=false;
+async function refreshTelegramLock(){
+ if(lockStatusBusy||document.hidden||!document.body?.classList.contains('settings-mode')||typeof nativeRequest!=='function')return;
+ lockStatusBusy=true;
+ try{
+  const response=await nativeRequest({type:'TELEGRAM_LOCK_STATUS'});if(!response?.ok)throw Error(response?.error||'Lock status unavailable');
+  const lock=response.lock||{},enabled=lock.configured===true,editable=lock.unlocked===true;
+  for(const id of telegramEditIds)if($(id))$(id).disabled=!editable;
+  if($('telegramLockState'))$('telegramLockState').textContent=!enabled?'Password not set':editable?'Unlocked · 2 min':'Locked';
+  if($('unlockTelegram')){$('unlockTelegram').textContent=enabled?'Unlock settings':'Set password';$('unlockTelegram').disabled=enabled&&editable;}
+  if($('lockTelegram'))$('lockTelegram').disabled=!enabled||!editable;
+  if($('telegramPassword')){$('telegramPassword').textContent=enabled?'Change password':'Set password protection';$('telegramPassword').disabled=enabled&&!editable;}
+ }catch(e){for(const id of telegramEditIds)if($(id))$(id).disabled=true;if($('telegramLockState'))$('telegramLockState').textContent='Lock unavailable';}
+ finally{lockStatusBusy=false;}
+}
+async function lockAction(type){
+ const response=await nativeRequest({type});if(!response?.ok)feedback(response?.error||'Settings remain locked');
+ else feedback(type==='TELEGRAM_LOCK'?'Telegram settings locked.':'Telegram editing enabled for this applicant.');
+ await refreshTelegramLock();
+}
+on('unlockTelegram',()=>lockAction('TELEGRAM_UNLOCK'));
+on('telegramPassword',()=>lockAction('TELEGRAM_PASSWORD'));
+on('lockTelegram',()=>lockAction('TELEGRAM_LOCK'));
+window.addEventListener('focus',()=>refreshTelegramLock());
+window.addEventListener('hashchange',()=>refreshTelegramLock());
+setInterval(()=>{refreshTelegramLock().catch(()=>{});},1000);
+refreshTelegramLock().catch(()=>{});

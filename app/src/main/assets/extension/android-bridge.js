@@ -18,7 +18,7 @@
   const d=await chrome.storage.local.get({monitoredTabId:null});
   if(d.monitoredTabId!==null)chrome.tabs.sendMessage(d.monitoredTabId,{type:'SARATHI_STOP'}).catch(()=>{});
  }
- async function restoreSettings(){const r=await nativeRequest({type:"SETTINGS_GET"});if(r?.ok&&r.values)await chrome.storage.local.set({...r.values,autoBookingEnabled:false,telegramConfigRevision:Date.now()+"-import"});}
+ async function restoreSettings(){const r=await nativeRequest({type:"SETTINGS_GET"});if(r?.ok&&r.values)await browser.storage.local.set({...r.values,autoBookingEnabled:false,telegramConfigRevision:Date.now()+"-import"});}
  async function command(m){
   if(m.type==="SETTINGS_RESTORE"){await restoreSettings();return;}
   if(m.type==='START_READY'){

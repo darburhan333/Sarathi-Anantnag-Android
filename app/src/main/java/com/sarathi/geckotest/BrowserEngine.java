@@ -58,6 +58,7 @@ final class BrowserEngine {
     boolean protectedPage,pageLostProtected,sessionExpired,pageUnloaded,loggedInPage=true;String sessionExpiredHeader="",protectedStage="",protectedUrl="",lastPageReason="COV form missing";long protectedUntilElapsed,lastVisibleAt=SystemClock.elapsedRealtime();
     long loginAtWallClockMs,loginAtElapsedMs;boolean loginRequiredObserved;
     boolean firstPageRecorded;int installAttempts;
+    long pageLoadStartedElapsed,lastPageStopElapsed;boolean lastPageLoadSucceeded;
     long bridgeLostAt;
     final long startupAt=SystemClock.elapsedRealtime();
     WebExtension.Port nativePort;
@@ -156,8 +157,16 @@ final class BrowserEngine {
       service.getSharedPreferences("monitor",0).edit().remove("loginAtWallClockMs"+profile).remove("loginAtElapsedMs"+profile).apply();
     }
     void recordSessionExpiryEvidence(){
-      service.record(sessionExpiryEvidence(profile,loginAtWallClockMs,loginAtElapsedMs,System.currentTimeMillis(),SystemClock.elapsedRealtime(),pageUrl));
+      long now=SystemClock.elapsedRealtime();
+      service.record(sessionExpiryEvidence(profile,loginAtWallClockMs,loginAtElapsedMs,System.currentTimeMillis(),now,pageUrl)
+        +"; serviceInstance="+service.processId+"; activityVisible="+service.visible+"; sincePauseMs="+service.sincePauseMs(now)
+        +"; pageLoading="+pageLoading+"; pendingLoadMs="+(pageLoading?Math.max(0L,now-pageLoadStartedElapsed):0L)
+        +"; lastPageStopAgeMs="+(lastPageStopElapsed>0?now-lastPageStopElapsed:-1)
+        +"; lastLoadSuccess="+lastPageLoadSucceeded+"; network="+service.networkEvidence()+"; "+run.rawState());
     }
+    boolean hasClosedPageNotice(){return service.getSharedPreferences("monitor",0).getBoolean("closedPageNotice"+profile,false);}
+    void dismissClosedPageNotice(){service.getSharedPreferences("monitor",0).edit().remove("closedPageNotice"+profile).apply();render();}
+    private void rememberClosedPage(){service.getSharedPreferences("monitor",0).edit().putBoolean("closedPageNotice"+profile,true).apply();}
     void setLoginAtForTest(long wall,long elapsed){loginAtWallClockMs=wall;loginAtElapsedMs=elapsed;}
     void setPageUrlForTest(String url){pageUrl=url;}
     static String sessionExpiryEvidence(int profile,long loginWall,long loginElapsed,long nowWall,long nowElapsed,String url){
@@ -187,7 +196,7 @@ final class BrowserEngine {
       if(!pressure&&now-lastVisibleAt<idleUnloadTimeoutMs())return;
       boolean unloaded=false;
       for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);priorityHints.remove(s);if(s.isOpen())s.close();if(s==current)current=null;unloaded=true;}
-      if(unloaded){pageUnloaded=true;String message="Applicant "+profile+" idle page closed; loggedIn="+loggedIn+"; login will be needed";service.record(message+"; memoryPressure="+pressure+"; idleMs="+(now-lastVisibleAt));log(message);}
+      if(unloaded){pageUnloaded=true;rememberClosedPage();String message="Applicant "+profile+" idle page closed; loggedIn="+loggedIn+"; reopen website and check login; page unloaded";service.record(message+"; memoryPressure="+pressure+"; idleMs="+(now-lastVisibleAt));log(message);}
     }
     void shutdown(){
       destroyed=true;
@@ -234,7 +243,7 @@ final class BrowserEngine {
         if(current!=null)pageLost(current,"Browser session unavailable");
         if(current==null&&!pageLostProtected){GeckoSession fresh=newSession();fresh.open(runtime);showSession(fresh);fresh.loadUri(HOME);}
       }
-      if(pageUnloaded&&current!=null){pageUnloaded=false;String banner="Applicant "+profile+" page unloaded, login will be needed";log(banner);if(activity!=null)Toast.makeText(activity,banner,Toast.LENGTH_LONG).show();}
+      if(pageUnloaded&&current!=null){pageUnloaded=false;log("Applicant "+profile+" website reopened — check login before starting");}
       if(showingMonitor)prepareMonitor();
     }
     // Test-only instrumentation hook; production code must not call this method.
@@ -347,11 +356,17 @@ final class BrowserEngine {
               switch(m.optString("type")){
                 case "ARM":if(!m.optString("batch").isEmpty()&&!m.optString("batch").equals(service.startBatch))throw new IllegalStateException("Start All cancelled");run.arm();break;
                 case "SETTINGS_GET":result.put("values",SettingsBackup.options(service,profile));break;
-                case "SETTINGS_SET":if(!service.settingsBusy)SettingsBackup.saveOptions(service,profile,m.getJSONObject("values"));break;
+                case "SETTINGS_SET":if(!service.settingsBusy){JSONObject values=m.getJSONObject("values"),saved=SettingsBackup.options(service,profile);for(String key:new String[]{"telegramEnabled","telegramStatusEnabled"})if(values.has(key)&&values.optBoolean(key)!=saved.optBoolean(key,"telegramEnabled".equals(key)))service.telegramLock.requireUnlocked(profile);SettingsBackup.saveOptions(service,profile,values);}break;
+                case "TELEGRAM_LOCK_STATUS":result.put("lock",service.telegramLock.status(profile));break;
+                case "TELEGRAM_UNLOCK":return service.telegramLock.request(service,profile,false);
+                case "TELEGRAM_PASSWORD":return service.telegramLock.request(service,profile,true);
+                case "TELEGRAM_LOCK":service.telegramLock.lockAll();break;
+                case "TELEGRAM_EDIT":service.telegramLock.requireUnlocked(profile);break;
+                case "TELEGRAM_OPTIONS_SET":service.telegramLock.requireUnlocked(profile);JSONObject options=new JSONObject(),requested=m.getJSONObject("values");for(String key:new String[]{"telegramEnabled","telegramStatusEnabled"})if(requested.has(key))options.put(key,requested.getBoolean(key));SettingsBackup.saveOptions(service,profile,options);break;
                 case "SECURE_GET":result.put("values",SecureSettings.read(service,profile));break;
-                case "SECURE_SET":SecureSettings.write(service,profile,m.getJSONObject("values"));service.releaseStatus(profile);break;
-                case "SECURE_REMOVE":SecureSettings.remove(service,profile);service.releaseStatus(profile);break;
-                case "SECURE_IMPORT":SecureSettings.importLegacy(service,profile);service.releaseStatus(profile);break;
+                case "SECURE_SET":service.telegramLock.requireUnlocked(profile);SecureSettings.write(service,profile,m.getJSONObject("values"));service.releaseStatus(profile);break;
+                case "SECURE_REMOVE":service.telegramLock.requireUnlocked(profile);SecureSettings.remove(service,profile);service.releaseStatus(profile);break;
+                case "SECURE_IMPORT":service.telegramLock.requireUnlocked(profile);SecureSettings.importLegacy(service,profile);service.releaseStatus(profile);break;
                 case "STATUS_CLAIM":if(!service.claimStatus(profile))throw new IllegalStateException("This bot already has a status receiver in another applicant. Disable that receiver first.");break;
                 case "STATUS_RELEASE":service.releaseStatus(profile);break;
                 case "SUMMARY":result.put("text","Applicant "+profile+" · "+(run.armed?"Monitoring":"Stopped")+" · checks "+lastState.optInt("sessionAttempts")+" · "+lastState.optString("bookingStage","Ready")+run.diagnostics());break;
@@ -359,7 +374,7 @@ final class BrowserEngine {
                 case "AUTHORIZE":return run.authorization();
                 case "SMOKE_PHASE":smokePhase=m.optString("phase");break;
                 case "UI_STOP":stopFromUi();break;
-                case "CRITICAL":alerts.critical(m.optString("kind"),m.optString("message"),m.optString("eventKey"));break;
+                case "CRITICAL":if("SESSION_EXPIRED".equals(m.optString("kind")))run.sessionExpired(m.optString("eventKey"));else alerts.critical(m.optString("kind"),m.optString("message"),m.optString("eventKey"));break;
                 case "DISARM":run.disarm();break;
                 case "ACK_ALERT":alerts.silence();service.refreshForeground(true);break;
                 case "ALERT_DELIVERY":service.record("ALERT A"+profile+" kind="+m.optString("kind")+" Telegram="+m.optString("telegram"));break;
@@ -476,13 +491,13 @@ final class BrowserEngine {
                 if(!sessions.contains(session)||!session.isOpen()||session==monitorSession)return;
                 if(session!=current&&!run.armed)showSession(session);
                 if(session==current)expireRetainedProtectionForNavigation(url);
-                pageLoading=true;pageReady=false;pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
+                pageLoading=true;pageLoadStartedElapsed=SystemClock.elapsedRealtime();pageReady=false;pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
                 log("Loading " + safeLocation(url));
                 final String loadingId=pageQuery;service.handler.postDelayed(()->{if(!destroyed&&pageLoading&&loadingId.equals(pageQuery))log("Connection slow · waiting for Sarathi");},15000);
             }
             @Override public void onPageStop(GeckoSession session, boolean success) {
                 if (session == current) {
-                    pageLoading=false;
+                    pageLoading=false;lastPageStopElapsed=SystemClock.elapsedRealtime();lastPageLoadSucceeded=success;
                     log(success?"Ready":"Page could not load — check connection or use Home");
                     if(success)command("PAGE_QUERY",pageQuery+"|"+pageUrl);
                     if(!firstPageRecorded){firstPageRecorded=true;logs.add("First page completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);service.handler.post(BrowserEngine.this::prepareMonitor);}

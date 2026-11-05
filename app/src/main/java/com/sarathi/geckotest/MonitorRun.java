@@ -43,6 +43,7 @@ final class MonitorRun {
   engine.service.markRunning(engine.profile,false);engine.service.refreshForeground(true);engine.activate();engine.render();
  }
  void sessionExpired(String eventKey){
+  if(engine.sessionExpired)return;
   engine.recordSessionExpiryEvidence();
   engine.clearLoginAt();
   engine.loginRequiredObserved=true;

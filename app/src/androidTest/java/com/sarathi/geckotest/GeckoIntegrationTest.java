@@ -599,6 +599,7 @@ public class GeckoIntegrationTest {
   assertTrue("Calendar endpoint must use a fixed redacted label",report.contains("endpoint=https://sarathi.parivahan.gov.in#CALENDAR"));
   assertEquals("Expiry must clear applicant 5 loginAt",0L,first.loginAtWallClockMs);
   assertEquals("Expiry must clear applicant 6 loginAt",0L,second.loginAtWallClockMs);
+  assertTrue("Evidence must include lifecycle and network state",report.contains("activityVisible=")&&report.contains("sincePauseMs=")&&report.contains("pendingLoadMs=")&&report.contains("network=")&&report.contains("serviceInstance="));
   assertFalse("Session evidence must not contain URL secrets",report.contains("FAKE_SECRET")||report.contains("FAKE_COOKIE"));
   String missing=BrowserEngine.sessionExpiryEvidence(4,0L,0L,wall,elapsed,"");
   assertTrue("Missing login time must be unavailable",missing.contains("loginAtWallClockMs=unavailable"));
@@ -792,9 +793,12 @@ public class GeckoIntegrationTest {
    e.unloadIdle(now,true);
    assertNull("Real memory pressure may unload an unprotected logged-in page",e.current);
    assertTrue("Unload state must be retained for next open",e.pageUnloaded);
-   assertTrue("Diagnostic must record login requirement",fixtureService.diagnosticReport().contains("Applicant 8 idle page closed; loggedIn=true; login will be needed"));
+   assertTrue("Diagnostic must record the page closure and login check",fixtureService.diagnosticReport().contains("Applicant 8 idle page closed; loggedIn=true; reopen website and check login"));
+   assertTrue("Idle closure notice must persist until dismissed",e.hasClosedPageNotice());
    e.foreground=true;e.ensureUsable();
    assertFalse("Opening the applicant must consume the unload banner state",e.pageUnloaded);
+   assertTrue("Reopening must not silently dismiss the persistent notice",e.hasClosedPageNotice());
+   e.dismissClosedPageNotice();assertFalse("Explicit dismiss clears only this applicant notice",e.hasClosedPageNotice());
    assertTrue("Unloaded applicant must reopen a usable home page",e.current!=null&&e.current.isOpen());
    e.foreground=false;e.loggedInPage=false;e.lastState=new org.json.JSONObject();e.lastVisibleAt=now-60L*60*1000;
    e.unloadIdle(now,false);
