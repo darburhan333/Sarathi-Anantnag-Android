@@ -6,6 +6,7 @@ if [ "${1:-all}" != "release-only" ]; then
   gradle -PtestAbi=x86_64 "${runner_args[@]}" connectedDebugAndroidTest --stacktrace
   result=$?
 fi
+if [ "${1:-all}" != "release-only" ]; then
 mkdir -p ci-evidence
 : > emulator-diagnostic-capture-status.txt
 adb pull /data/local/tmp/monitor-preview.png monitor-preview.png >> emulator-diagnostic-capture-status.txt 2>&1 || echo "monitor-preview.png unavailable (non-fatal; test may have failed before capture)" >> emulator-diagnostic-capture-status.txt
@@ -16,6 +17,7 @@ adb shell dumpsys battery > ci-evidence/emulator-battery.txt 2>&1 || echo "dumps
 adb shell dumpsys notification --noredact > ci-evidence/emulator-notifications.txt 2>&1 || echo "dumpsys notification failed" >> emulator-diagnostic-capture-status.txt
 adb logcat -d > emulator-logcat.txt 2>&1 || echo "logcat capture failed" >> emulator-diagnostic-capture-status.txt
 python3 scripts/capture-diagnostics.py || result=1
+fi
 if [ "$result" -eq 0 ]; then
   # The emulator job intentionally has no production signing secrets. Create a disposable
   # CI-only key so the minified release APK can be installed and exercised by the smoke test.
