@@ -15,10 +15,18 @@ snapshot_count=0
 def snapshot():
  global snapshot_count
  for attempt in range(3):
+  # A failed dump can return exit 0 and leave yesterday's hierarchy in place.
+  # Remove it first: assertions must only inspect a fresh, successfully parsed snapshot.
+  adb('shell','rm','-f','/sdcard/release-ui.xml')
   adb('shell','uiautomator','dump','/sdcard/release-ui.xml')
-  xml=adb('shell','cat','/sdcard/release-ui.xml')
+  try:
+   xml=adb('shell','cat','/sdcard/release-ui.xml')
+   root=ET.fromstring(xml)
+  except (subprocess.CalledProcessError,ET.ParseError) as exc:
+   print('Fresh UI snapshot unavailable; retry '+str(attempt+1)+': '+repr(exc),flush=True)
+   time.sleep(.5)
+   continue
   open('release-ui.xml','w').write(xml)
-  root=ET.fromstring(xml)
   failures=[n.get('text','') for n in root.iter('node') if ("isn't responding" in n.get('text','') or 'keeps stopping' in n.get('text','')) and n.get('text') not in {"Quickstep isn't responding","System UI isn't responding"}]
   assert not failures,'Target app or unexpected process failure: '+repr(failures)
   if snapshot_count==0:print('Initial release UI: '+repr([n.get('text','') for n in root.iter('node') if n.get('text')])[:1800],flush=True)

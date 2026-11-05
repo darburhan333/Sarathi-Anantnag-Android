@@ -94,6 +94,7 @@ let viewEpoch=0;
 let viewRequest=0;
 let lastStageRendered=null;
 let lastHistoryRendered=null;
+let lastPaintKey=null;
 const viewDefaults={telegramStatusEnabled:false,telegramStatusError:'',telegramStatusLastPoll:0,telegramStatusLastReply:0,nextRetryAt:0,running:false,lastCheck:0,lastStatus:'Stopped',heartbeatAt:0,monitorProgressAt:0,monitorLoopActive:false,calendarLock:false,telegramEnabled:true,desktopEnabled:true,soundEnabled:true,volume:85,history:[],covSelection:[],attempts:0,attemptDay:'',attemptTimestamps:[],alarmActive:false,telegramDeliveryStatus:'',telegramLastAttempt:0,botToken:'',chatId:'',chatId2:'',successWatch:false,audioError:'',bookingStage:'',autoBookingEnabled:false,assistedBookingPreference:false,failureDesktopError:'',failureTelegramError:''};
 function applyViewChanges(changes){
   if(!viewState){pendingViewChanges.push(changes);return;}
@@ -108,6 +109,12 @@ function applyViewChanges(changes){
 function paintView(){
   if(!viewState)return;
   const d=viewState;
+  // Avoid rebuilding unchanged text/fields on idle screens. Besides needless layout,
+  // repeated accessibility events prevent Android's UI driver and TalkBack from settling.
+  const rollingCount=Array.isArray(d.attemptTimestamps)?d.attemptTimestamps.filter(t=>Number.isFinite(t)&&t>Date.now()-86400000&&t<=Date.now()).length:0;
+  const paintKey=JSON.stringify([d,[...dirtyTelegram],navigator.onLine,rollingCount,(d.running||d.successWatch)?Math.floor(Date.now()/1000):0]);
+  if(paintKey===lastPaintKey)return;
+  lastPaintKey=paintKey;
   if($('focusState')){
     const stage=String(d.bookingStage||'').toUpperCase();const attention=/SMS|CALENDAR|QUOTA|BOOK SLOT|FAIL|EXPIRED|REVIEW|CONFIRM/.test(stage);
     $('focusState').textContent=d.running?'Monitoring active':attention?'Needs attention':'Stopped';
