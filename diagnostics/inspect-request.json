@@ -1,4 +1,5 @@
 {
   "run_id": 42082189734,
-  "reason": "First foreground-stop failure and subsequent UI-thread blockage"
+  "reason": "Read full first failure, long-running fixture, and device resource evidence",
+  "nonce": 2
 }
