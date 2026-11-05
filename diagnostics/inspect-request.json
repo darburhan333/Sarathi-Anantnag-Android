@@ -2,5 +2,6 @@
   "run_id": 42109452912,
   "mode": "password_preflight",
   "source_sha": "4b42ebd5b8b03b20f23a955b1fdda50e6048260e",
-  "reason": "Validate four new native password cases in parallel with the unchanged full release run"
+  "nonce": 2,
+  "reason": "Grant startup notification permission before the standalone native dialog test"
 }

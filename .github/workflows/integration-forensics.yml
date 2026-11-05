@@ -3,6 +3,9 @@ on:
   push:
     branches: ['build/**']
     paths: ['diagnostics/inspect-request.json']
+concurrency:
+  group: sarathi-evidence-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
   actions: read
@@ -70,7 +73,10 @@ jobs:
           profile: pixel_6
           ram-size: 4096
           disable-animations: true
-          script: gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.TelegramSettingsLockTest connectedDebugAndroidTest --stacktrace
+          script: |
+            adb install -r "$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
+            adb shell pm grant com.sarathi.anantnag.gecko.v33 android.permission.POST_NOTIFICATIONS
+            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.TelegramSettingsLockTest connectedDebugAndroidTest --stacktrace
       - uses: actions/upload-artifact@v4
         if: always()
         with:
