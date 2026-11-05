@@ -4,7 +4,9 @@ PACKAGE='com.sarathi.anantnag.gecko.v33'
 def adb(*args):return subprocess.check_output(['adb',*args],text=True)
 def snapshot():
  adb('shell','uiautomator','dump','/sdcard/release-ui.xml')
- return ET.fromstring(adb('shell','cat','/sdcard/release-ui.xml'))
+ xml=adb('shell','cat','/sdcard/release-ui.xml')
+ open('release-ui.xml','w').write(xml)
+ return ET.fromstring(xml)
 def recover_system_anr(root):
  # On a slow CI emulator, recover from either launcher or System UI ANR without force-closing apps.
  anr_titles={"Quickstep isn't responding","System UI isn't responding"}
@@ -80,11 +82,18 @@ root=snapshot()
 assert not any(n.get('content-desc')=='Applicant 1' for n in root.iter('node')),'Hide must restore clean main screen'
 root=snapshot()
 labels=['Website','Start All','Silence All','Stop All','Home','Call A1']
+adb('shell','screencap','-p','/data/local/tmp/release-preview.png')
+adb('pull','/data/local/tmp/release-preview.png','release-preview.png')
+def native_control(root,label):
+ matches=[n for n in root.iter('node') if n.get('text')==label and n.get('class')=='android.widget.Button' and n.get('package')==PACKAGE]
+ assert len(matches)==1,'Expected one native Signature control '+label+': '+str([n.attrib for n in matches])
+ return matches[0]
 for label in labels:
  assert any(n.get('text')==label for n in root.iter('node')),'Signature control missing: '+label
-control_nodes=[next(n for n in root.iter('node') if n.get('text')==label) for label in labels]
+control_nodes=[native_control(root,label) for label in labels]
 rects=[list(map(int,re.findall(r'\d+',n.get('bounds')))) for n in control_nodes]
-assert len({r[1] for r in rects[:3]})==1 and len({r[1] for r in rects[3:]})==1,'Controls must occupy exactly two aligned rows'
+print('Native Signature control bounds: '+repr(dict(zip(labels,rects))),flush=True)
+assert len({r[1] for r in rects[:3]})==1 and len({r[1] for r in rects[3:]})==1,'Controls must occupy exactly two aligned rows: '+repr(dict(zip(labels,rects)))
 assert rects[0][1]<rects[3][1],'Control rows must keep the approved sequence'
 assert rects[0][0]<rects[1][0]<rects[2][0] and rects[3][0]<rects[4][0]<rects[5][0],'Control column order changed'
 picker=next(n for n in root.iter('node') if n.get('content-desc')=='Choose applicant')
