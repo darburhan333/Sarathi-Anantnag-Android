@@ -96,31 +96,36 @@ public class MainActivity extends Activity {
     public MonitorService serviceForTest(){return engine==null?null:engine.service;}
     private void command(String type){if(engine!=null)engine.command(type);}
     private void toggleMonitor(){if(!activePanel.equals("monitor")){closeApplicantSettings();return;}if(engine!=null)engine.toggleMonitor();}
+    private static void setTextIfChanged(TextView view,String value){if(!value.contentEquals(view.getText()))view.setText(value);}
+    private static void setDescriptionIfChanged(View view,String value){if(!value.contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))view.setContentDescription(value);}
     void render(){
       if(engine==null||!visible)return;
       if(engine.current!=null&&engine.current.isOpen()&&view.getSession()!=engine.current){view.releaseSession();view.setSession(engine.current);engine.activeStates.remove(engine.current);}
       if(engine.monitorSession!=null&&engine.monitorSession.isOpen()&&monitorView.getSession()!=engine.monitorSession){monitorView.releaseSession();monitorView.setSession(engine.monitorSession);engine.activeStates.remove(engine.monitorSession);}
       monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);
+      // Only the displayed layer participates in accessibility; both Gecko sessions retain their existing activity policy.
+      int websiteAccessibility=engine.showingMonitor?View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO;
+      if(view.getImportantForAccessibility()!=websiteAccessibility)view.setImportantForAccessibility(websiteAccessibility);
       if(pendingMonitorPanel!=null&&engine.monitorSession!=null){String panel=pendingMonitorPanel;pendingMonitorPanel=null;engine.monitorSession.loadUri(engine.monitorUrl+"#"+panel);}
-      monitorButton.setText(engine.showingMonitor?"Website":"Monitor");monitorButton.setContentDescription(engine.showingMonitor?"Switch to website":"Switch to monitor");
+      setTextIfChanged(monitorButton,engine.showingMonitor?"Website":"Monitor");setDescriptionIfChanged(monitorButton,engine.showingMonitor?"Switch to website":"Switch to monitor");
       if(applicantPicker!=null&&applicantPicker.getSelectedItemPosition()!=engine.profile-1)applicantPicker.setSelection(engine.profile-1);
-      if(activeSummary!=null)activeSummary.setText(engine.service.activeCount()+" of 9 monitoring");
-      if(closedPageNotice!=null){closedPageNotice.setVisibility(engine.hasClosedPageNotice()?View.VISIBLE:View.GONE);closedPageNotice.setText("Applicant "+engine.profile+" · Idle website was closed. Reopen Website and check login before Start. Tap to dismiss.");}
-       if(callButton!=null){callButton.setText("Call A"+engine.profile);callButton.setContentDescription("Call Applicant "+engine.profile);}
+      if(activeSummary!=null)setTextIfChanged(activeSummary,engine.service.activeCount()+" of 9 monitoring");
+      if(closedPageNotice!=null){closedPageNotice.setVisibility(engine.hasClosedPageNotice()?View.VISIBLE:View.GONE);setTextIfChanged(closedPageNotice,"Applicant "+engine.profile+" · Idle website was closed. Reopen Website and check login before Start. Tap to dismiss.");}
+       if(callButton!=null){setTextIfChanged(callButton,"Call A"+engine.profile);setDescriptionIfChanged(callButton,"Call Applicant "+engine.profile);}
       if(settingsContext!=null)settingsContext.setVisibility(activePanel.equals("monitor")?View.GONE:View.VISIBLE);
       if(signatureControls!=null)signatureControls.setVisibility(activePanel.equals("monitor")?View.VISIBLE:View.GONE);
-      if(settingsTitle!=null)settingsTitle.setText("Alerts · Applicant "+engine.profile);
-      monitorButton.setBackgroundTintList(null);
-      for(int i=0;i<MonitorService.PROFILE_COUNT;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];boolean running=e!=null&&e.run.armed;String label="Applicant "+(i+1)+"\n"+(running?"● RUNNING":"○ STOPPED");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);applicantButtons[i].setAlpha(lockedApplicant==i+1?1f:0.72f);applicantButtons[i].setBackgroundTintList(ColorStateList.valueOf(lockedApplicant==i+1?0xFF0F766E:0xFF254167));}
-      for(int i=0;i<settingsApplicantButtons.length;i++)if(settingsApplicantButtons[i]!=null){BrowserEngine profile=engine.service.profiles[i];settingsApplicantButtons[i].setText("Applicant "+(i+1)+(profile!=null&&profile.run.armed?" ● RUNNING":" ○ STOPPED")+(i+1==lockedApplicant?" · LOCKED":""));}
+      if(settingsTitle!=null)setTextIfChanged(settingsTitle,"Alerts · Applicant "+engine.profile);
+      if(monitorButton.getBackgroundTintList()!=null)monitorButton.setBackgroundTintList(null);
+      for(int i=0;i<MonitorService.PROFILE_COUNT;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];boolean running=e!=null&&e.run.armed;String label="Applicant "+(i+1)+"\n"+(running?"● RUNNING":"○ STOPPED");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);float alpha=lockedApplicant==i+1?1f:0.72f;if(applicantButtons[i].getAlpha()!=alpha)applicantButtons[i].setAlpha(alpha);int tint=lockedApplicant==i+1?0xFF0F766E:0xFF254167;ColorStateList oldTint=applicantButtons[i].getBackgroundTintList();if(oldTint==null||oldTint.getDefaultColor()!=tint)applicantButtons[i].setBackgroundTintList(ColorStateList.valueOf(tint));}
+      for(int i=0;i<settingsApplicantButtons.length;i++)if(settingsApplicantButtons[i]!=null){BrowserEngine profile=engine.service.profiles[i];setTextIfChanged(settingsApplicantButtons[i],"Applicant "+(i+1)+(profile!=null&&profile.run.armed?" ● RUNNING":" ○ STOPPED")+(i+1==lockedApplicant?" · LOCKED":""));}
       applyApplicantVisibility(getSharedPreferences("monitor",0).getBoolean("showApplicants",false));
       if(!status.getText().toString().equals(engine.status))status.setText(engine.status);status.setVisibility(engine.showingMonitor?View.GONE:View.VISIBLE);
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
-      if(batteryButton!=null)batteryButton.setText((exempt&&android.provider.Settings.canDrawOverlays(this)&&!power.isPowerSaveMode()&&getSystemService(android.app.NotificationManager.class).areNotificationsEnabled())?"Background\nsetup ✓":"Background\nsetup !");
+      if(batteryButton!=null)setTextIfChanged(batteryButton,(exempt&&android.provider.Settings.canDrawOverlays(this)&&!power.isPowerSaveMode()&&getSystemService(android.app.NotificationManager.class).areNotificationsEnabled())?"Background\nsetup ✓":"Background\nsetup !");
       String text=engine.ready?"Applicant "+engine.profile+" · "+(engine.monitoring?"RUNNING":"STOPPED")+engine.service.routineWarning():"Connecting Applicant "+engine.profile+"…";if(!monitorStatus.getText().toString().equals(text))monitorStatus.setText(text);
-      if(visible&&engine.monitoring)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-      else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+      boolean keepScreen=visible&&engine.monitoring;boolean screenFlag=(getWindow().getAttributes().flags&WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)!=0;
+      if(keepScreen!=screenFlag){if(keepScreen)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
     }
     void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){render();return;}MonitorService service=engine.service;service.telegramLock.lockAll();view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);if(engine.monitorSession==null)engine.showingMonitor=true;engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;pendingMonitorPanel=activePanel;if(!activePanel.equals("monitor")){engine.showingMonitor=true;engine.prepareMonitor();}engine.attach(this);engine.foregroundState();}
     private boolean directCalls(){return getSharedPreferences("calling",0).getBoolean("direct",false);}
