@@ -4,7 +4,7 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('p
  const data={},nativeCalls=[],states=[];let receive;
  const port={onMessage:{addListener:f=>receive=f},onDisconnect:{addListener(){}},postMessage:m=>states.push(m)};
  const chrome={storage:{local:{get:async defaults=>({...defaults,...data}),set:async values=>Object.assign(data,values)},onChanged:{addListener(){}}},runtime:{onMessage:{addListener(){}},sendMessage:async()=>({ok:true})},tabs:{sendMessage:async()=>({ok:true}),query:async()=>[]}};
- const ctx={chrome,browser:{runtime:{connectNative:()=>port,getURL:p=>'moz-extension://fixture/'+p}},nativeRequest:async m=>{nativeCalls.push(m);if(m.type==='RESTORE')return {ok:true,armed:false};if(m.type==='SETTINGS_GET')return {ok:true,values:{}};return {ok:true}},inGateQueue:async work=>work(),setTimeout:()=>1,clearTimeout(){},Date,Math,console};
+ const ctx={chrome,browser:{storage:chrome.storage,runtime:{connectNative:()=>port,getURL:p=>'moz-extension://fixture/'+p}},nativeRequest:async m=>{nativeCalls.push(m);if(m.type==='RESTORE')return {ok:true,armed:false};if(m.type==='SETTINGS_GET')return {ok:true,values:{}};return {ok:true}},inGateQueue:async work=>work(),setTimeout:()=>1,clearTimeout(){},Date,Math,console};
  vm.createContext(ctx);vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../app/src/main/assets/extension/android-bridge.js'),'utf8'),ctx);
  for(let i=0;i<100&&!receive;i++)await Promise.resolve();
  assert(receive,'Real bridge must connect before receiving native commands');
