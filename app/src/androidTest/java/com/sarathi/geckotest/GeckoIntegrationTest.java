@@ -579,6 +579,38 @@ public class GeckoIntegrationTest {
    assertEquals("The single named retention constant must be five minutes",300000L,BrowserEngine.STOP_PAGE_PROTECTION_MAX_MS);
   });
  }
+ @Test public void pageReplacementDetachesAccessibilityBeforeClosingOldSession()throws Exception{
+  InstrumentationRegistry.getInstrumentation().getUiAutomation();
+  BrowserEngine e=fixtureService.engine;
+  main(()->{
+   org.mozilla.geckoview.GeckoSession original=e.current;
+   final android.view.View[] displayed=new android.view.View[1];
+   java.util.concurrent.atomic.AtomicBoolean inspectedBeforeClose=new java.util.concurrent.atomic.AtomicBoolean();
+   org.mozilla.geckoview.GeckoSession previous=new org.mozilla.geckoview.GeckoSession(original.getSettings()){
+    @Override public void close(){
+     assertNull("Accessibility must detach BEFORE native session close",getAccessibility().getView());
+     assertNotSame("The displayed view must release ownership before native close",this,((org.mozilla.geckoview.GeckoView)displayed[0]).getSession());
+     inspectedBeforeClose.set(true);
+     super.close();
+    }
+   };
+   previous.open(e.runtime);e.sessions.add(previous);e.current=previous;e.showingMonitor=false;e.render();
+   displayed[0]=previous.getAccessibility().getView();
+   assertNotNull("Displayed website must expose its accessibility view",displayed[0]);
+   android.view.accessibility.AccessibilityNodeProvider provider=displayed[0].getAccessibilityNodeProvider();
+   assertNotNull("The displayed browser must retain accessibility support",provider);
+   provider.performAction(android.view.View.NO_ID,android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS,null);
+   e.resetProtectionForTest();
+   assertTrue("Closing the old page must check the detach ordering",inspectedBeforeClose.get());
+   assertFalse("Replaced page must be closed",previous.isOpen());
+   assertNotSame(previous,e.current);
+   assertTrue("Replacement page must remain open",e.current.isOpen());
+   assertSame("Replacement must attach to the existing website view",displayed[0],e.current.getAccessibility().getView());
+   e.pageLost(original,"Test-only unused page cleanup");
+  });
+  InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+ }
+
  @Test public void simultaneousSessionExpiryEvidenceIsPerApplicantAndRedacted()throws Exception{
   BrowserEngine first=readyApplicant(5),second=readyApplicant(6);
   long wall=System.currentTimeMillis(),elapsed=android.os.SystemClock.elapsedRealtime();

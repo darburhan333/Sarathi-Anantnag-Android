@@ -195,7 +195,7 @@ final class BrowserEngine {
       if(loggedIn&&!pressure)return;
       if(!pressure&&now-lastVisibleAt<idleUnloadTimeoutMs())return;
       boolean unloaded=false;
-      for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);priorityHints.remove(s);if(s.isOpen())s.close();if(s==current)current=null;unloaded=true;}
+      for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);priorityHints.remove(s);closeSession(s);if(s==current)current=null;unloaded=true;}
       if(unloaded){pageUnloaded=true;rememberClosedPage();String message="Applicant "+profile+" idle page closed; loggedIn="+loggedIn+"; reopen website and check login; page unloaded";service.record(message+"; memoryPressure="+pressure+"; idleMs="+(now-lastVisibleAt));log(message);}
     }
     void shutdown(){
@@ -203,7 +203,7 @@ final class BrowserEngine {
       if(protectedUntilElapsed>0L)clearProtectedPage();
       if(extension!=null){extension.setMessageDelegate(null,"sarathi");extension.setTabDelegate(null);}
       if(nativePort!=null)nativePort.disconnect();
-      for(GeckoSession s:sessions)if(s.isOpen())s.close();
+      for(GeckoSession s:new ArrayList<>(sessions))closeSession(s);
       activeStates.clear();priorityHints.clear();
       alerts.stop();activity=null;
     }
@@ -263,12 +263,22 @@ final class BrowserEngine {
         updateProtection(protectionState);
       pageQuery="";pageUrl="";pageReady=false;pageLoading=false;showingMonitor=false;canGoBack=false;
       pendingId=null;afterStop=null;activeStates.clear();priorityHints.clear();
-      if(current!=null){GeckoSession previous=current;current=null;sessions.remove(previous);if(previous.isOpen())previous.close();}
+      if(current!=null){GeckoSession previous=current;current=null;sessions.remove(previous);closeSession(previous);}
       GeckoSession fresh=newSession();fresh.open(runtime);showSession(fresh);fresh.loadUri(HOME);
       activate();service.refreshForeground(true);
     }
     // Test-only instrumentation hook; production code must not call this method.
     boolean isPriorityHighForTest(GeckoSession session){return java.util.Objects.equals(priorityHints.get(session),GeckoSession.PRIORITY_HIGH);}
+
+    private void closeSession(GeckoSession session){
+      // Android may retain a virtual accessibility node until the next traversal.
+      // Detach its provider while the session is still valid, so focus cleanup
+      // cannot synchronously query native nodes after the page has been closed.
+      View owner=session.getAccessibility().getView();
+      session.getAccessibility().setView(null);
+      if(owner instanceof GeckoView&&((GeckoView)owner).getSession()==session)((GeckoView)owner).releaseSession();
+      if(session.isOpen())session.close();
+    }
 
     void pageLost(GeckoSession session,String reason){
       if(destroyed||!sessions.remove(session))return;
@@ -276,7 +286,7 @@ final class BrowserEngine {
       activeStates.remove(session);priorityHints.remove(session);
       if(website){current=null;if(protectedPage&&protectedUntilElapsed>0L){clearProtectedPage();pageLostProtected=false;service.record("Applicant "+profile+" retained page protection cleared because the page session closed");}else if(protectedPage){pageLostProtected=true;lastPageReason="A"+profile+": page lost during "+protectedStage+", restart the booking flow";status=lastPageReason;service.record(lastPageReason+" url="+protectedUrl);alerts.critical("PROTECTED_PAGE_LOST",lastPageReason);run.stopForBackground(lastPageReason);}else run.fail(reason+" — inspect Sarathi and press START");}
       if(monitor){monitorSession=null;monitorReady=false;}
-      if(session.isOpen())session.close();
+      closeSession(session);
       service.record("Applicant "+profile+" "+(website?"website":monitor?"dashboard":"unused page")+" closed; active="+run.armed);
       // Recreate only a visible page. Never replay form submissions or resume a lost run.
       if(foreground)service.handler.post(()->{ensureUsable();render();activate();});
