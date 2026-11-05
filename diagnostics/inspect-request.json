@@ -1,0 +1,4 @@
+{
+  "run_id": 42082189734,
+  "reason": "First foreground-stop failure and subsequent UI-thread blockage"
+}
