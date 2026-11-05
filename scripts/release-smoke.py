@@ -3,10 +3,13 @@ import subprocess,time,xml.etree.ElementTree as ET,re
 PACKAGE='com.sarathi.anantnag.gecko.v33'
 def adb(*args):return subprocess.check_output(['adb',*args],text=True)
 def snapshot():
- adb('shell','uiautomator','dump','/sdcard/release-ui.xml')
- xml=adb('shell','cat','/sdcard/release-ui.xml')
- open('release-ui.xml','w').write(xml)
- return ET.fromstring(xml)
+ for attempt in range(3):
+  adb('shell','uiautomator','dump','/sdcard/release-ui.xml')
+  xml=adb('shell','cat','/sdcard/release-ui.xml')
+  open('release-ui.xml','w').write(xml)
+  root=ET.fromstring(xml)
+  if not recover_system_anr(root):return root
+ raise AssertionError('Emulator launcher/System UI remains unresponsive after bounded Wait recovery')
 def recover_system_anr(root):
  # On a slow CI emulator, recover from either launcher or System UI ANR without force-closing apps.
  anr_titles={"Quickstep isn't responding","System UI isn't responding"}
