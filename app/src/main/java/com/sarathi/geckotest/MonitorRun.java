@@ -7,7 +7,7 @@ final class MonitorRun {
  private long recoveryRetryAt,verifiedAt;long resumeGraceUntil;
  private int recoveryAttempt;
  private static final long[] RETRY_DELAYS={5000,15000,30000};
- private int generation;private String recoveryId="",lastReason="Ready";
+ private int generation;private String recoveryId="",lastReason="Ready",expiredEventKey;
  private final Map<GeckoResult<Object>,Runnable> waits=new IdentityHashMap<>();
  private final Set<GeckoResult<Object>> authorizations=Collections.newSetFromMap(new IdentityHashMap<>());
  private final Set<GeckoResult<Object>> delayed=Collections.newSetFromMap(new IdentityHashMap<>());
@@ -43,7 +43,8 @@ final class MonitorRun {
   engine.service.markRunning(engine.profile,false);engine.service.refreshForeground(true);engine.activate();engine.render();
  }
  void sessionExpired(String eventKey){
-  if(engine.sessionExpired)return;
+  if(engine.sessionExpired&&java.util.Objects.equals(expiredEventKey,eventKey))return;
+  expiredEventKey=eventKey;
   engine.recordSessionExpiryEvidence();
   engine.clearLoginAt();
   engine.loginRequiredObserved=true;

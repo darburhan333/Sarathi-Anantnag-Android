@@ -588,10 +588,17 @@ public class GeckoIntegrationTest {
    first.setPageUrlForTest("https://sarathi.parivahan.gov.in/slots/dlsltprev.do/private-path?token=FAKE_SECRET#fragment");
    second.setPageUrlForTest("https://sarathi.parivahan.gov.in/slots/fetchdltprevmnth.do/private-path?cookie=FAKE_COOKIE");
    first.run.sessionExpired("simultaneous-one");
+   String recorded=fixtureService.getSharedPreferences("diagnostics",0).getString("criticalEvents","");
+   first.run.sessionExpired("simultaneous-one");
+   assertEquals("Duplicate expiry event must not append a second terminal record",recorded,fixtureService.getSharedPreferences("diagnostics",0).getString("criticalEvents",""));
+   first.setLoginAtForTest(wall-3000L,elapsed-3000L);
+   first.run.sessionExpired("simultaneous-one-new-run");
+   assertEquals("A distinct later expiry must still clear its login timestamp",0L,first.loginAtWallClockMs);
    second.run.sessionExpired("simultaneous-two");
   });
   String report=fixtureService.diagnosticReport();
   assertTrue("First applicant expiry evidence missing",report.contains("SESSION_EVIDENCE applicant=5 loginAtWallClockMs="+(wall-5000L)+" expiredAtWallClockMs="));
+  assertTrue("A new expiry event must not be hidden by the previous expiry flag",report.contains("SESSION_EVIDENCE applicant=5 loginAtWallClockMs="+(wall-3000L)+" expiredAtWallClockMs="));
   assertTrue("Second applicant expiry evidence missing",report.contains("SESSION_EVIDENCE applicant=6 loginAtWallClockMs="+(wall-11000L)+" expiredAtWallClockMs="));
   assertTrue("First applicant elapsed time must be calculated at expiry",BrowserEngine.sessionExpiryEvidence(5,wall-5000L,elapsed-5000L,wall,elapsed,"https://sarathi.parivahan.gov.in/slots/dlsltprev.do").contains("elapsedSinceLoginMs=5000"));
   assertTrue("Second applicant elapsed time must be calculated at expiry",BrowserEngine.sessionExpiryEvidence(6,wall-11000L,elapsed-11000L,wall,elapsed,"https://sarathi.parivahan.gov.in/slots/fetchdltprevmnth.do").contains("elapsedSinceLoginMs=11000"));
