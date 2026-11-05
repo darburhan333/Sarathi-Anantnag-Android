@@ -42,7 +42,7 @@ import java.util.Locale;
 
 final class BrowserEngine {
     static final long STOP_PAGE_PROTECTION_MAX_MS=5L*60L*1000L;
-    static final String HOME="https://parivahan.gov.in/";
+    static final String HOME="https://sarathi.parivahan.gov.in/sarathiservice/stateSelection.do";
     private static GeckoRuntime sharedRuntime;
     final GeckoRuntime runtime;
     final MonitorService service;
