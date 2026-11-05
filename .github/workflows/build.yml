@@ -185,7 +185,10 @@ jobs:
           profile: pixel_6
           ram-size: 4096
           disable-animations: true
-          script: gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.GeckoIntegrationTest#pageReplacementDetachesAccessibilityBeforeClosingOldSession,com.sarathi.geckotest.GeckoIntegrationTest#simultaneousSessionExpiryEvidenceIsPerApplicantAndRedacted,com.sarathi.geckotest.GeckoIntegrationTest#stopDuringCalendarReviewDisarmsAndKeepsProtectedPageActive connectedDebugAndroidTest --stacktrace
+          script: |
+            adb install -r "$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
+            adb shell dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33
+            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.GeckoIntegrationTest#pageReplacementDetachesAccessibilityBeforeClosingOldSession,com.sarathi.geckotest.GeckoIntegrationTest#simultaneousSessionExpiryEvidenceIsPerApplicantAndRedacted,com.sarathi.geckotest.GeckoIntegrationTest#stopDuringCalendarReviewDisarmsAndKeepsProtectedPageActive connectedDebugAndroidTest --stacktrace
       - uses: actions/upload-artifact@v4
         if: always()
         with:
