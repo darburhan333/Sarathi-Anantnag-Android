@@ -270,13 +270,19 @@ final class BrowserEngine {
     // Test-only instrumentation hook; production code must not call this method.
     boolean isPriorityHighForTest(GeckoSession session){return java.util.Objects.equals(priorityHints.get(session),GeckoSession.PRIORITY_HIGH);}
 
+    static void releaseView(GeckoView view){
+      GeckoSession session=view.getSession();
+      if(session!=null)session.getAccessibility().setView(null);
+      view.releaseSession();
+      // Clear Android's cached virtual focus while this host has no native provider.
+      // The GeckoSession is already detached and retains its existing activity policy.
+      int visibility=view.getVisibility();
+      if(visibility!=View.INVISIBLE){view.setVisibility(View.INVISIBLE);view.setVisibility(visibility);}
+    }
     private void closeSession(GeckoSession session){
-      // Android may retain a virtual accessibility node until the next traversal.
-      // Detach its provider while the session is still valid, so focus cleanup
-      // cannot synchronously query native nodes after the page has been closed.
       View owner=session.getAccessibility().getView();
       session.getAccessibility().setView(null);
-      if(owner instanceof GeckoView&&((GeckoView)owner).getSession()==session)((GeckoView)owner).releaseSession();
+      if(owner instanceof GeckoView&&((GeckoView)owner).getSession()==session)releaseView((GeckoView)owner);
       if(session.isOpen())session.close();
     }
 

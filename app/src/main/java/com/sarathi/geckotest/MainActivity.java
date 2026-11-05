@@ -100,8 +100,8 @@ public class MainActivity extends Activity {
     private static void setDescriptionIfChanged(View view,String value){if(!value.contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))view.setContentDescription(value);}
     void render(){
       if(engine==null||!visible)return;
-      if(engine.current!=null&&engine.current.isOpen()&&view.getSession()!=engine.current){view.releaseSession();view.setSession(engine.current);engine.activeStates.remove(engine.current);}
-      if(engine.monitorSession!=null&&engine.monitorSession.isOpen()&&monitorView.getSession()!=engine.monitorSession){monitorView.releaseSession();monitorView.setSession(engine.monitorSession);engine.activeStates.remove(engine.monitorSession);}
+      if(engine.current!=null&&engine.current.isOpen()&&view.getSession()!=engine.current){BrowserEngine.releaseView(view);view.setSession(engine.current);engine.activeStates.remove(engine.current);}
+      if(engine.monitorSession!=null&&engine.monitorSession.isOpen()&&monitorView.getSession()!=engine.monitorSession){BrowserEngine.releaseView(monitorView);monitorView.setSession(engine.monitorSession);engine.activeStates.remove(engine.monitorSession);}
       monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);
       // Only the displayed layer participates in accessibility; both Gecko sessions retain their existing activity policy.
       int websiteAccessibility=engine.showingMonitor?View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO;
@@ -127,7 +127,7 @@ public class MainActivity extends Activity {
       boolean keepScreen=visible&&engine.monitoring;boolean screenFlag=(getWindow().getAttributes().flags&WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)!=0;
       if(keepScreen!=screenFlag){if(keepScreen)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
     }
-    void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){render();return;}MonitorService service=engine.service;service.telegramLock.lockAll();view.releaseSession();monitorView.releaseSession();engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);if(engine.monitorSession==null)engine.showingMonitor=true;engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;pendingMonitorPanel=activePanel;if(!activePanel.equals("monitor")){engine.showingMonitor=true;engine.prepareMonitor();}engine.attach(this);engine.foregroundState();}
+    void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){render();return;}MonitorService service=engine.service;service.telegramLock.lockAll();BrowserEngine.releaseView(view);BrowserEngine.releaseView(monitorView);engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);if(engine.monitorSession==null)engine.showingMonitor=true;engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;pendingMonitorPanel=activePanel;if(!activePanel.equals("monitor")){engine.showingMonitor=true;engine.prepareMonitor();}engine.attach(this);engine.foregroundState();}
     private boolean directCalls(){return getSharedPreferences("calling",0).getBoolean("direct",false);}
     static Intent applicantCallIntent(String phone,boolean direct,boolean permitted){return new Intent(direct&&permitted?Intent.ACTION_CALL:Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null));}
     private void openDialer(String phone){startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));}
@@ -395,7 +395,7 @@ public class MainActivity extends Activity {
     }
     @Override protected void onDestroy(){
       if(settingsMenuDialog!=null)settingsMenuDialog.dismiss();if(logsDialog!=null)logsDialog.dismiss();
-      view.releaseSession();monitorView.releaseSession();
+      BrowserEngine.releaseView(view);BrowserEngine.releaseView(monitorView);
       if(engine!=null){engine.activeStates.clear();engine.detach(this);if(engine.service.activity==this)engine.service.activity=null;engine.activate();}
       if(bound)unbindService(connection);
       super.onDestroy();
