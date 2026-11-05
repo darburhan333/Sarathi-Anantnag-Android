@@ -21,3 +21,6 @@ ANDROID_KEY_ALIAS="$SMOKE_KEY_ALIAS" \
 ANDROID_KEY_PASSWORD="$SMOKE_KEY_PASSWORD" \
   gradle -PtestAbi=x86_64 -PsmokeRelease assembleRelease --stacktrace || exit 1
 
+
+# Release R8/Gradle heap before starting the 4 GiB Android emulator.
+gradle --stop

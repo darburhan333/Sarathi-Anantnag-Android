@@ -43,7 +43,7 @@ if [ "$result" -eq 0 ]; then
   fi
   adb install "$APK_PATH" || exit 1
   adb shell pm clear com.sarathi.anantnag.gecko.v33 || exit 1
-  python3 scripts/release-smoke.py || exit 1
+  python3 -u scripts/release-smoke.py || exit 1
 fi
 exit "$result"
 

@@ -1,13 +1,26 @@
 """Exercise the actual minified release UI, with no debug extension or fixture hooks."""
 import subprocess,time,xml.etree.ElementTree as ET,re
 PACKAGE='com.sarathi.anantnag.gecko.v33'
-def adb(*args):return subprocess.check_output(['adb',*args],text=True)
+def adb(*args):
+ try:return subprocess.check_output(['adb',*args],text=True,timeout=35)
+ except subprocess.TimeoutExpired as exc:
+  print('ADB timeout: '+repr(args),flush=True)
+  try:
+   diagnostic=subprocess.check_output(['adb','logcat','-d','-t','300'],text=True,timeout=10)
+   open('release-smoke-failure.txt','w').write('ADB timeout: '+repr(args)+'\n'+diagnostic)
+   print(diagnostic,flush=True)
+  except Exception as capture:print('Timeout evidence capture failed: '+repr(capture),flush=True)
+  raise AssertionError('ADB command timed out: '+repr(args)) from exc
+snapshot_count=0
 def snapshot():
+ global snapshot_count
  for attempt in range(3):
   adb('shell','uiautomator','dump','/sdcard/release-ui.xml')
   xml=adb('shell','cat','/sdcard/release-ui.xml')
   open('release-ui.xml','w').write(xml)
   root=ET.fromstring(xml)
+  if snapshot_count==0:print('Initial release UI: '+repr([n.get('text','') for n in root.iter('node') if n.get('text')])[:1800],flush=True)
+  snapshot_count+=1
   if not recover_system_anr(root):return root
  raise AssertionError('Emulator launcher/System UI remains unresponsive after bounded Wait recovery')
 def recover_system_anr(root):
@@ -76,6 +89,7 @@ for label in ['Phone numbers','Alerts','Logs','Background setup']:
 adb('shell','screencap','-p','/data/local/tmp/release-settings.png');adb('pull','/data/local/tmp/release-settings.png','release-settings.png')
 tap_text('Close')
 for number in [2,3,4,5,6,7,8,9,1]:
+ print('Release UI: checking Applicant '+str(number),flush=True)
  root=choose_applicant(number)
  assert not any(n.get('text','').startswith('Alerts · Applicant ') for n in root.iter('node')),'Selecting an applicant must not open Settings'
  settings_menu();tap_text('Alerts');wait_text('Alerts · Applicant '+str(number))
@@ -85,9 +99,11 @@ for number in [2,3,4,5,6,7,8,9,1]:
  assert not any(n.get('text') in ['LIVE MONITOR','Start this applicant','Ready to monitor'] for n in alerts.iter('node')),'Alerts must not contain the Monitor'
  if number==1:
   adb('shell','screencap','-p','/data/local/tmp/release-alerts.png');adb('pull','/data/local/tmp/release-alerts.png','release-alerts.png')
+ print('Release UI: verified Alerts for Applicant '+str(number),flush=True)
  tap_text('Back');root=wait_ready(number);wait_text('LIVE MONITOR')
 root=snapshot()
 assert not any(n.get('content-desc')=='Applicant 1' for n in root.iter('node')),'Compact selector must keep the legacy applicant grid hidden'
+print('Release UI: checking Logs isolation',flush=True)
 settings_menu();tap_text('Logs');logs=wait_text('Activity & diagnostics')
 assert not any(n.get('class','').endswith('GeckoView') for n in logs.iter('node')),'Logs must not contain a browser'
 assert not any(n.get('text') in ['Start this applicant','LIVE MONITOR','Bot token'] for n in logs.iter('node')),'Logs must only contain activity and diagnostics'

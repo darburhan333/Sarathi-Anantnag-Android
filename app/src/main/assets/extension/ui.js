@@ -199,19 +199,20 @@ window.addEventListener('hashchange',applyFocusRoute);
 applyFocusRoute();
 
 const telegramEditIds=['botToken','chatId','chatId2','telegramEnabled','telegramStatusEnabled','saveTelegram','removeTelegram','importTelegram'];
-let lockStatusBusy=false;
+let lockStatusBusy=false,lastTelegramLockKey='';
 async function refreshTelegramLock(){
  if(lockStatusBusy||document.hidden||!document.body?.classList.contains('settings-mode')||typeof nativeRequest!=='function')return;
  lockStatusBusy=true;
  try{
   const response=await nativeRequest({type:'TELEGRAM_LOCK_STATUS'});if(!response?.ok)throw Error(response?.error||'Lock status unavailable');
   const lock=response.lock||{},enabled=lock.configured===true,editable=lock.unlocked===true;
+  const key=String(enabled)+':'+String(editable);if(key===lastTelegramLockKey)return;lastTelegramLockKey=key;
   for(const id of telegramEditIds)if($(id))$(id).disabled=!editable;
   if($('telegramLockState'))$('telegramLockState').textContent=!enabled?'Password not set':editable?'Unlocked · 2 min':'Locked';
   if($('unlockTelegram')){$('unlockTelegram').textContent=enabled?'Unlock settings':'Set password';$('unlockTelegram').disabled=enabled&&editable;}
   if($('lockTelegram'))$('lockTelegram').disabled=!enabled||!editable;
   if($('telegramPassword')){$('telegramPassword').textContent=enabled?'Change password':'Set password protection';$('telegramPassword').disabled=enabled&&!editable;}
- }catch(e){for(const id of telegramEditIds)if($(id))$(id).disabled=true;if($('telegramLockState'))$('telegramLockState').textContent='Lock unavailable';}
+ }catch(e){if(lastTelegramLockKey==='error')return;lastTelegramLockKey='error';for(const id of telegramEditIds)if($(id))$(id).disabled=true;if($('telegramLockState'))$('telegramLockState').textContent='Lock unavailable';}
  finally{lockStatusBusy=false;}
 }
 async function lockAction(type){
