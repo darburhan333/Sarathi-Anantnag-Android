@@ -467,6 +467,11 @@ final class BrowserEngine {
         Uri u = Uri.parse(url);
         return (u.getHost() == null ? "" : u.getHost()) + (u.getPath() == null ? "" : u.getPath());
     }
+    void recordApplicantSwitch(long milliseconds,boolean retained){
+      String time=new SimpleDateFormat("HH:mm:ss",Locale.US).format(new Date());
+      logs.add(time+" Applicant switch: attachMs="+milliseconds+"; retained="+retained);if(logs.size()>60)logs.remove(0);
+      status=retained?"Sarathi page restored":"Opening Sarathi…";render();
+    }
     void log(String message) {
         String time = new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
         logs.add(time + " " + message);
