@@ -1,5 +1,5 @@
 """Exercise the actual minified release UI, with no debug extension or fixture hooks."""
-import subprocess,time,xml.etree.ElementTree as ET,re
+import subprocess,time,xml.etree.ElementTree as ET,re,sys,traceback
 PACKAGE='com.sarathi.anantnag.gecko.v33'
 def adb(*args):
  try:return subprocess.check_output(['adb',*args],text=True,timeout=35)
@@ -11,6 +11,21 @@ def adb(*args):
    print(diagnostic,flush=True)
   except Exception as capture:print('Timeout evidence capture failed: '+repr(capture),flush=True)
   raise AssertionError('ADB command timed out: '+repr(args)) from exc
+def capture_release_failure(kind,error,tb):
+ evidence=[''.join(traceback.format_exception(kind,error,tb))]
+ for args in [('logcat','-d','-t','6000'),('shell','dumpsys','activity','activities'),('shell','dumpsys','meminfo',PACKAGE)]:
+  try:
+   result=subprocess.run(['adb',*args],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=15)
+   evidence.append(repr(args)+'\n'+result.stdout)
+  except Exception as capture:evidence.append(repr(args)+': '+repr(capture))
+ open('release-smoke-failure.txt','w').write('\n\n'.join(evidence))
+ try:
+  subprocess.run(['adb','shell','screencap','-p','/data/local/tmp/release-failure.png'],check=True,timeout=10)
+  subprocess.run(['adb','pull','/data/local/tmp/release-failure.png','release-failure.png'],check=True,timeout=10)
+ except Exception:pass
+ sys.__excepthook__(kind,error,tb)
+sys.excepthook=capture_release_failure
+
 snapshot_count=0
 def snapshot():
  global snapshot_count
