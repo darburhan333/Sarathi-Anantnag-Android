@@ -521,6 +521,23 @@ public class GeckoIntegrationTest {
    assertTrue("Protected calendar session must retain PRIORITY_HIGH",e.isPriorityHighForTest(e.current));
   });
  }
+ @Test public void backgroundSnapshotsCannotClearVerifiedManualPage()throws Exception{
+  BrowserEngine e=readyApplicant(1);
+  java.lang.reflect.Method receive=BrowserEngine.class.getDeclaredMethod("receive",Object.class);receive.setAccessible(true);
+  main(()->{
+   e.updateProtection(json("protectPage",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION"));
+   try{receive.invoke(e,json("type","STATE","running",true,"successWatch",true,"protectPage",false,"calendarLock",false,"bookingStage","MONITORING"));}
+   catch(Exception failure){throw new AssertionError(failure);}
+   assertTrue("A background monitoring snapshot must not discard document-verified SMS protection",e.protectedPage);
+   assertEquals("A background monitoring snapshot must retain the manual stage","AWAITING MANUAL SMS VERIFICATION",e.protectedStage);
+   e.updateProtection(json("protectPage",false,"calendarLock",false,"bookingStage","READY"));
+   assertFalse("A fresh document query may clear protection after leaving the manual page",e.protectedPage);
+   e.updateProtection(json("protectPage",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION"));
+   try{receive.invoke(e,json("type","STATE","running",false,"successWatch",false,"protectPage",false,"calendarLock",false,"bookingStage","SESSION_EXPIRED"));}
+   catch(Exception failure){throw new AssertionError(failure);}
+   assertFalse("Terminal expiry must retain its existing protection-release behavior",e.protectedPage);
+  });
+ }
  @Test public void stopDuringSmsStageKeepsProtectedPageActiveAndForeground()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;BrowserEngine e=readyApplicant(4);
   main(()->{
@@ -552,11 +569,12 @@ public class GeckoIntegrationTest {
   Thread responder=new Thread(()->{while(!smsServer.isClosed())try(Socket socket=smsServer.accept()){
    socket.setSoTimeout(1000);
    BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream()));
-   String line;while((line=reader.readLine())!=null&&!line.isEmpty()){}
+   String line=reader.readLine();System.out.println("SMS_STOP_FIXTURE_REQUEST "+line);
+   while((line=reader.readLine())!=null&&!line.isEmpty()){}
    byte[] body="<html><body><h1>SMS Verification</h1><label>SMS verification Code <input id='smsCode' type='text' autocomplete='one-time-code'></label></body></html>".getBytes("UTF-8");
    OutputStream out=socket.getOutputStream();
-   out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes("UTF-8"));out.write(body);out.flush();
-  }catch(IOException ignored){}},"SmsStopFixture");responder.setDaemon(true);responder.start();
+   out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes("UTF-8"));out.write(body);out.flush();System.out.println("SMS_STOP_FIXTURE_RESPONSE bytes="+body.length);
+  }catch(IOException failure){if(!smsServer.isClosed())System.out.println("SMS_STOP_FIXTURE_IO "+failure);}},"SmsStopFixture");responder.setDaemon(true);responder.start();
   try{
   // Wait for the extension's initial STATE snapshot before installing the SMS
   // fixture. Otherwise a late startup STOPPED snapshot can overwrite the test
@@ -572,7 +590,11 @@ public class GeckoIntegrationTest {
   // valid unprotected evidence and must not race a synthetic protected page.
   String smsUrl="http://127.0.0.1:"+smsServer.getLocalPort()+"/slots/dlsltprev.do";
   String smsLocation="127.0.0.1/slots/dlsltprev.do"; // BrowserEngine stores host + path without scheme/port.
-  main(()->protectedApplicant.current.loadUri(smsUrl));
+  main(()->{
+   activity.getActivity().selectApplicant(5);
+   protectedApplicant.showingMonitor=false;protectedApplicant.render();protectedApplicant.activate();
+   protectedApplicant.current.loadUri(smsUrl);
+  });
   java.util.concurrent.atomic.AtomicBoolean smsDocumentReady=new java.util.concurrent.atomic.AtomicBoolean();
   long smsDeadline=System.currentTimeMillis()+30000;
   while(!smsDocumentReady.get()&&System.currentTimeMillis()<smsDeadline){

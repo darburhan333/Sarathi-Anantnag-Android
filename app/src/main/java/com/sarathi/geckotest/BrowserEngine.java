@@ -102,7 +102,8 @@ final class BrowserEngine {
         if(changed)activeStates.put(s,active);
       }
     }
-    void updateProtection(JSONObject state){
+    void updateProtection(JSONObject state){updateProtection(state,true);}
+    private void updateProtection(JSONObject state,boolean documentVerified){
       String stage=state.optString("bookingStage","");
       boolean bookingStage=stage.contains("SMS")||stage.contains("CALENDAR")||stage.contains("BOOK SLOT")||stage.equals("APPOINTMENT CONFIRMED");
       boolean protectedNow=state.optBoolean("protectPage")||state.optBoolean("calendarLock")||bookingStage;
@@ -116,7 +117,9 @@ final class BrowserEngine {
         // A queued STOPPED snapshot can arrive before native STOP starts its grace
         // timer, as well as afterwards. Neither snapshot proves the protected page
         // disappeared. Explicit navigation, page loss and the STOP deadline own release.
-        boolean retainedStopSnapshot=protectedPage&&"STOPPED".equals(stage);
+        // Background monitoring snapshots may lag behind the visible manual page.
+        // A current document query or explicit terminal expiry owns clearing it.
+        boolean retainedStopSnapshot=protectedPage&&((!documentVerified&&!"SESSION_EXPIRED".equals(stage))||"STOPPED".equals(stage));
         if(!retainedStopSnapshot){clearProtectedPage();pageLostProtected=false;}
       }
       if(state.has("loggedIn")){loggedInPage=state.optBoolean("loggedIn",true);if(!loggedInPage){loginRequiredObserved=true;clearLoginAt();}}
@@ -333,7 +336,7 @@ final class BrowserEngine {
         case "ALERT_DELIVERY":service.record("ALERT A"+profile+" kind="+o.optString("kind")+" Telegram="+o.optString("telegram"));break;
         case "STATE":
           monitoring=o.optBoolean("running")||o.optBoolean("successWatch");
-          lastState=o;updateProtection(o);
+          lastState=o;updateProtection(o,false);
           monitorStatus=(monitoring?(foreground?"RUNNING · FOREGROUND":"RUNNING · BACKGROUND"):"STOPPED")+" · Session clicks "+o.optInt("sessionAttempts")+"\n"+o.optString("lastStatus");
           run.onState(o);render();
           break;
@@ -344,6 +347,15 @@ final class BrowserEngine {
         case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"),o.optBoolean("terminal"),o.optString("reason","No verification details"));break;
         case "ERROR":log(o.optString("message"));break;
       }
+    }
+    private void queryPageReadiness(GeckoSession website,String queryId,String expectedUrl,int attempt){
+      if(BuildConfig.DEBUG&&expectedUrl.startsWith("http://127.0.0.1"))android.util.Log.i("READINESS_PROBE","A"+profile+" attempt="+attempt+" current="+(website==current)+" query="+queryId.equals(pageQuery)+" url="+expectedUrl.equals(pageUrl)+" loading="+pageLoading+" ready="+pageReady);
+      if(destroyed||website!=current||!website.isOpen()||!queryId.equals(pageQuery)||!expectedUrl.equals(pageUrl)||pageLoading||pageReady)return;
+      // The document_idle script first proves native session ownership. Its
+      // listener can become ready just after onPageStop; inspect the same page
+      // again briefly instead of losing the one-shot reply. No navigation/action.
+      command("PAGE_QUERY",queryId+"|"+expectedUrl);
+      if(attempt<4)service.handler.postDelayed(()->queryPageReadiness(website,queryId,expectedUrl,attempt+1),500);
     }
     private void installExtension(){
       installAttempts++;
@@ -516,7 +528,7 @@ final class BrowserEngine {
                 if (session == current) {
                     pageLoading=false;lastPageStopElapsed=SystemClock.elapsedRealtime();lastPageLoadSucceeded=success;
                     log(success?"Ready":"Page could not load — check connection or use Home");
-                    if(success)command("PAGE_QUERY",pageQuery+"|"+pageUrl);
+                    if(success)queryPageReadiness(session,pageQuery,pageUrl,0);
                     if(!firstPageRecorded){firstPageRecorded=true;logs.add("First page completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);service.handler.post(BrowserEngine.this::prepareMonitor);}
                 }
             }

@@ -28,3 +28,12 @@ Manual SMS/OTP/CAPTCHA and final confirmation. No automatic login, navigation re
 - Full release verification remains required; physical Infinix testing remains pending.
 
 - Preserve a latched protected page when a queued STOPPED snapshot arrives before native Stop begins its retention timer. The focused SMS test now explicitly covers this ordering. Notification Stop uses an actual offline SMS document so a still-loading real homepage cannot overwrite a synthetic fixture; all original safety assertions remain. Notification test reports/logcat are always uploaded, including failures.
+
+## Stop and current-document protection fixes
+- Ordinary success watching no longer marks a normal COV page as a protected manual booking page. Explicit protection, calendar locks and SMS/calendar/BOOK SLOT/confirmed stages retain protection. Bridge contract tests cover normal watching, actual manual stages and terminal expiry.
+- Background STATE snapshots cannot discard a document-verified manual page. Current-document proof and terminal SESSION_EXPIRED retain their release behavior. A native regression exercises this boundary.
+- Page readiness retries at most five read-only checks over two seconds while the same session, query ID and URL remain current; response, navigation, loading, closure or destruction cancels pending checks. No page navigation or form action is performed by readiness retries.
+- The actual offline SMS notification Stop test passed with zero failures/skips in focused run 42168538270, candidate fba4785059afb615519a54a80ee704970613156d. APK asset proof confirmed the updated debug bridge for profiles 1, 5 and 9.
+- Debug-only PAGE_QUERY accepts the loopback fixture and logs fixture readiness. Production retains its Sarathi-only query and host permissions. Verification rejects bridge drift outside that small debug fixture block.
+- Extension versions: production 3.4.11; debug 3.4.12. IDs are unchanged.
+- Canonical checks are 31 focused lifecycle cases plus the complete integration set and required notification Stop. Existing 55-minute limits are unchanged. Missing/failed/skipped notification Stop XML fails the gate. Full release verification is still pending.

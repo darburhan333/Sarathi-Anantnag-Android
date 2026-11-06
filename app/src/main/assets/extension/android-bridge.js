@@ -10,7 +10,9 @@
  function scheduleState(){if(stateTimer!==null)return;stateTimer=setTimeout(()=>{stateTimer=null;state().catch(()=>{});},250);}
  async function state(){
   const d=await chrome.storage.local.get(defaults);
-  port?.postMessage({type:'STATE',...d,protectPage:!!(d.protectPage||d.calendarLock||d.successWatch)});
+  const stage=String(d.bookingStage||'');
+  const manualPage=stage.includes('SMS')||stage.includes('CALENDAR')||stage.includes('BOOK SLOT')||stage==='APPOINTMENT CONFIRMED';
+  port?.postMessage({type:'STATE',...d,protectPage:!!(d.protectPage||d.calendarLock||manualPage)});
  }
  async function stop(reason){
   await inGateQueue(()=>chrome.storage.local.set({androidStopEpoch:String(Date.now())+'-'+Math.random(),running:false,successWatch:false,

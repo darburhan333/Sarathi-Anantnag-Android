@@ -189,7 +189,7 @@ jobs:
             adb install -r "$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
             adb shell pm grant com.sarathi.anantnag.gecko.v33 android.permission.POST_NOTIFICATIONS
             adb shell dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33
-            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.GeckoIntegrationTest#backgroundStallRecoversWithoutClosingPages,com.sarathi.geckotest.GeckoIntegrationTest#backgroundRecoveryRetriesAndIsolatesFailure,com.sarathi.geckotest.GeckoIntegrationTest#encryptedSettingsRoundTrip,com.sarathi.geckotest.GeckoIntegrationTest#applicantPhonesAreSeparateAndEncrypted,com.sarathi.geckotest.GeckoIntegrationTest#stopCancelsEveryConcurrentWaitOnce,com.sarathi.geckotest.GeckoIntegrationTest#backgroundCriticalNativeFailureIsCaughtBeforeRemoteDelivery,com.sarathi.geckotest.GeckoIntegrationTest#normalMonitoringStartThenStopDoesNotRequireProtectionConfirmation,com.sarathi.geckotest.GeckoIntegrationTest#stopDuringCalendarReviewDisarmsAndKeepsProtectedPageActive,com.sarathi.geckotest.GeckoIntegrationTest#stopDuringSmsStageKeepsProtectedPageActiveAndForeground,com.sarathi.geckotest.GeckoIntegrationTest#stopProtectionRetentionIsFiveMinutesForSmsAndCalendar,com.sarathi.geckotest.GeckoIntegrationTest#pageReplacementDetachesAccessibilityBeforeClosingOldSession,com.sarathi.geckotest.GeckoIntegrationTest#simultaneousSessionExpiryEvidenceIsPerApplicantAndRedacted,com.sarathi.geckotest.GeckoIntegrationTest#applicantSettingsLockAndVisibilityDoNotStopOtherApplicants,com.sarathi.geckotest.GeckoIntegrationTest#fullScreenSettingsPreserveWebsiteSession,com.sarathi.geckotest.GeckoIntegrationTest#signatureControlsKeepGlobalAndSelectedActionsSeparate,com.sarathi.geckotest.GeckoIntegrationTest#compactLayoutKeepsActionsAboveMonitorAndLogsSeparate,com.sarathi.geckotest.GeckoIntegrationTest#quickCallRequiresBothDirectPreferenceAndPhonePermission,com.sarathi.geckotest.GeckoIntegrationTest#delayedNativeSilenceCannotCancelANewerCriticalAlert,com.sarathi.geckotest.GeckoIntegrationTest#backAndHomeConfirmOnlyWhenPageProtected,com.sarathi.geckotest.GeckoIntegrationTest#lostNormalPageRecoversButLostProtectedPageDoesNotReplace,com.sarathi.geckotest.GeckoIntegrationTest#idleUnloadRetainsLoggedInPagesUnlessRealMemoryPressure,com.sarathi.geckotest.GeckoIntegrationTest#idleUnloadTimeoutDefaultsToSixtyMinutesAndCanBeConfigured,com.sarathi.geckotest.GeckoIntegrationTest#sessionExpiredStateDisarmsRun,com.sarathi.geckotest.GeckoIntegrationTest#sessionExpiredIsTerminalAndAppearsInNotificationAndCopyLog,com.sarathi.geckotest.GeckoIntegrationTest#pageReadyReasonsUseOnlyActionableSarathiStates,com.sarathi.geckotest.GeckoIntegrationTest#idlePageLossRecoversWithoutAlarmAndHomeWorksWithoutBridge,com.sarathi.geckotest.GeckoIntegrationTest#recoveryRequiresMatchingRunAndCannotResumeAfterStop,com.sarathi.geckotest.GeckoIntegrationTest#telegramCredentialsAreIsolated,com.sarathi.geckotest.GeckoIntegrationTest#silenceAllPreservesRuns,com.sarathi.geckotest.GeckoIntegrationTest#switchingSurfacesRetainsSessionsAndDetachesHiddenAccessibility connectedDebugAndroidTest --stacktrace
+            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.GeckoIntegrationTest#backgroundStallRecoversWithoutClosingPages,com.sarathi.geckotest.GeckoIntegrationTest#backgroundRecoveryRetriesAndIsolatesFailure,com.sarathi.geckotest.GeckoIntegrationTest#encryptedSettingsRoundTrip,com.sarathi.geckotest.GeckoIntegrationTest#applicantPhonesAreSeparateAndEncrypted,com.sarathi.geckotest.GeckoIntegrationTest#stopCancelsEveryConcurrentWaitOnce,com.sarathi.geckotest.GeckoIntegrationTest#backgroundCriticalNativeFailureIsCaughtBeforeRemoteDelivery,com.sarathi.geckotest.GeckoIntegrationTest#normalMonitoringStartThenStopDoesNotRequireProtectionConfirmation,com.sarathi.geckotest.GeckoIntegrationTest#stopDuringCalendarReviewDisarmsAndKeepsProtectedPageActive,com.sarathi.geckotest.GeckoIntegrationTest#stopDuringSmsStageKeepsProtectedPageActiveAndForeground,com.sarathi.geckotest.GeckoIntegrationTest#stopProtectionRetentionIsFiveMinutesForSmsAndCalendar,com.sarathi.geckotest.GeckoIntegrationTest#pageReplacementDetachesAccessibilityBeforeClosingOldSession,com.sarathi.geckotest.GeckoIntegrationTest#simultaneousSessionExpiryEvidenceIsPerApplicantAndRedacted,com.sarathi.geckotest.GeckoIntegrationTest#applicantSettingsLockAndVisibilityDoNotStopOtherApplicants,com.sarathi.geckotest.GeckoIntegrationTest#fullScreenSettingsPreserveWebsiteSession,com.sarathi.geckotest.GeckoIntegrationTest#signatureControlsKeepGlobalAndSelectedActionsSeparate,com.sarathi.geckotest.GeckoIntegrationTest#compactLayoutKeepsActionsAboveMonitorAndLogsSeparate,com.sarathi.geckotest.GeckoIntegrationTest#quickCallRequiresBothDirectPreferenceAndPhonePermission,com.sarathi.geckotest.GeckoIntegrationTest#delayedNativeSilenceCannotCancelANewerCriticalAlert,com.sarathi.geckotest.GeckoIntegrationTest#backAndHomeConfirmOnlyWhenPageProtected,com.sarathi.geckotest.GeckoIntegrationTest#lostNormalPageRecoversButLostProtectedPageDoesNotReplace,com.sarathi.geckotest.GeckoIntegrationTest#idleUnloadRetainsLoggedInPagesUnlessRealMemoryPressure,com.sarathi.geckotest.GeckoIntegrationTest#idleUnloadTimeoutDefaultsToSixtyMinutesAndCanBeConfigured,com.sarathi.geckotest.GeckoIntegrationTest#sessionExpiredStateDisarmsRun,com.sarathi.geckotest.GeckoIntegrationTest#sessionExpiredIsTerminalAndAppearsInNotificationAndCopyLog,com.sarathi.geckotest.GeckoIntegrationTest#pageReadyReasonsUseOnlyActionableSarathiStates,com.sarathi.geckotest.GeckoIntegrationTest#idlePageLossRecoversWithoutAlarmAndHomeWorksWithoutBridge,com.sarathi.geckotest.GeckoIntegrationTest#recoveryRequiresMatchingRunAndCannotResumeAfterStop,com.sarathi.geckotest.GeckoIntegrationTest#telegramCredentialsAreIsolated,com.sarathi.geckotest.GeckoIntegrationTest#silenceAllPreservesRuns,com.sarathi.geckotest.GeckoIntegrationTest#switchingSurfacesRetainsSessionsAndDetachesHiddenAccessibility,com.sarathi.geckotest.GeckoIntegrationTest#backgroundSnapshotsCannotClearVerifiedManualPage connectedDebugAndroidTest --stacktrace
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -269,6 +269,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+      - name: Build notification Stop instrumentation before emulator boot
+        run: |
+          gradle -PtestAbi=x86_64 assembleDebug assembleDebugAndroidTest
+          gradle --stop
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -281,7 +285,11 @@ jobs:
           profile: pixel_6
           ram-size: 4096
           disable-animations: true
-          script: gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.annotation=com.sarathi.geckotest.QuarantinedNotificationStop connectedDebugAndroidTest --stacktrace
+          script: |
+            adb install -r "$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
+            adb shell pm grant com.sarathi.anantnag.gecko.v33 android.permission.POST_NOTIFICATIONS
+            adb shell dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33
+            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.annotation=com.sarathi.geckotest.QuarantinedNotificationStop connectedDebugAndroidTest --stacktrace
       - name: Record quarantined notification STOP result
         if: always()
         shell: bash
@@ -310,6 +318,7 @@ jobs:
               if not found:
                   summary.write("- FAIL: test result XML not found\n")
           print(f"{status}: {target}")
+          if not passed:raise SystemExit("Required notification STOP test did not pass")
           PY
 
       - uses: actions/upload-artifact@v4

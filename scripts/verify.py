@@ -4,6 +4,20 @@ root=Path(__file__).resolve().parents[1]
 ext=root/'app/src/main/assets/extension'
 for f in ext.glob('*.js'):
  subprocess.run(['node','--check',str(f)],check=True)
+# The debug bridge mirrors production outside its localhost readiness fixture.
+# Fail if normal bridge behavior drifts between emulator tests and release.
+production_bridge=(ext/'android-bridge.js').read_text()
+debug_bridge=(root/'app/src/debug/assets/extension/android-bridge.js').read_text()
+def without_readiness_fixture(source):
+ start=source.index("  if(m.type==='PAGE_QUERY')")
+ end=source.index("  if(m.type==='DISARMED')",start)
+ return source[:start]+source[end:]
+assert without_readiness_fixture(production_bridge)==without_readiness_fixture(debug_bridge), 'Debug bridge drifted from production outside PAGE_QUERY'
+for bridge in [production_bridge,debug_bridge]:
+ assert "if(r?.ok&&r.ready&&r.page===queryUrl)" in bridge
+ assert "port?.postMessage({type:'PAGE_READY',id:queryId,url:r.page,covReady:r.covReady,protectPage:r.protectPage,loggedIn:r.loggedIn!==false,reason:r.reason})" in bridge
+assert '127.0.0.1' not in production_bridge, 'Loopback fixture support must remain debug-only'
+
 ui=(ext/'ui.js').read_text()
 content=(ext/'content.js').read_text()
 background=(ext/'background.js').read_text()
