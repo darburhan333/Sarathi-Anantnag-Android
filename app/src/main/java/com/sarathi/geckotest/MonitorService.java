@@ -7,7 +7,7 @@ public final class MonitorService extends Service {
  final BrowserEngine[] profiles=new BrowserEngine[PROFILE_COUNT];BrowserEngine engine;MainActivity activity;boolean visible;volatile boolean settingsBusy;
  private volatile boolean promoted,destroying;
  private KeepAlive keepAlive;
- TelegramSettingsLock telegramLock;long lastActivityPauseElapsed;private long lastNetworkChangeElapsed;
+ CriticalHistory criticalHistory;TelegramSettingsLock telegramLock;long lastActivityPauseElapsed;private long lastNetworkChangeElapsed;
  final HandlerThread clockThread=new HandlerThread("MonitoringClock",android.os.Process.THREAD_PRIORITY_DEFAULT);Handler clock;
  private volatile long clockBeat,clockUptime,longestClockGap,mainBeat,armedClockBeat;volatile long screenOffAt,screenOnAt;private final java.util.concurrent.atomic.AtomicBoolean tickQueued=new java.util.concurrent.atomic.AtomicBoolean();
  private volatile boolean needsCpu;private int lastAudioMode=Integer.MIN_VALUE;
@@ -22,7 +22,7 @@ public final class MonitorService extends Service {
   @Override public void onAvailable(Network n){handler.post(()->{if(!n.equals(network)){lastNetworkChangeElapsed=SystemClock.elapsedRealtime();record("Network transition: available; serviceInstance="+processId);if(network!=null)recoverAll("Network changed; verifying existing sessions");}network=n;});}
   @Override public void onLost(Network n){handler.post(()->{if(n.equals(network)){network=null;lastNetworkChangeElapsed=SystemClock.elapsedRealtime();record("Network transition: lost; serviceInstance="+processId);recoverAll("Network unavailable; waiting for session verification");}});}
  };
- @Override public void onCreate(){super.onCreate();telegramLock=new TelegramSettingsLock(this);keepAlive=new KeepAlive(this);clockThread.start();clock=new Handler(clockThread.getLooper());
+ @Override public void onCreate(){super.onCreate();criticalHistory=new CriticalHistory(this);telegramLock=new TelegramSettingsLock(this);keepAlive=new KeepAlive(this);clockThread.start();clock=new Handler(clockThread.getLooper());
   getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("sarathi-monitor","Background monitoring",NotificationManager.IMPORTANCE_LOW));
   wake=getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"MParivahan:monitor");wake.setReferenceCounted(false);
   android.net.wifi.WifiManager wifi=(android.net.wifi.WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
@@ -66,11 +66,11 @@ public final class MonitorService extends Service {
   keepAlive.start();if(!keepAlive.overlayAllowed())record("WARNING: overlay permission missing; background reliability is not established");
  }
  String routineWarning(){StringBuilder ids=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&e.run.armed&&e.alerts.mode().equals("ROUTINE OFF")){if(ids.length()>0)ids.append(", ");ids.append("A").append(e.profile);}return ids.length()==0?"":"\nALERTS: ROUTINE OFF ("+ids+")";}
- private String notificationText(){
-  StringBuilder text=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&(e.run.armed||e.protectedPage)){if(text.length()>0)text.append(" · ");text.append("A").append(e.profile).append(" ").append(e.lastState.optBoolean("calendarLock")?"CALENDAR, act now":e.lastState.optString("bookingStage").contains("SMS")?"SMS, waiting":String.valueOf(e.lastState.optInt("sessionAttempts"))).append(" [").append(e.alerts.mode()).append("]");}
-  if(text.length()==0)text.append(alerting()?"Alert active — open app":"Finishing alerts");
-  return text.toString()+routineWarning()+(keepAlive.overlayAllowed()?"":"\nWARNING: Display over other apps permission missing");
+ String monitoringNotificationText(){
+  StringBuilder names=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&e.run.armed){if(names.length()>0)names.append(" · ");names.append("A").append(e.profile);}
+  return names.length()>0?"Monitoring: "+names:protectedCount()>0?"Monitoring paused · booking page retained":alerting()?"Alert active — open app":"Monitoring stopped";
  }
+ private String notificationText(){return monitoringNotificationText();}
  static boolean shouldUpdateForegroundNotificationForTest(String previous,String next,long now,long last){return !java.util.Objects.equals(previous,next)&&(last==0||now-last>=10000L);}
  private Notification notification(){return notification(notificationText());}
  private Notification notification(String summary){
@@ -113,26 +113,28 @@ public final class MonitorService extends Service {
  }
  String startBatch="";
  void cancelStartBatch(){startBatch="";for(BrowserEngine e:profiles)if(e!=null&&e.preparingStartControls)e.finishStartControls();}
- void startAllReady(){
+ void startAllReady(){startReady(0);}
+ void startApplicantReady(int applicant){if(applicant<1||applicant>PROFILE_COUNT)throw new IllegalArgumentException("Invalid applicant");startReady(applicant);}
+ private void startReady(int onlyApplicant){
   if(!visible||activity==null){record("Start All ignored: app is not visible");return;}
   // One tap creates one batch. Pages still initializing get a short retry window.
-  startBatch=java.util.UUID.randomUUID().toString();
+  cancelStartBatch();startBatch=java.util.UUID.randomUUID().toString();
   java.util.Set<Integer> requested=new java.util.HashSet<>();
   record("Start All requested batch="+startBatch);
-  startAllAttempt(startBatch,0,requested);
-  android.widget.Toast.makeText(this,"Start All requested — preparing available applicants",android.widget.Toast.LENGTH_LONG).show();
+  startAllAttempt(startBatch,0,requested,onlyApplicant);
+  android.widget.Toast.makeText(this,onlyApplicant==0?"Start All requested — preparing available applicants":"Preparing Applicant "+onlyApplicant,android.widget.Toast.LENGTH_LONG).show();
  }
- private void startAllAttempt(String batch,int attempt,java.util.Set<Integer> requested){
+ private void startAllAttempt(String batch,int attempt,java.util.Set<Integer> requested,int onlyApplicant){
   if(!batch.equals(startBatch)||!visible||activity==null)return;
   boolean waiting=false;
   for(BrowserEngine e:profiles){
-   if(e==null||e.run.armed||requested.contains(e.profile))continue;
+   if(e==null||(onlyApplicant!=0&&e.profile!=onlyApplicant)||e.run.armed||requested.contains(e.profile))continue;
    if(e.current==null||!e.current.isOpen())continue;
    if(!e.monitorReady){e.prepareStartControls();waiting=true;continue;}
    requested.add(e.profile);e.command("START_READY",batch);
   }
   if(waiting&&attempt<20){
-   handler.postDelayed(()->startAllAttempt(batch,attempt+1,requested),500);
+   handler.postDelayed(()->startAllAttempt(batch,attempt+1,requested,onlyApplicant),500);
   }else if(waiting){
    record("Start All initialization timeout after "+(attempt*500)+"ms; inspect applicants that were not ready");for(BrowserEngine e:profiles)if(e!=null&&e.preparingStartControls)e.finishStartControls();
   }
@@ -174,7 +176,7 @@ public final class MonitorService extends Service {
  boolean isKeepAliveAudioRunningForTest(){return keepAlive!=null&&keepAlive.isAudioRunningForTest();}
  public boolean isArmedForTest(){return engine.run.armed;}public int attemptsForTest(){return engine.lastState.optInt("sessionAttempts");}
  void arm(){engine.run.arm();}org.mozilla.geckoview.GeckoResult<Object> waitFor(long ms){return engine.run.waitFor(ms);}
- String diagnosticReport(){StringBuilder out=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&!e.sessionExpiredHeader.isEmpty())out.append(e.sessionExpiredHeader).append("\n");out.append("=== CRITICAL EVENTS (never trimmed) ===\n").append(getSharedPreferences("diagnostics",0).getString("criticalEvents","")).append("\n=== CURRENT DIAGNOSTICS ===\n");out.append("KeepAlive: "+(keepAlive==null?"uninitialized":keepAlive.status())+"\n");out.append("PID: "+android.os.Process.myPid()+" · service instance: "+processId+" · service promoted: "+promoted+" · wake lock: "+wake.isHeld()+" · wifi lock: "+(wifiLock!=null&&wifiLock.isHeld())+"\n");out.append(clockDiagnostics()).append("; active=").append(activeCount()).append("; protected=").append(protectedCount()).append("; alerting=").append(alerting()).append("; stopGraceRemainingMs=").append(stopAfter>0?stopAfter-SystemClock.elapsedRealtime():-1L).append("\nLive Gecko sessions: ").append(sessionCount()).append("\n");out.append(getSharedPreferences("diagnostics",0).getString("events",""));for(BrowserEngine e:profiles)if(e!=null)out.append("\nApplicant ").append(e.profile).append(e.run.diagnostics()).append("\n").append(String.join("\n",e.logs));return out.toString();}
+ String diagnosticReport(){StringBuilder out=new StringBuilder();for(BrowserEngine e:profiles)if(e!=null&&!e.sessionExpiredHeader.isEmpty())out.append(e.sessionExpiredHeader).append("\n");out.append("=== CRITICAL EVENTS (never trimmed) ===\n").append(criticalHistory==null?"":criticalHistory.recent()).append("\nFull critical history is preserved in the archive. Logs > Export critical history saves it.").append("\n=== CURRENT DIAGNOSTICS ===\n");out.append("KeepAlive: "+(keepAlive==null?"uninitialized":keepAlive.status())+"\n");out.append("PID: "+android.os.Process.myPid()+" · service instance: "+processId+" · service promoted: "+promoted+" · wake lock: "+wake.isHeld()+" · wifi lock: "+(wifiLock!=null&&wifiLock.isHeld())+"\n");out.append(clockDiagnostics()).append("; active=").append(activeCount()).append("; protected=").append(protectedCount()).append("; alerting=").append(alerting()).append("; stopGraceRemainingMs=").append(stopAfter>0?stopAfter-SystemClock.elapsedRealtime():-1L).append("\nLive Gecko sessions: ").append(sessionCount()).append("\n");out.append(getSharedPreferences("diagnostics",0).getString("events",""));for(BrowserEngine e:profiles)if(e!=null)out.append("\nApplicant ").append(e.profile).append(e.run.diagnostics()).append("\n").append(String.join("\n",e.logs));return out.toString();}
  void logHistoricalExits(){if(Build.VERSION.SDK_INT<30)return;try{java.util.Set<String> seen=new java.util.HashSet<>(getSharedPreferences("diagnostics",0).getStringSet("seenExits",java.util.Collections.emptySet()));for(ApplicationExitInfo info:getSystemService(ActivityManager.class).getHistoricalProcessExitReasons(getPackageName(),0,5)){String key=info.getPid()+":"+info.getTimestamp();if(seen.add(key)){record("SERVICE_EXIT_EVIDENCE reason="+info.getReason()+" status="+info.getStatus()+" importance="+info.getImportance()+" pid="+info.getPid()+" processKind="+(getPackageName().equals(info.getProcessName())?"main":"child")+" time="+info.getTimestamp());record("historicalExit reason="+info.getReason()+" pid="+info.getPid()+" process="+info.getProcessName()+" time="+info.getTimestamp()+" detail="+info.getDescription());}}if(seen.size()>100)seen.clear();getSharedPreferences("diagnostics",0).edit().putStringSet("seenExits",seen).apply();}catch(Exception ex){record("Exit history unavailable: "+ex.getClass().getSimpleName());}}
  private boolean isCriticalDiagnostic(String message){String value=message.toUpperCase(java.util.Locale.US);return value.contains("SERVICE_START")||value.contains("SERVICE_EXIT_EVIDENCE")||value.contains("DISARM")||value.contains("STALL")||value.contains("SESSION")||value.contains("ALERT")||value.contains("PAGE UNLOADED")||value.contains("PAGE LOST")||value.contains("PAGE LOSS")||value.contains("CLOSED; ACTIVE=");}
  static String trimDiagnosticHistory(String value,int maxBytes){
@@ -189,7 +191,7 @@ public final class MonitorService extends Service {
   if(!marker.isEmpty()){String other=marker.equals("Screen OFF")?"Screen ON":marker.equals("Screen ON")?"Screen OFF":marker.equals("Activity paused")?"Activity resumed":"Activity paused";if(old.lastIndexOf(marker)>old.lastIndexOf(other))return;}
   if(message.startsWith("historicalExit")&&old.contains("historicalExit"))return;
   String line=new java.text.SimpleDateFormat("MM-dd HH:mm:ss",java.util.Locale.US).format(new java.util.Date())+" "+message;
-  if(isCriticalDiagnostic(message)){String critical=p.getString("criticalEvents","");p.edit().putString("criticalEvents",critical.isEmpty()?line:critical+"\n"+line).apply();}
+  if(isCriticalDiagnostic(message)&&criticalHistory!=null)criticalHistory.append(line);
   String next=trimDiagnosticHistory(old+"\n"+line,65536);p.edit().putString("events",next).apply();
  }
  static String audioModeNameForTest(int mode){if(mode==AudioManager.MODE_IN_CALL)return "IN_CALL";if(mode==AudioManager.MODE_RINGTONE)return "RINGTONE";if(mode==AudioManager.MODE_IN_COMMUNICATION)return "IN_COMMUNICATION";return mode==AudioManager.MODE_NORMAL?"NORMAL":"MODE_"+mode;}
@@ -197,7 +199,7 @@ public final class MonitorService extends Service {
  private void recordAudioMode(int mode){if(mode!=lastAudioMode){String previous=lastAudioMode==Integer.MIN_VALUE?"unknown":audioModeNameForTest(lastAudioMode);lastAudioMode=mode;record("AudioManager mode changed "+previous+" -> "+audioModeNameForTest(mode)+" ("+mode+"); callStateHint="+audioModeNameForTest(mode));}}
  private void captureAudioMode(){try{recordAudioMode(getSystemService(AudioManager.class).getMode());}catch(Exception ex){record("AudioManager mode read failed: "+ex.getClass().getSimpleName());}}
  @Override public void onTaskRemoved(Intent rootIntent){record("Task removed; active applicants="+activeCount()+"; monitoring retained");super.onTaskRemoved(rootIntent);}
- @Override public void onDestroy(){handler.removeCallbacks(stopGraceCheck);if(telegramLock!=null)telegramLock.close();if(keepAlive!=null)keepAlive.stop();record("Service destroyed; active applicants="+activeCount());getSharedPreferences("diagnostics",0).edit().putBoolean("lastServiceDestroyed",true).apply();destroying=true;if(screenReceiverRegistered){unregisterReceiver(screenReceiver);screenReceiverRegistered=false;}clock.removeCallbacksAndMessages(null);clockThread.quitSafely();connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();super.onDestroy();}
+ @Override public void onDestroy(){handler.removeCallbacks(stopGraceCheck);if(telegramLock!=null)telegramLock.close();if(keepAlive!=null)keepAlive.stop();record("Service destroyed; active applicants="+activeCount());getSharedPreferences("diagnostics",0).edit().putBoolean("lastServiceDestroyed",true).apply();destroying=true;if(screenReceiverRegistered){unregisterReceiver(screenReceiver);screenReceiverRegistered=false;}clock.removeCallbacksAndMessages(null);clockThread.quitSafely();connectivity.unregisterNetworkCallback(networks);for(BrowserEngine e:profiles)if(e!=null){e.run.disarm();e.shutdown();}if(wake.isHeld())wake.release();if(wifiLock!=null&&wifiLock.isHeld())wifiLock.release();if(criticalHistory!=null)criticalHistory.close();super.onDestroy();}
 }
 
 

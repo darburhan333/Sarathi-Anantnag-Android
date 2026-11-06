@@ -33,6 +33,7 @@
    }finally{port?.postMessage({type:'FILL_RESULT',id:m.id,ok});}
    return;
   }
+  if(m.type==='RTO_SET'){await chrome.storage.local.set({detectedRto:String(m.label||'')});return;}
   if(m.type==='START_READY'){
    const result=await chrome.runtime.sendMessage({type:'ANDROID_START_READY',batch:m.reason});
    port?.postMessage({type:'START_RESULT',batch:m.reason,ok:result?.ok===true,reason:result?.reason||'Monitor page unavailable'});return;
@@ -42,7 +43,7 @@
    const fixture=queryUrl.startsWith('http://127.0.0.1:');
    const tabs=await chrome.tabs.query({url:['https://sarathi.parivahan.gov.in/*','http://127.0.0.1/*']});
    if(fixture)console.info('READINESS_PROBE '+JSON.stringify({applicant:globalThis.APPLICANT||1,tabs:tabs.map(t=>({id:t.id,target:t.url===queryUrl}))}));
-   for(const tab of tabs){try{const r=await tabRequest(tab.id,{type:'SARATHI_PROFILE_QUERY'});if(fixture)console.info('READINESS_PROBE '+JSON.stringify({tab:tab.id,ok:r?.ok,ready:r?.ready,protect:r?.protectPage,pageMatches:r?.page===queryUrl,reason:r?.reason}));if(r?.ok&&r.ready&&r.page===queryUrl){port?.postMessage({type:'PAGE_READY',id:queryId,url:r.page,covReady:r.covReady,protectPage:r.protectPage,loggedIn:r.loggedIn!==false,reason:r.reason});return;}}catch(error) {if(fixture)console.info('READINESS_PROBE error '+String(error?.message||error).replace(/https?:\/\/\S+/g,'[url]'));}}
+   for(const tab of tabs){try{const r=await tabRequest(tab.id,{type:'SARATHI_PROFILE_QUERY',queryToken:queryId});if(fixture)console.info('READINESS_PROBE '+JSON.stringify({tab:tab.id,ok:r?.ok,ready:r?.ready,protect:r?.protectPage,pageMatches:r?.page===queryUrl,reason:r?.reason}));if(r?.ok&&r.ready&&r.page===queryUrl){port?.postMessage({type:'PAGE_READY',id:queryId,url:r.page,rtoLabel:r.rtoLabel||'',covReady:r.covReady,protectPage:r.protectPage,loggedIn:r.loggedIn!==false,reason:r.reason});return;}}catch(error) {if(fixture)console.info('READINESS_PROBE error '+String(error?.message||error).replace(/https?:\/\/\S+/g,'[url]'));}}
    return;
   }
   if(m.type==='DISARMED'){await chrome.storage.local.set({androidServiceReady:false});const d=await chrome.storage.local.get({running:false,successWatch:false});if(d.running||d.successWatch)await stop('Background service stopped — press START to begin again');return;}

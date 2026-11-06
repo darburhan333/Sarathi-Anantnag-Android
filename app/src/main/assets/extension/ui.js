@@ -95,7 +95,7 @@ let viewRequest=0;
 let lastStageRendered=null;
 let lastHistoryRendered=null;
 let lastPaintKey=null;
-const viewDefaults={telegramStatusEnabled:false,telegramStatusError:'',telegramStatusLastPoll:0,telegramStatusLastReply:0,nextRetryAt:0,running:false,lastCheck:0,lastStatus:'Stopped',heartbeatAt:0,monitorProgressAt:0,monitorLoopActive:false,calendarLock:false,telegramEnabled:true,desktopEnabled:true,soundEnabled:true,volume:85,history:[],covSelection:[],attempts:0,attemptDay:'',attemptTimestamps:[],alarmActive:false,telegramDeliveryStatus:'',telegramLastAttempt:0,botToken:'',chatId:'',chatId2:'',successWatch:false,audioError:'',bookingStage:'',autoBookingEnabled:false,assistedBookingPreference:false,failureDesktopError:'',failureTelegramError:''};
+const viewDefaults={detectedRto:'',telegramStatusEnabled:false,telegramStatusError:'',telegramStatusLastPoll:0,telegramStatusLastReply:0,nextRetryAt:0,running:false,lastCheck:0,lastStatus:'Stopped',heartbeatAt:0,monitorProgressAt:0,monitorLoopActive:false,calendarLock:false,telegramEnabled:true,desktopEnabled:true,soundEnabled:true,volume:85,history:[],covSelection:[],attempts:0,attemptDay:'',attemptTimestamps:[],alarmActive:false,telegramDeliveryStatus:'',telegramLastAttempt:0,botToken:'',chatId:'',chatId2:'',successWatch:false,audioError:'',bookingStage:'',autoBookingEnabled:false,assistedBookingPreference:false,failureDesktopError:'',failureTelegramError:''};
 function applyViewChanges(changes){
   if(!viewState){pendingViewChanges.push(changes);return;}
   for(const [key,entry] of Object.entries(changes)){
@@ -119,7 +119,7 @@ function paintView(){
     const stage=String(d.bookingStage||'').toUpperCase();const attention=/SMS|CALENDAR|QUOTA|BOOK SLOT|FAIL|EXPIRED|REVIEW|CONFIRM/.test(stage);
     $('focusState').textContent=d.running?'Monitoring active':attention?'Needs attention':'Stopped';
     $('focusStage').textContent=/SMS/.test(stage)?'SMS verification':/EXPIRED/.test(stage)?'Session expired':/CONFIRMED|BOOKED/.test(stage)?'Appointment confirmed':/FAIL/.test(stage)?'Check applicant page':/CALENDAR/.test(stage)?'Calendar detected':/QUOTA/.test(stage)?'Checking quota':d.running?'Checking availability':'Ready to monitor';
-    $('focusCov').textContent=(d.covSelection&&Array.isArray(d.covSelection)&&d.covSelection.length?d.covSelection.join(' + ')+' · ':'')+'Anantnag';
+    $('focusCov').textContent=(d.covSelection&&Array.isArray(d.covSelection)&&d.covSelection.length?d.covSelection.join(' + ')+' · ':'')+(d.detectedRto?'RTO · '+d.detectedRto:'RTO not detected');
   }
 
   if($('telegramStatusEnabled'))$('telegramStatusEnabled').checked=!!d.telegramStatusEnabled;

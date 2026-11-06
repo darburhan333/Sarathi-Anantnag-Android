@@ -129,7 +129,7 @@ adb('shell','screencap','-p','/data/local/tmp/release-logs.png');adb('pull','/da
 tap_text('Close');root=wait_ready(1)
 assert any(n.get('text')=='Call A1' for n in root.iter('node')),'Log filtering must not switch the active applicant'
 root=snapshot()
-labels=['Stop All','Start All','Home','Fill Details','Website','Silence All','Call A1']
+labels=['Stop All','Start All','Home','Website','Silence All','Call A1']
 adb('shell','screencap','-p','/data/local/tmp/release-preview.png')
 adb('pull','/data/local/tmp/release-preview.png','release-preview.png')
 def native_control(root,label):
@@ -141,12 +141,14 @@ for label in labels:
 control_nodes=[native_control(root,label) for label in labels]
 rects=[list(map(int,re.findall(r'\d+',n.get('bounds')))) for n in control_nodes]
 print('Native Signature control bounds: '+repr(dict(zip(labels,rects))),flush=True)
-assert len({r[1] for r in rects[:4]})==1 and len({r[1] for r in rects[4:]})==1,'Controls must occupy exactly two aligned rows: '+repr(dict(zip(labels,rects)))
-assert rects[0][1]<rects[4][1],'Control rows must keep the approved sequence'
+assert len({r[1] for r in rects[:3]})==1 and len({r[1] for r in rects[3:]})==1,'Controls must occupy exactly two aligned rows: '+repr(dict(zip(labels,rects)))
+assert rects[0][1]<rects[3][1],'Control rows must keep the approved sequence'
 monitor_heading=next(n for n in root.iter('node') if n.get('text')=='LIVE MONITOR')
 heading_bounds=list(map(int,re.findall(r'\d+',monitor_heading.get('bounds'))))
 assert max(r[3] for r in rects)<=heading_bounds[1],'Both control rows must be ABOVE the live monitor'
-assert rects[0][0]<rects[1][0]<rects[2][0]<rects[3][0] and rects[4][0]<rects[5][0]<rects[6][0],'Control column order changed'
+assert rects[0][0]<rects[1][0]<rects[2][0] and rects[3][0]<rects[4][0]<rects[5][0],'Control column order changed'
+details_bounds=list(map(int,re.findall(r'\d+',native_control(root,'Fill Details').get('bounds'))))
+assert details_bounds[1]>=max(r[3] for r in rects) and details_bounds[3]<=heading_bounds[1], 'Fill Details must be in the status bar below both action rows'
 picker=next(n for n in root.iter('node') if n.get('content-desc')=='Choose applicant')
 tap_node(picker);tap_text('Applicant 2');root=wait_ready(2)
 assert any(n.get('text')=='Call A2' for n in root.iter('node')),'Quick call must follow selected applicant'

@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "MPARIVAHAN SLOT BOOKING -J&K",
-  "version": "3.4.15",
+  "version": "3.4.17",
   "browser_specific_settings": {
     "gecko": {
       "id": "sarathi-android@burhan.local"
@@ -38,6 +38,7 @@
         "compat.js",
         "applicant-fill.js",
         "booking-rules.js",
+        "rto-label.js",
         "content.js"
       ],
       "run_at": "document_idle"

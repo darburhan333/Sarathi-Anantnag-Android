@@ -15,7 +15,7 @@ def without_readiness_fixture(source):
 assert without_readiness_fixture(production_bridge)==without_readiness_fixture(debug_bridge), 'Debug bridge drifted from production outside PAGE_QUERY'
 for bridge in [production_bridge,debug_bridge]:
  assert "if(r?.ok&&r.ready&&r.page===queryUrl)" in bridge
- assert "port?.postMessage({type:'PAGE_READY',id:queryId,url:r.page,covReady:r.covReady,protectPage:r.protectPage,loggedIn:r.loggedIn!==false,reason:r.reason})" in bridge
+ assert "port?.postMessage({type:'PAGE_READY',id:queryId,url:r.page,rtoLabel:r.rtoLabel||'',covReady:r.covReady,protectPage:r.protectPage,loggedIn:r.loggedIn!==false,reason:r.reason})" in bridge
 assert '127.0.0.1' not in production_bridge, 'Loopback fixture support must remain debug-only'
 
 ui=(ext/'ui.js').read_text()
@@ -30,6 +30,7 @@ subprocess.run(['python3',str(root/'scripts/test-capture-diagnostics.py')],check
 manifest=json.loads((ext/'manifest.json').read_text())
 assert not any('127.0.0.1' in x for x in manifest['permissions'])
 subprocess.run(['node',str(root/'scripts/cov-row-tests.js')],check=True)
+subprocess.run(['node',str(root/'scripts/rto-label-tests.js')],check=True)
 subprocess.run(['node',str(root/'scripts/vault-tests.js')],check=True)
 subprocess.run(['node',str(root/'scripts/telegram-lock-tests.js')],check=True)
 subprocess.run(['node',str(root/'scripts/telegram-delivery-tests.js')],check=True)

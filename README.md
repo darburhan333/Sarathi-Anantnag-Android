@@ -1,3 +1,7 @@
+# Latest: 3.9.4-midnight-teal
+
+See [HANDOVER_3_9_4.md](HANDOVER_3_9_4.md) for the thirteen approved improvements and validation status.
+
 ## 3.9.0 compact UI
 
 The main applicant selector is separate from the two compact action rows. Their order is Monitor/Website, Start All, Silence All; then Stop All, Home, Call. Both rows sit above the monitoring content. The main Monitor page contains assisted booking, seven-stage progress, connection details and recent activity.

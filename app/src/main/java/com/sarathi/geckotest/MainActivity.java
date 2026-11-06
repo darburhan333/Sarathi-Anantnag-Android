@@ -58,7 +58,8 @@ public class MainActivity extends Activity {
     private final LinearLayout[] applicantRows=new LinearLayout[2];
     private int lockedApplicant=1;
     private AlertDialog settingsMenuDialog,logsDialog;
-    private LinearLayout signatureControls,settingsContext;
+    private LinearLayout signatureControls,settingsContext,applicantStatusBar;
+    private int detailsDialogEpoch;
     private TextView settingsTitle;
     private View appLogo;
     private String activePanel="monitor";
@@ -96,6 +97,7 @@ public class MainActivity extends Activity {
     public String signatureControlLabelForTest(int index){return signatureButtons[index].getText().toString();}
     public boolean signatureHasIconForTest(int index){return signatureButtons[index].getCompoundDrawablesRelative()[0]!=null;}
     public boolean applicantMenuHighlightForTest(int number){TextView row=(TextView)applicantAdapter.getDropDownView(number-1,null,applicantPicker);return row.getCurrentTextColor()==0xFF63E6CA&&row.getCompoundDrawablesRelative()[2]!=null;}
+    public void longClickSignatureControlForTest(int index){signatureButtons[index].performLongClick();}
     public void clickSignatureControlForTest(int index){signatureButtons[index].performClick();}
     public MonitorService serviceForTest(){return engine==null?null:engine.service;}
     private void command(String type){if(engine!=null)engine.command(type);}
@@ -128,6 +130,7 @@ public class MainActivity extends Activity {
       if(activeSummary!=null)setTextIfChanged(activeSummary,engine.service.activeCount()+" of 9 monitoring");
       if(closedPageNotice!=null){closedPageNotice.setVisibility(engine.hasClosedPageNotice()?View.VISIBLE:View.GONE);setTextIfChanged(closedPageNotice,"Applicant "+engine.profile+" · Idle website was closed. Reopen Website and check login before Start. Tap to dismiss.");}
        if(callButton!=null){setTextIfChanged(callButton,"Call A"+engine.profile);setDescriptionIfChanged(callButton,"Call Applicant "+engine.profile);}
+      if(applicantStatusBar!=null)applicantStatusBar.setVisibility(activePanel.equals("monitor")?View.VISIBLE:View.GONE);
       if(settingsContext!=null)settingsContext.setVisibility(activePanel.equals("monitor")?View.GONE:View.VISIBLE);
       if(signatureControls!=null)signatureControls.setVisibility(activePanel.equals("monitor")?View.VISIBLE:View.GONE);
       if(settingsTitle!=null)setTextIfChanged(settingsTitle,"Alerts · Applicant "+engine.profile);
@@ -191,6 +194,7 @@ public class MainActivity extends Activity {
       TextView report=text(logHeader+service.diagnosticReport(),11,0xFFCAD7E4);report.setTypeface(Typeface.MONOSPACE);report.setTextIsSelectable(true);report.setPadding(dp(10),dp(10),dp(10),dp(10));
       android.widget.ScrollView scroll=new android.widget.ScrollView(this);scroll.setBackgroundColor(0xFF0D2B33);scroll.addView(report);panel.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
       filter.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> parent){}public void onItemSelected(android.widget.AdapterView<?> parent,View child,int position,long id){BrowserEngine profile=position==0?null:service.profiles[position-1];report.setText(logHeader+(position==0?service.diagnosticReport():profile==null?"No activity for Applicant "+position:"Applicant "+position+profile.run.diagnostics()+"\n"+String.join("\n",profile.logs)));}});
+      LinearLayout archiveRow=new LinearLayout(this);button(archiveRow,"Export critical history",0xFF10343D,()->{try{startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain").putExtra(Intent.EXTRA_TITLE,"MParivahan-critical-history.txt"),83);}catch(android.content.ActivityNotFoundException ex){detailsToast("No file picker is available.");}});panel.addView(archiveRow);
       LinearLayout actions=new LinearLayout(this);button(actions,"Copy logs",0xFF10343D,()->{((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Sarathi logs",report.getText()));Toast.makeText(this,"Logs copied",Toast.LENGTH_SHORT).show();});button(actions,"Share",0xFF10443F,()->startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,report.getText().toString()),"Share logs")));button(actions,"Close",0xFF10343D,()->{if(logsDialog!=null)logsDialog.dismiss();});panel.addView(actions);
       logsDialog=darkDialog(panel,true);logsDialog.setOnDismissListener(d->logsDialog=null);
     }
@@ -233,7 +237,7 @@ public class MainActivity extends Activity {
         Intent intent=new Intent(exporting?Intent.ACTION_CREATE_DOCUMENT:Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(exporting?"application/octet-stream":"*/*");if(exporting)intent.putExtra(Intent.EXTRA_TITLE,"MParivahan-settings.enc");startActivityForResult(intent,exporting?81:82);
       }).setNegativeButton("Cancel",null).show();
     }
-    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request!=81&&request!=82)return;
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==83){if(result==RESULT_OK&&data!=null&&data.getData()!=null&&engine!=null)engine.service.criticalHistory.export(data.getData(),ok->runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())detailsToast(ok?"Critical history exported":"Could not export critical history.");}));return;}if(request!=81&&request!=82)return;
       final char[] password=backupPassword;backupPassword=null;if(password==null)return;
       if(result!=RESULT_OK||data==null||data.getData()==null){java.util.Arrays.fill(password,'\0');return;}
       final MonitorService service=engine==null?null:engine.service;if(service==null||service.activeCount()>0||service.protectedCount()>0){java.util.Arrays.fill(password,'\0');Toast.makeText(this,"Stop monitoring and finish protected pages first",Toast.LENGTH_LONG).show();return;}
@@ -246,6 +250,13 @@ public class MainActivity extends Activity {
       },"SettingsTransfer").start();
     }
     private void manageApplicantAlerts(){showApplicantSettings();}
+    private android.widget.ArrayAdapter<String> alertModeChoices(){
+      return new android.widget.ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,PhoneAlerts.MODES){
+        private View styled(int position,View convert,android.view.ViewGroup parent,boolean dropdown){TextView item=(TextView)(dropdown?super.getDropDownView(position,convert,parent):super.getView(position,convert,parent));item.setTextColor(0xFFEDF9F8);item.setBackgroundColor(0xFF10343D);item.setTextSize(14);item.setGravity(Gravity.CENTER_VERTICAL);item.setMinHeight(dp(48));item.setPadding(dp(12),dp(8),dp(12),dp(8));return item;}
+        @Override public View getView(int p,View v,android.view.ViewGroup parent){return styled(p,v,parent,false);}
+        @Override public View getDropDownView(int p,View v,android.view.ViewGroup parent){return styled(p,v,parent,true);}
+      };
+    }
     private void manageDeviceAlertOptions(){
       if(engine==null)return;
       MonitorService service=engine.service;
@@ -255,17 +266,17 @@ public class MainActivity extends Activity {
       android.widget.SeekBar idleTimeout=new android.widget.SeekBar(this);idleTimeout.setMax(175);idleTimeout.setProgress(Math.max(0,Math.min(175,idleMinutes-5)));panel.addView(idleTimeout);
       idleTimeout.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(android.widget.SeekBar bar,int progress,boolean fromUser){idleLabel.setText("Unload unprotected idle pages after "+(progress+5)+" minutes (logged-in pages are retained unless Android reports real memory pressure)");}public void onStartTrackingTouch(android.widget.SeekBar bar){}public void onStopTrackingTouch(android.widget.SeekBar bar){getSharedPreferences("monitor",0).edit().putInt("idleUnloadMinutes",bar.getProgress()+5).apply();}});
 
-      android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(240)));
+      android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,-2));scroll.setFillViewport(false);
       for(int n=1;n<=MonitorService.PROFILE_COUNT;n++){
         final int number=n;LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.VERTICAL);
         TextView label=new TextView(this);label.setText("Applicant "+n);row.addView(label);
-        android.widget.Spinner modes=new android.widget.Spinner(this);modes.setAdapter(new android.widget.ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,PhoneAlerts.MODES));
+        android.widget.Spinner modes=new android.widget.Spinner(this);modes.setAdapter(alertModeChoices());modes.setBackgroundTintList(ColorStateList.valueOf(0xFF63E6CA));modes.setMinimumHeight(dp(48));modes.setContentDescription("Alert mode for Applicant "+n);
         String saved=getSharedPreferences("monitor",0).getString("alertMode"+n,"CRITICAL ONLY");modes.setSelection(java.util.Arrays.asList(PhoneAlerts.MODES).indexOf(saved));
         modes.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> v){}public void onItemSelected(android.widget.AdapterView<?> v,View child,int position,long id){getSharedPreferences("monitor",0).edit().putString("alertMode"+number,PhoneAlerts.MODES[position]).apply();service.refreshForeground(true);render();}});row.addView(modes);
-        Button test=new Button(this);test.setText("Test alert");test.setOnClickListener(v->{BrowserEngine existing=service.profiles[number-1];PhoneAlerts alerts=existing==null?new PhoneAlerts(service,number):existing.alerts;alerts.testOnce();});row.addView(test);rows.addView(row);
+        LinearLayout testRow=new LinearLayout(this);button(testRow,"Test alert",0xFF10443F,()->{BrowserEngine existing=service.profiles[number-1];PhoneAlerts alerts=existing==null?new PhoneAlerts(service,number):existing.alerts;alerts.testOnce();});row.addView(testRow);row.setPadding(0,dp(8),0,dp(12));rows.addView(row);
       }
 
-      Button export=new Button(this);export.setText("Export encrypted settings");export.setOnClickListener(v->transferSettings(true));panel.addView(export);Button restore=new Button(this);restore.setText("Import encrypted settings");restore.setOnClickListener(v->transferSettings(false));panel.addView(restore);
+      LinearLayout exportRow=new LinearLayout(this),importRow=new LinearLayout(this);button(exportRow,"Export encrypted settings",0xFF10343D,()->transferSettings(true));button(importRow,"Import encrypted settings",0xFF10343D,()->transferSettings(false));panel.addView(exportRow);panel.addView(importRow);
       themePanel(panel);android.widget.ScrollView alertsScroll=new android.widget.ScrollView(this);alertsScroll.setBackgroundColor(0xFF071D24);alertsScroll.addView(panel);
       new AlertDialog.Builder(this,android.R.style.Theme_Material_Dialog_Alert).setTitle("Device alert options").setView(alertsScroll).setPositiveButton("Done",null).setNeutralButton("Silence all now",(d,w)->service.silenceAll()).show();
     }
@@ -316,6 +327,7 @@ public class MainActivity extends Activity {
     private void detailsToast(String value){Toast.makeText(this,value,Toast.LENGTH_LONG).show();}
     private void detailsTask(Runnable task){if(!detailsWorker.isShutdown())detailsWorker.execute(task);}
     private void manageApplicantDetails(){
+      detailsDialogEpoch++;
       LinearLayout panel=darkPanel();panel.addView(text("Applicant Details",21,0xFFEDF9F8));panel.addView(text("Application number and DOB · stored encrypted on this phone",12,0xFFA6C3CA));
       android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(360)));
       AlertDialog list=darkDialog(panel,false);
@@ -323,29 +335,49 @@ public class MainActivity extends Activity {
       LinearLayout actions=new LinearLayout(this);button(actions,"Close",0xFF10343D,list::dismiss);panel.addView(actions);
     }
     private void editApplicantDetails(int applicant,boolean returnToList){
+      final int route=++detailsDialogEpoch;
       detailsTask(()->{
         ApplicantDetails.Record record;
-        try{record=ApplicantDetails.read(getApplicationContext(),applicant);}catch(Exception ex){runOnUiThread(()->detailsToast("Could not read saved details. Try again."));return;}
+        try{record=ApplicantDetails.read(getApplicationContext(),applicant);}catch(Exception ex){runOnUiThread(()->{if(route==detailsDialogEpoch)showDetailsReadError(applicant,returnToList);});return;}
         final ApplicantDetails.Record saved=record;
         runOnUiThread(()->{
-          if(isFinishing()||isDestroyed())return;
+          if(isFinishing()||isDestroyed()||route!=detailsDialogEpoch)return;
           LinearLayout panel=darkPanel();panel.addView(text("Applicant "+applicant+" · Saved details",19,0xFF63E6CA));
           panel.addView(text("Application number",13,0xFFA6C3CA));android.widget.EditText number=new android.widget.EditText(this);number.setSingleLine(true);number.setTextColor(0xFFEDF9F8);number.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);number.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(25)});number.setText(saved.applicationNumber);panel.addView(number);
           panel.addView(text("Date of birth · DD-MM-YYYY",13,0xFFA6C3CA));android.widget.EditText birth=new android.widget.EditText(this);birth.setSingleLine(true);birth.setTextColor(0xFFEDF9F8);birth.setInputType(android.text.InputType.TYPE_CLASS_DATETIME|android.text.InputType.TYPE_DATETIME_VARIATION_DATE);birth.setText(saved.dob);birth.setHint("DD-MM-YYYY");birth.setHintTextColor(0xFFA6C3CA);panel.addView(birth);
           TextView feedback=text("CAPTCHA and Submit stay manual.",12,0xFFA6C3CA);panel.addView(feedback);
-          AlertDialog dialog=darkDialog(panel,false);dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+          AlertDialog dialog=darkDialog(panel,false);dialog.setOnDismissListener(d->{if(detailsDialogEpoch==route)detailsDialogEpoch++;});dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
           LinearLayout actions=new LinearLayout(this);
           Button save=button(actions,"Save",0xFF087E72,()->{});
           save.setOnClickListener(v->{
             final String app,dob;try{app=ApplicantDetails.normalizeNumber(number.getText().toString());dob=ApplicantDetails.normalizeDob(birth.getText().toString());}catch(IllegalArgumentException ex){feedback.setText(ex.getMessage());return;}
-            save.setEnabled(false);detailsTask(()->{boolean ok;try{ApplicantDetails.save(getApplicationContext(),applicant,app,dob);ok=true;}catch(Exception ex){ok=false;}final boolean result=ok;
-              runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(result){dialog.dismiss();detailsToast("Applicant "+applicant+" details saved");if(returnToList)manageApplicantDetails();else showSavedApplicantDetails(applicant);}else{feedback.setText("Could not save details. Try again.");save.setEnabled(true);}});
+            save.setEnabled(false);for(int i=0;i<actions.getChildCount();i++)actions.getChildAt(i).setEnabled(false);number.setEnabled(false);birth.setEnabled(false);detailsTask(()->{boolean ok;try{ApplicantDetails.save(getApplicationContext(),applicant,app,dob);ok=true;}catch(Exception ex){ok=false;}final boolean result=ok;
+              runOnUiThread(()->{if(isFinishing()||isDestroyed()||route!=detailsDialogEpoch)return;if(result){dialog.dismiss();detailsToast("Applicant "+applicant+" details saved");if(returnToList)manageApplicantDetails();else showSavedApplicantDetails(applicant);}else{feedback.setText("Could not save details. Try again.");for(int i=0;i<actions.getChildCount();i++)actions.getChildAt(i).setEnabled(true);number.setEnabled(true);birth.setEnabled(true);}});
             });
           });
-          button(actions,"Delete",0xFF35212C,()->new AlertDialog.Builder(this).setTitle("Delete Applicant "+applicant+" details?").setPositiveButton("Delete",(d,w)->detailsTask(()->{boolean ok;try{ApplicantDetails.remove(getApplicationContext(),applicant);ok=true;}catch(Exception ex){ok=false;}final boolean result=ok;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(result){dialog.dismiss();if(returnToList)manageApplicantDetails();else showSavedApplicantDetails(applicant);}else feedback.setText("Could not delete details. Try again.");});})).setNegativeButton("Cancel",null).show());
+          button(actions,"Delete",0xFF35212C,()->new AlertDialog.Builder(this).setTitle("Delete Applicant "+applicant+" details?").setPositiveButton("Delete",(d,w)->detailsTask(()->{boolean ok;try{ApplicantDetails.remove(getApplicationContext(),applicant);ok=true;}catch(Exception ex){ok=false;}final boolean result=ok;runOnUiThread(()->{if(isFinishing()||isDestroyed()||route!=detailsDialogEpoch)return;if(result){dialog.dismiss();if(returnToList)manageApplicantDetails();else showSavedApplicantDetails(applicant);}else feedback.setText("Could not delete details. Try again.");});})).setNegativeButton("Cancel",null).show());
           button(actions,"Close",0xFF10343D,()->{dialog.dismiss();if(returnToList)manageApplicantDetails();});panel.addView(actions);
         });
       });
+    }
+    static Intent developerProfileIntent(){return new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.facebook.com/share/14u4TJG1Mn1/"));}
+    private void openDeveloperProfile(){try{startActivity(developerProfileIntent());}catch(android.content.ActivityNotFoundException ex){detailsToast("No app is available to open the Facebook profile.");}}
+    private void fillSelectedApplicantDirectly(){
+      final BrowserEngine selected=engine;final int applicant=selected.profile;
+      if(!selected.canFillApplicant()){detailsToast("Open this applicant's Website details page and stop monitoring before filling.");return;}
+      detailsTask(()->{
+        final ApplicantDetails.Record record;try{record=ApplicantDetails.read(getApplicationContext(),applicant);}catch(Exception ex){runOnUiThread(()->showDetailsReadError(applicant,false));return;}
+        runOnUiThread(()->{
+          if(isFinishing()||isDestroyed()||engine!=selected||!selected.canFillApplicant())return;
+          if(!record.saved()){detailsToast("Save Applicant "+applicant+" details in Settings first.");return;}
+          selected.fillApplicant(record).accept(raw->{boolean ok=false;try{ok=new JSONObject(String.valueOf(raw)).optBoolean("ok");}catch(Exception ignored){}final boolean accepted=ok;runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())detailsToast(accepted?"Details filled. Review them and enter CAPTCHA manually.":"Could not fill. Open the details page and clear conflicting values.");});},error->runOnUiThread(()->detailsToast("Could not fill. Open Fill Details to review or copy the saved values.")));
+        });
+      });
+    }
+    private void showDetailsReadError(int applicant,boolean returnToList){
+      if(isFinishing()||isDestroyed())return;
+      new AlertDialog.Builder(this).setTitle("Applicant "+applicant+" details unavailable").setMessage("The saved record could not be read. Reset only this applicant’s saved details, then enter them again.")
+       .setPositiveButton("Reset details",(d,w)->detailsTask(()->{try{ApplicantDetails.remove(getApplicationContext(),applicant);runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())editApplicantDetails(applicant,returnToList);});}catch(Exception ex){runOnUiThread(()->detailsToast("Could not reset details. Try again."));}})).setNegativeButton("Cancel",null).show();
     }
     private void copyApplicantValue(String label,String value){
       ClipData clip=ClipData.newPlainText(label,value);
@@ -353,24 +385,25 @@ public class MainActivity extends Activity {
       ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(clip);Toast.makeText(this,label+" copied",Toast.LENGTH_SHORT).show();
     }
     private void showSavedApplicantDetails(int applicant){
+      final int route=++detailsDialogEpoch;
       detailsTask(()->{
-        final ApplicantDetails.Record record;try{record=ApplicantDetails.read(getApplicationContext(),applicant);}catch(Exception ex){runOnUiThread(()->detailsToast("Could not read saved details. Try again."));return;}
+        final ApplicantDetails.Record record;try{record=ApplicantDetails.read(getApplicationContext(),applicant);}catch(Exception ex){runOnUiThread(()->{if(route==detailsDialogEpoch)showDetailsReadError(applicant,false);});return;}
         runOnUiThread(()->{
-          if(isFinishing()||isDestroyed()||engine==null||engine.profile!=applicant)return;
+          if(isFinishing()||isDestroyed()||route!=detailsDialogEpoch||engine==null||engine.profile!=applicant)return;
           LinearLayout panel=darkPanel();panel.addView(text("Saved details · Applicant "+applicant,20,0xFF63E6CA));panel.addView(text("Stored encrypted on this phone",12,0xFFA6C3CA));
           if(record.saved()){
             for(String[] field:new String[][]{{"Application number",record.applicationNumber},{"Date of birth",record.dob}}){panel.addView(text(field[0],12,0xFFA6C3CA));LinearLayout row=new LinearLayout(this);TextView value=text(field[1],17,0xFFEDF9F8);value.setGravity(Gravity.CENTER_VERTICAL);row.addView(value,new LinearLayout.LayoutParams(0,dp(48),3));button(row,"Copy",0xFF10343D,()->copyApplicantValue(field[0],field[1]));panel.addView(row);}
           }else panel.addView(text("No details saved for this applicant yet.",14,0xFFEDF9F8));
           TextView feedback=text("Fills application number and DOB only. CAPTCHA and Submit stay manual.",12,0xFFA6C3CA);feedback.setPadding(0,dp(12),0,dp(8));panel.addView(feedback);
-          AlertDialog dialog=darkDialog(panel,false);dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+          AlertDialog dialog=darkDialog(panel,false);dialog.setOnDismissListener(d->{if(detailsDialogEpoch==route)detailsDialogEpoch++;});dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
           LinearLayout fillRow=new LinearLayout(this);Button fill=button(fillRow,"Fill applicant details",0xFF087E72,()->{});fill.setEnabled(record.saved());panel.addView(fillRow);
           fill.setOnClickListener(v->{
             if(engine==null||engine.profile!=applicant||!engine.canFillApplicant()){feedback.setText("Open this applicant's Website details page and stop monitoring before filling.");return;}
             fill.setEnabled(false);BrowserEngine selected=engine;
             selected.fillApplicant(record).accept(raw->{
               boolean ok=false;try{ok=new JSONObject(String.valueOf(raw)).optBoolean("ok");}catch(Exception ignored){}final boolean accepted=ok;
-              runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(accepted){dialog.dismiss();detailsToast("Details filled. Review them and enter CAPTCHA manually.");}else{feedback.setText("Could not fill. Open the applicant details page, clear conflicting values, or use Copy.");fill.setEnabled(true);}});
-            },error->runOnUiThread(()->{if(isFinishing()||isDestroyed())return;feedback.setText("Could not fill this page. Use Copy or try again.");fill.setEnabled(true);}));
+              runOnUiThread(()->{if(isFinishing()||isDestroyed()||route!=detailsDialogEpoch)return;if(accepted){dialog.dismiss();detailsToast("Details filled. Review them and enter CAPTCHA manually.");}else{feedback.setText("Could not fill. Open the applicant details page, clear conflicting values, or use Copy.");fill.setEnabled(true);}});
+            },error->runOnUiThread(()->{if(isFinishing()||isDestroyed()||route!=detailsDialogEpoch)return;feedback.setText("Could not fill this page. Use Copy or try again.");fill.setEnabled(true);}));
           });
           LinearLayout actions=new LinearLayout(this);button(actions,"Edit details",0xFF10343D,()->{dialog.dismiss();editApplicantDetails(applicant,false);});button(actions,"Close",0xFF10343D,dialog::dismiss);panel.addView(actions);
         });
@@ -415,7 +448,7 @@ public class MainActivity extends Activity {
         android.widget.ImageView logo=new android.widget.ImageView(this);appLogo=logo;logo.setImageResource(R.drawable.ic_launcher_foreground);logo.setContentDescription("MPARIVAHAN app logo");brand.addView(logo,new LinearLayout.LayoutParams(dp(30),dp(30)));
         LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.setPadding(dp(9),0,dp(4),0);
         TextView heading=new TextView(this);heading.setText("MPARIVAHAN · J&K");heading.setTextColor(0xFF63E6CA);heading.setTextSize(16);heading.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));heading.setLetterSpacing(0.01f);names.addView(heading);
-        TextView developer=new TextView(this);developer.setText("By Burhan Mohidin");developer.setTextColor(0xFF63E6CA);developer.setTextSize(10);developer.setPadding(0,dp(2),0,0);names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,-2,1));
+        TextView developer=new TextView(this);developer.setText("By Burhan Mohidin");developer.setTextColor(0xFF63E6CA);developer.setTextSize(10);developer.setPadding(0,dp(2),0,0);developer.setContentDescription("Open Burhan Mohidin Facebook profile");developer.setOnClickListener(v->openDeveloperProfile());names.addView(developer);brand.addView(names,new LinearLayout.LayoutParams(0,-2,1));
         Button settingsMenu=new Button(this);settingsMenu.setText("☰");settingsMenu.setTextSize(23);settingsMenu.setAllCaps(false);settingsMenu.setTextColor(0xFFEDF9F8);settingsMenu.setBackgroundColor(Color.TRANSPARENT);settingsMenu.setPadding(0,0,0,0);settingsMenu.setMinWidth(0);settingsMenu.setMinimumWidth(0);settingsMenu.setContentDescription("Open all settings");settingsMenu.setOnClickListener(v->showQuickMenu(settingsMenu));brand.addView(settingsMenu,new LinearLayout.LayoutParams(dp(44),dp(44)));header.addView(brand);
         LinearLayout selection=new LinearLayout(this);selection.setGravity(Gravity.CENTER_VERTICAL);selection.setPadding(dp(5),dp(2),dp(5),dp(4));GradientDrawable selectorShape=new GradientDrawable();selectorShape.setColor(0xFF0A252D);selectorShape.setCornerRadius(dp(10));selectorShape.setStroke(dp(1),0xFF63E6CA);selection.setBackground(selectorShape);
         applicantPicker=new android.widget.Spinner(this);String[] applicantNames=new String[MonitorService.PROFILE_COUNT];for(int n=0;n<applicantNames.length;n++)applicantNames[n]="Applicant "+(n+1);
@@ -439,7 +472,11 @@ public class MainActivity extends Activity {
         monitorStatus.setTextColor(Color.rgb(223,234,248));
         monitorStatus.setPadding(dp(4),0,dp(4),dp(5));
         monitorStatus.setText("Connecting monitor… website opens independently");
-        monitorStatus.setTextSize(11);monitorStatus.setMaxLines(1);monitorStatus.setTextColor(0xFFA6C3CA);monitorStatus.setPadding(dp(9),0,dp(9),dp(3));header.addView(monitorStatus);header.addView(status);
+        monitorStatus.setTextSize(11);monitorStatus.setMaxLines(1);monitorStatus.setTextColor(0xFFA6C3CA);monitorStatus.setPadding(dp(9),0,dp(9),dp(3));applicantStatusBar=new LinearLayout(this);applicantStatusBar.setGravity(Gravity.CENTER_VERTICAL);
+        signatureButtons[3]=signatureButton(applicantStatusBar,"Fill Details",0xFF10443F,0xFF63E6CA,()->{if(engine!=null)showSavedApplicantDetails(engine.profile);});
+        LinearLayout.LayoutParams detailsSize=new LinearLayout.LayoutParams(dp(122),dp(40));detailsSize.setMargins(dp(2),dp(3),dp(6),dp(3));signatureButtons[3].setLayoutParams(detailsSize);signatureButtons[3].setTextSize(11);
+        signatureButtons[3].setOnLongClickListener(v->{if(engine!=null)fillSelectedApplicantDirectly();return true;});signatureButtons[3].setTooltipText("Hold to fill this applicant’s saved details");
+        applicantStatusBar.addView(monitorStatus,new LinearLayout.LayoutParams(0,-2,1));header.addView(applicantStatusBar);header.addView(status);
         utilities.setVisibility(View.GONE);
         view = new GeckoView(this);
         FrameLayout pages=new FrameLayout(this);websitePages=pages;
@@ -452,7 +489,10 @@ public class MainActivity extends Activity {
         signatureButtons[0]=signatureButton(firstRow,"Stop All",0xFF35212C,0xFFFFACB8,()->{if(engine!=null)engine.service.stopAll();});
         signatureButtons[1]=signatureButton(firstRow,"Start All",0xFF087E72,0xFFEDF9F8,()->{if(engine!=null)engine.service.startAllReady();});
         signatureButtons[2]=signatureButton(firstRow,"Home",0xFF10343D,0xFFEDF9F8,()->{if(engine!=null)engine.home();});
-        signatureButtons[3]=signatureButton(firstRow,"Fill Details",0xFF10443F,0xFF63E6CA,()->{if(engine!=null)showSavedApplicantDetails(engine.profile);});
+        signatureButtons[0].setOnLongClickListener(v->{if(engine!=null){engine.run.stopByUser();detailsToast("Applicant "+engine.profile+" stopped");}return true;});
+        signatureButtons[0].setTooltipText("Hold to stop only the selected applicant");
+        signatureButtons[1].setOnLongClickListener(v->{if(engine!=null)engine.service.startApplicantReady(engine.profile);return true;});
+        signatureButtons[1].setTooltipText("Hold to start only the selected applicant");
         monitorButton=signatureButton(secondRow,"Monitor",0xFF10343D,0xFF63E6CA,this::toggleMonitor);signatureButtons[4]=monitorButton;
         signatureButtons[5]=signatureButton(secondRow,"Silence All",0xFF10343D,0xFFEDF9F8,()->{if(engine!=null)engine.service.silenceAll();});
         callButton=signatureButton(secondRow,"Call",0xFF10443F,0xFF63E6CA,()->{if(engine!=null)applicantPhone(engine.profile);});signatureButtons[6]=callButton;

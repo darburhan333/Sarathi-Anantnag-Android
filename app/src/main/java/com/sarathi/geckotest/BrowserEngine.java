@@ -204,7 +204,7 @@ final class BrowserEngine {
       if(!pressure&&now-lastVisibleAt<idleUnloadTimeoutMs())return;
       boolean unloaded=false;
       for(GeckoSession s:new ArrayList<>(sessions))if(s!=monitorSession){sessions.remove(s);activeStates.remove(s);priorityHints.remove(s);closeSession(s);if(s==current)current=null;unloaded=true;}
-      if(unloaded){pageUnloaded=true;rememberClosedPage();String message="Applicant "+profile+" idle page closed; loggedIn="+loggedIn+"; reopen website and check login; page unloaded";service.record(message+"; memoryPressure="+pressure+"; idleMs="+(now-lastVisibleAt));log(message);}
+      if(unloaded){setRtoLabel("");pageUnloaded=true;rememberClosedPage();String message="Applicant "+profile+" idle page closed; loggedIn="+loggedIn+"; reopen website and check login; page unloaded";service.record(message+"; memoryPressure="+pressure+"; idleMs="+(now-lastVisibleAt));log(message);}
     }
     void shutdown(){
       destroyed=true;
@@ -244,7 +244,7 @@ final class BrowserEngine {
       });
     }
     void finishNavigation(String id){if(!destroyed&&id.equals(pendingId)&&afterStop!=null){Runnable r=afterStop;afterStop=null;pendingId=null;r.run();}}
-    void home(){navigate("Go Home",()->{GeckoSession previous=current;ensureUsable();showingMonitor=false;if(current!=null&&current==previous)current.loadUri(HOME);render();activate();});}
+    void home(){navigate("Go Home",()->{setRtoLabel("");GeckoSession previous=current;ensureUsable();showingMonitor=false;if(current!=null&&current==previous)current.loadUri(HOME);render();activate();});}
     void ensureUsable(){
       if(destroyed||pageLostProtected)return;
       if(current==null||!current.isOpen()){
@@ -298,7 +298,7 @@ final class BrowserEngine {
       if(destroyed||!sessions.remove(session))return;
       boolean website=session==current,monitor=session==monitorSession;
       activeStates.remove(session);priorityHints.remove(session);
-      if(website){current=null;if(protectedPage&&protectedUntilElapsed>0L){clearProtectedPage();pageLostProtected=false;service.record("Applicant "+profile+" retained page protection cleared because the page session closed");}else if(protectedPage){pageLostProtected=true;lastPageReason="A"+profile+": page lost during "+protectedStage+", restart the booking flow";status=lastPageReason;service.record(lastPageReason+" url="+protectedUrl);alerts.critical("PROTECTED_PAGE_LOST",lastPageReason);run.stopForBackground(lastPageReason);}else run.fail(reason+" — inspect Sarathi and press START");}
+      if(website){setRtoLabel("");current=null;if(protectedPage&&protectedUntilElapsed>0L){clearProtectedPage();pageLostProtected=false;service.record("Applicant "+profile+" retained page protection cleared because the page session closed");}else if(protectedPage){pageLostProtected=true;lastPageReason="A"+profile+": page lost during "+protectedStage+", restart the booking flow";status=lastPageReason;service.record(lastPageReason+" url="+protectedUrl);alerts.critical("PROTECTED_PAGE_LOST",lastPageReason);run.stopForBackground(lastPageReason);}else run.fail(reason+" — inspect Sarathi and press START");}
       if(monitor){monitorSession=null;monitorReady=false;}
       closeSession(session);
       service.record("Applicant "+profile+" "+(website?"website":monitor?"dashboard":"unused page")+" closed; active="+run.armed);
@@ -339,7 +339,7 @@ final class BrowserEngine {
       JSONObject o=(JSONObject)message;
       switch(o.optString("type")){
         case "READY":
-          monitorUrl=o.optString("monitorUrl");ready=true;foregroundState();
+          monitorUrl=o.optString("monitorUrl");ready=true;setRtoLabel(rtoLabel);foregroundState();
           log("Monitor connected in "+(SystemClock.elapsedRealtime()-startupAt)+" ms");
           log("Monitor ready — open Sarathi, then MONITOR to start");prepareMonitor();break;
         case "CRITICAL":{
@@ -359,7 +359,7 @@ final class BrowserEngine {
           finishNavigation(o.optString("id"));break;
         case "FILL_RESULT":finishFill(o.optString("id"),o.optBoolean("ok"));break;
         case "START_RESULT":finishStartControls();if(o.optString("batch").equals(service.startBatch)){log("Start All: "+o.optString("reason"));service.record("Applicant "+profile+" Start All: "+o.optString("reason"));}break;
-        case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;updateProtection(o);if(o.optBoolean("covReady")&&loggedInPage&&(loginRequiredObserved||(!sessionExpired&&loginAtWallClockMs==0L))){markLoginAt();loginRequiredObserved=false;}String reason=pageReadyReason(o.optString("reason"),o.optBoolean("calendarLock")||o.optBoolean("protectPage")&&o.optString("reason").toLowerCase(Locale.US).contains("calendar"),o.optString("reason").toLowerCase(Locale.US).contains("session expired"),o.optBoolean("covReady"));lastPageReason=reason;log("PAGE_READY: "+reason);}break;
+        case "PAGE_READY":if(!pageLoading&&o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;if(o.optBoolean("covReady"))setRtoLabel(o.optString("rtoLabel"));updateProtection(o);if(o.optBoolean("covReady")&&loggedInPage&&(loginRequiredObserved||(!sessionExpired&&loginAtWallClockMs==0L))){markLoginAt();loginRequiredObserved=false;}String reason=pageReadyReason(o.optString("reason"),o.optBoolean("calendarLock")||o.optBoolean("protectPage")&&o.optString("reason").toLowerCase(Locale.US).contains("calendar"),o.optString("reason").toLowerCase(Locale.US).contains("session expired"),o.optBoolean("covReady"));lastPageReason=reason;log("PAGE_READY: "+reason);}break;
         case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"),o.optBoolean("terminal"),o.optString("reason","No verification details"));break;
         case "ERROR":log(o.optString("message"));break;
       }
@@ -461,6 +461,13 @@ final class BrowserEngine {
       GeckoResult<Object> reply=fillReply;fillReply=null;fillSession=null;fillToken="";fillCommitted=false;
       reply.complete(accepted?"{\"ok\":true}":"{\"ok\":false}");
     }
+    private String rtoLabel="";
+    void setRtoLabel(String value){
+      rtoLabel=value==null?"":value.replaceAll("[\\p{Cntrl}]"," ").replaceAll("\\s+"," ").trim();
+      if(rtoLabel.length()>100)rtoLabel="";
+      JSONObject message=json("RTO_SET");try{message.put("label",rtoLabel);}catch(Exception ignored){}if(nativePort!=null)nativePort.postMessage(message);
+    }
+    String rtoLabelForTest(){return rtoLabel;}
     String websiteLoadingLabel(){return pageLoading?"Loading Sarathi · "+loadProgress+"%":status;}
     private String safeLocation(String url) {
         if (url == null) return "";
@@ -494,6 +501,7 @@ final class BrowserEngine {
         @Override public GeckoResult<Object> onMessage(String app,Object message,WebExtension.MessageSender sender){
           boolean allowed=sender.session==session&&sessions.contains(session)&&message instanceof JSONObject&&"PROFILE".equals(((JSONObject)message).optString("type"));
           if(message instanceof JSONObject){JSONObject request=(JSONObject)message;String type=request.optString("type");
+            if(type.equals("PAGE_CHECK"))allowed=sender.session==session&&session==current&&!pageLoading&&pageQuery.equals(request.optString("token"));
             if(type.equals("FILL_CHECK")||type.equals("FILL_COMMIT")){
               allowed=sender.session==session&&session==fillSession&&fillReply!=null&&!fillCommitted&&fillToken.equals(request.optString("token"))&&canFillApplicant();
               if(allowed&&type.equals("FILL_COMMIT"))fillCommitted=true;
@@ -564,7 +572,8 @@ final class BrowserEngine {
             @Override public void onPageStart(GeckoSession session, String url) {
                 if(!sessions.contains(session)||!session.isOpen()||session==monitorSession)return;
                 if(session!=current&&!run.armed)showSession(session);
-                if(session==current)expireRetainedProtectionForNavigation(url);
+                if(session!=current)return;
+                cancelFill();expireRetainedProtectionForNavigation(url);
                 loadProgress=0;pageLoading=true;pageLoadStartedElapsed=SystemClock.elapsedRealtime();pageReady=false;pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
                 log("Loading " + safeLocation(url));
                 final String loadingId=pageQuery;service.handler.postDelayed(()->{if(!destroyed&&pageLoading&&loadingId.equals(pageQuery))log("Connection slow · waiting for Sarathi");},15000);

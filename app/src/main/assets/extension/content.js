@@ -710,8 +710,13 @@
     }
   }
 
+  function respondProfile(sendResponse){const pageTextNow=pageText(true);const loginRequired=/captcha|session expired|please login|login again|sign in to continue/i.test(pageTextNow)&&!getCovForm();sendResponse({ok:true,ready:document.readyState!=='loading',loggedIn:!loginRequired,rtoLabel:getCovForm()&&typeof globalThis.readSarathiRtoLabel==='function'?globalThis.readSarathiRtoLabel(document):'',covReady:!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageTextNow),protectPage:isSmsVerificationPage()||realCalendar(),reason:isSmsVerificationPage()?'SMS verification ready':realCalendar()?'Calendar detected':EXPIRY_TEXT.test(pageTextNow)?'Session expired':getCovForm()?'COV selection':'COV form missing',page:location.href});}
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if(message?.type==='SARATHI_PROFILE_QUERY'){const pageTextNow=pageText(true);const loginRequired=/captcha|session expired|please login|login again|sign in to continue/i.test(pageTextNow)&&!getCovForm();sendResponse({ok:true,ready:document.readyState!=='loading',loggedIn:!loginRequired,covReady:!!getCovForm()&&!realCalendar()&&!EXPIRY_TEXT.test(pageTextNow),protectPage:isSmsVerificationPage()||realCalendar(),reason:isSmsVerificationPage()?'SMS verification ready':realCalendar()?'Calendar detected':EXPIRY_TEXT.test(pageTextNow)?'Session expired':getCovForm()?'COV selection':'COV form missing',page:location.href});return false;}
+    if(message?.type==='SARATHI_PROFILE_QUERY'){
+      if(!message.queryToken){respondProfile(sendResponse);return false;}
+      (async()=>{let proof=await browser.runtime.sendNativeMessage('profile',{type:'PAGE_CHECK',token:message.queryToken});if(typeof proof==='string')proof=JSON.parse(proof);if(proof?.ok===true)respondProfile(sendResponse);else sendResponse({ok:false});})().catch(()=>sendResponse({ok:false}));return true;
+    }
     if (message?.type === 'SARATHI_HEALTH_PING') {
       (async()=>{
         const owner=await confirmOwnership();

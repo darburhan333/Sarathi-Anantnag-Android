@@ -51,10 +51,9 @@ final class KeepAlive {
   void start() {
     requested=true;
     if (Looper.myLooper() == Looper.getMainLooper()) {
-      showOverlay();
-      recordStatus();
+      if(requested){showOverlay();recordStatus();}
     } else {
-      main.post(() -> { showOverlay(); recordStatus(); });
+      main.post(() -> { if(requested){showOverlay();recordStatus();} });
     }
     startAudio();
   }
@@ -63,7 +62,7 @@ final class KeepAlive {
     requested=false;
     audioGeneration.incrementAndGet();audioRunning = false;
     if(audioThread!=null)audioThread.interrupt();
-    main.post(this::hideOverlay);
+    if(Looper.myLooper()==Looper.getMainLooper())hideOverlay();else main.post(()->{if(!requested)hideOverlay();});
     if (!lastStatus.isEmpty()) {
       lastStatus = "";
       service.record("Keep-alive stopped");
@@ -87,7 +86,7 @@ final class KeepAlive {
   }
 
   private void showOverlay() {
-    if (overlay != null || !overlayAllowed()) return;
+    if (!requested || overlay != null || !overlayAllowed()) return;
     try {
       WindowManager wm = context.getSystemService(WindowManager.class);
       View v = new View(context);

@@ -719,9 +719,9 @@ public class GeckoIntegrationTest {
    first.setPageUrlForTest("https://sarathi.parivahan.gov.in/slots/dlsltprev.do/private-path?token=FAKE_SECRET#fragment");
    second.setPageUrlForTest("https://sarathi.parivahan.gov.in/slots/fetchdltprevmnth.do/private-path?cookie=FAKE_COOKIE");
    first.run.sessionExpired("simultaneous-one");
-   String recorded=fixtureService.getSharedPreferences("diagnostics",0).getString("criticalEvents","");
+   String recorded=fixtureService.criticalHistory.recent();
    first.run.sessionExpired("simultaneous-one");
-   assertEquals("Duplicate expiry event must not append a second terminal record",recorded,fixtureService.getSharedPreferences("diagnostics",0).getString("criticalEvents",""));
+   assertEquals("Duplicate expiry event must not append a second terminal record",recorded,fixtureService.criticalHistory.recent());
    first.setLoginAtForTest(wall-3000L,elapsed-3000L);
    first.run.sessionExpired("simultaneous-one-new-run");
    assertEquals("A distinct later expiry must still clear its login timestamp",0L,first.loginAtWallClockMs);
@@ -799,6 +799,59 @@ public class GeckoIntegrationTest {
    assertTrue("Website must stay open while viewing Alerts",website[0].isOpen());
   });
  }
+ @Test public void unusedTabCannotOverwriteCurrentPageTracking()throws Exception{
+  BrowserEngine e=readyApplicant(7);
+  main(()->{
+   try{
+    java.lang.reflect.Method create=BrowserEngine.class.getDeclaredMethod("newSession");create.setAccessible(true);
+    org.mozilla.geckoview.GeckoSession extra=(org.mozilla.geckoview.GeckoSession)create.invoke(e);extra.open(e.runtime);
+    java.lang.reflect.Field url=BrowserEngine.class.getDeclaredField("pageUrl"),query=BrowserEngine.class.getDeclaredField("pageQuery");url.setAccessible(true);query.setAccessible(true);
+    Object previousUrl=url.get(e),previousQuery=query.get(e);boolean armed=e.run.armed;e.run.armed=true;
+    try{extra.getProgressDelegate().onPageStart(extra,"https://sarathi.parivahan.gov.in/slots/unused.do");assertEquals("Unused page must not change current URL",previousUrl,url.get(e));assertEquals("Unused page must not revoke current query",previousQuery,query.get(e));}
+    finally{e.run.armed=armed;e.pageLost(extra,"Test unused session cleanup");}
+   }catch(ReflectiveOperationException ex){throw new AssertionError(ex);}
+  });
+ }
+ @Test public void selectedStartPreparesOnlyChosenApplicant()throws Exception{
+  MainActivity a=activity.getActivity();BrowserEngine other=readyApplicant(8),selected=readyApplicant(9);
+  main(()->{
+   a.selectApplicant(9);fixtureService.activity=a;fixtureService.visible=true;
+   if(other.monitorSession!=null)other.pageLost(other.monitorSession,"Test selected-start reset");
+   if(selected.monitorSession!=null)selected.pageLost(selected.monitorSession,"Test selected-start reset");
+   a.longClickSignatureControlForTest(1);
+   assertNotNull("Selected Start must prepare selected dashboard",selected.monitorSession);
+   assertNull("Selected Start must not prepare another dashboard",other.monitorSession);
+   assertFalse("Starting from non-COV must not arm selected applicant",selected.run.armed);fixtureService.cancelStartBatch();
+  });
+ }
+ @Test public void rtoAndNotificationFollowIndependentApplicants()throws Exception{
+  BrowserEngine first=readyApplicant(1),second=readyApplicant(2);
+  main(()->{
+   first.setRtoLabel("ANANTNAG");second.setRtoLabel("SRINAGAR");assertEquals("ANANTNAG",first.rtoLabelForTest());assertEquals("SRINAGAR",second.rtoLabelForTest());
+   first.run.arm();second.run.arm();String notice=fixtureService.monitoringNotificationText();assertTrue(notice.contains("A1")&&notice.contains("A2"));assertFalse(notice.contains("CRITICAL ONLY")||notice.contains("checks"));
+   second.run.stopByUser();assertFalse(fixtureService.monitoringNotificationText().contains("A2"));first.run.stopByUser();
+   first.setRtoLabel("");assertEquals("",first.rtoLabelForTest());assertEquals("SRINAGAR",second.rtoLabelForTest());second.setRtoLabel("");
+  });
+  assertEquals(android.content.Intent.ACTION_VIEW,MainActivity.developerProfileIntent().getAction());assertEquals("https://www.facebook.com/share/14u4TJG1Mn1/",MainActivity.developerProfileIntent().getDataString());
+ }
+ @Test public void corruptApplicantDetailsCanBeDeletedWithoutAffectingOthers()throws Exception{
+  android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  try{
+   ApplicantDetails.save(context,5,"000000005","15-08-1998");
+   context.getSharedPreferences("applicant-details",0).edit().putString("applicant4","not-a-valid-encrypted-record").commit();
+   try{ApplicantDetails.read(context,4);fail("Damaged ciphertext must not become usable details");}catch(Exception expected){}
+   ApplicantDetails.remove(context,4);assertFalse(ApplicantDetails.read(context,4).saved());assertEquals("000000005",ApplicantDetails.read(context,5).applicationNumber);
+  }finally{ApplicantDetails.remove(context,4);ApplicantDetails.remove(context,5);}
+ }
+ @Test public void criticalArchiveKeepsOldEventsOutsideBoundedView()throws Exception{
+  android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();String name="critical-test-"+java.util.UUID.randomUUID()+".log";
+  CriticalHistory history=new CriticalHistory(context,name);
+  try{
+   history.append("SESSION oldest-archive-proof");for(int i=0;i<1000;i++)history.append("ALERT archive-row-"+i+" "+new String(new char[100]).replace('\0','x'));
+   history.flushForTest();String tail=history.recent();assertTrue(tail.getBytes(java.nio.charset.StandardCharsets.UTF_8).length<=65536);assertTrue(tail.contains("archive-row-999"));assertFalse(tail.contains("oldest-archive-proof"));
+   String all=new String(java.nio.file.Files.readAllBytes(new java.io.File(context.getFilesDir(),name).toPath()),java.nio.charset.StandardCharsets.UTF_8);assertTrue("Archiving must preserve earliest critical evidence",all.contains("oldest-archive-proof"));assertTrue(all.contains("archive-row-999"));
+  }finally{history.close();new java.io.File(context.getFilesDir(),name).delete();}
+ }
  @Test public void startAllPreparesColdDashboardWithoutSwitchingWebsite()throws Exception{
   MainActivity a=activity.getActivity();BrowserEngine e=readyApplicant(9);
   final org.mozilla.geckoview.GeckoSession[] website=new org.mozilla.geckoview.GeckoSession[1];
@@ -837,13 +890,16 @@ public class GeckoIntegrationTest {
    assertEquals("Home must be the third control","Home",a.signatureControlLabelForTest(2));
    assertFalse("Opening an applicant must default to its website",second.showingMonitor);
    assertEquals("Quick call must follow the selected applicant","Call A2",a.signatureControlLabelForTest(6));
-   assertEquals("Details must finish the first row","Fill Details",a.signatureControlLabelForTest(3));
+   assertEquals("Details must be available in the applicant status bar","Fill Details",a.signatureControlLabelForTest(3));
    for(int i=0;i<7;i++)assertTrue("Each primary action needs its leading icon",a.signatureHasIconForTest(i));
    assertTrue("Applicant menu must highlight the selected applicant",a.applicantMenuHighlightForTest(2));
    assertFalse("Other applicants must not have the selected highlight",a.applicantMenuHighlightForTest(1));
    a.clickSignatureControlForTest(5);
    assertTrue("Silence All must not stop applicant 1",first.run.armed);
    assertTrue("Silence All must not stop applicant 2",second.run.armed);
+   a.longClickSignatureControlForTest(0);
+   assertTrue("Long Stop must preserve other applicants",first.run.armed);
+   assertFalse("Long Stop must stop selected applicant",second.run.armed);
    a.clickSignatureControlForTest(0);
    assertFalse("Stop All must stop applicant 1 regardless of selection",first.run.armed);
    assertFalse("Stop All must stop applicant 2",second.run.armed);

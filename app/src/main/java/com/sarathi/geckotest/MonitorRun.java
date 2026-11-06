@@ -45,6 +45,7 @@ final class MonitorRun {
  void sessionExpired(String eventKey){
   if(engine.sessionExpired&&java.util.Objects.equals(expiredEventKey,eventKey))return;
   expiredEventKey=eventKey;
+  engine.setRtoLabel("");
   engine.recordSessionExpiryEvidence();
   engine.clearLoginAt();
   engine.loginRequiredObserved=true;

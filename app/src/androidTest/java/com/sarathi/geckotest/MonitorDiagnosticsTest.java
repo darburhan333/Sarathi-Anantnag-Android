@@ -50,7 +50,7 @@ public class MonitorDiagnosticsTest {
         service.record("ALERT critical-buffer-alert-marker");
         service.record("Applicant 4 page unloaded, login will be needed");
         for (int i = 0; i < 2200; i++) service.record("routine-retention-" + i);
-        String critical = service.getSharedPreferences("diagnostics", 0).getString("criticalEvents", "");
+        String critical = service.criticalHistory.recent();
         assertTrue("Old critical SESSION event must survive routine log trimming", critical.contains(oldest));
         assertTrue(critical.contains("DISARM critical-buffer-disarm-marker"));
         assertTrue(critical.contains("STALL critical-buffer-stall-marker"));

@@ -23,5 +23,8 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('p
  assert.equal(elements.get('chatId').value,'999','Route changes must preserve an unsaved field in the same applicant');
  assert.equal(state.chatId,'111','Navigation must never save credentials implicitly');
  assert.equal(state.assistedBookingPreference,true,'Navigation must preserve the booking preference');
+ state.detectedRto='SRINAGAR';await vm.runInContext('refresh()',ctx);
+ assert(elements.get('focusCov').textContent.includes('SRINAGAR'));
+ state.detectedRto='';await vm.runInContext('refresh()',ctx);assert(elements.get('focusCov').textContent.includes('RTO not detected'));
  console.log('PASS: shipped UI DOM, clean main/Alerts routes, two recipients and unsaved form retention');
 })().catch(e=>{console.error(e);process.exitCode=1});
