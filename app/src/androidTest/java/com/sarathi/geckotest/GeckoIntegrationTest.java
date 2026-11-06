@@ -799,6 +799,36 @@ public class GeckoIntegrationTest {
    assertTrue("Website must stay open while viewing Alerts",website[0].isOpen());
   });
  }
+ @Test public void hiddenBrowserSurfaceDoesNotExposeStaleAccessibilityProvider()throws Exception{
+  BrowserEngine e=readyApplicant(1);
+  main(()->{
+   activity.getActivity().selectApplicant(1);e.showingMonitor=false;e.render();
+   ApplicantGeckoView surface=(ApplicantGeckoView)e.current.getAccessibility().getView();
+   assertNotNull(surface);assertNotNull("Visible current page must retain accessibility",surface.getAccessibilityNodeProvider());
+   org.mozilla.geckoview.GeckoSession retained=e.current;
+   surface.setUiVisible(false);assertNull("Hidden page must not expose a stale provider",surface.getAccessibilityNodeProvider());
+   assertSame("Accessibility visibility must not close the website",retained,surface.getSession());assertTrue(retained.isOpen());
+   surface.setUiVisible(true);assertNotNull("Visible page must restore accessibility",surface.getAccessibilityNodeProvider());
+  });
+ }
+ @Test public void finishDetachesBrowserBeforeTraversalAndCannotReattachIt()throws Exception{
+  MainActivity a=activity.getActivity();BrowserEngine e=readyApplicant(1);
+  main(()->{
+   a.selectApplicant(1);e.showingMonitor=false;e.render();e.run.arm();
+   org.mozilla.geckoview.GeckoSession retained=e.current;
+   org.mozilla.geckoview.GeckoView surface=(org.mozilla.geckoview.GeckoView)retained.getAccessibility().getView();
+   assertNotNull(surface);a.finish();a.render();
+   assertNull("finish must release the browser before Android traversal",surface.getSession());
+   assertNull("A finishing surface must expose no provider",surface.getAccessibilityNodeProvider());
+   assertNull("A finishing render must not reattach accessibility",retained.getAccessibility().getView());
+   assertTrue("Finishing the Activity must retain its monitoring session",retained.isOpen());assertTrue(e.run.armed);
+  });
+  android.content.Context ctx=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  MainActivity reopened=(MainActivity)InstrumentationRegistry.getInstrumentation().startActivitySync(new android.content.Intent(ctx,MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+  long end=System.currentTimeMillis()+15000;while(reopened.serviceForTest()==null&&System.currentTimeMillis()<end)Thread.sleep(100);
+  assertSame("Reopened Activity must reuse the service",fixtureService,reopened.serviceForTest());
+  main(()->{fixtureService.stopAll();reopened.finish();});
+ }
  @Test public void unusedTabCannotOverwriteCurrentPageTracking()throws Exception{
   BrowserEngine e=readyApplicant(7);
   main(()->{

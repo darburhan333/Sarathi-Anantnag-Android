@@ -279,6 +279,7 @@ final class BrowserEngine {
     boolean isPriorityHighForTest(GeckoSession session){return java.util.Objects.equals(priorityHints.get(session),GeckoSession.PRIORITY_HIGH);}
 
     static void releaseView(GeckoView view){
+      if(view instanceof ApplicantGeckoView)((ApplicantGeckoView)view).clearPlatformAccessibilityFocus();
       GeckoSession session=view.getSession();
       if(session!=null)session.getAccessibility().setView(null);
       view.releaseSession();

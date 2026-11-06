@@ -59,7 +59,7 @@ public class MainActivity extends Activity {
     private int lockedApplicant=1;
     private AlertDialog settingsMenuDialog,logsDialog;
     private LinearLayout signatureControls,settingsContext,applicantStatusBar;
-    private int detailsDialogEpoch;
+    private int detailsDialogEpoch;private boolean finishingViews;
     private TextView settingsTitle;
     private View appLogo;
     private String activePanel="monitor";
@@ -105,12 +105,14 @@ public class MainActivity extends Activity {
     private static void setTextIfChanged(TextView view,String value){if(!value.contentEquals(view.getText()))view.setText(value);}
     private static void setDescriptionIfChanged(View view,String value){if(!value.contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))view.setContentDescription(value);}
     void render(){
-      if(engine==null||!visible)return;
+      if(engine==null||!visible||finishingViews||isFinishing()||isDestroyed())return;
       // Attach only the displayed surface. Detached sessions remain owned by
       // BrowserEngine and retain the existing monitoring/protection activity policy.
       GeckoView shown=engine.showingMonitor?monitorView:view;
       GeckoView hidden=engine.showingMonitor?view:monitorView;
       org.mozilla.geckoview.GeckoSession displayed=engine.showingMonitor?engine.monitorSession:engine.current;
+      if(shown instanceof ApplicantGeckoView)((ApplicantGeckoView)shown).setUiVisible(true);
+      if(hidden instanceof ApplicantGeckoView)((ApplicantGeckoView)hidden).setUiVisible(false);
       boolean ownershipChanged=false;
       if(hidden.getSession()!=null){
         org.mozilla.geckoview.GeckoSession detached=hidden.getSession();
@@ -478,10 +480,10 @@ public class MainActivity extends Activity {
         signatureButtons[3].setOnLongClickListener(v->{if(engine!=null)fillSelectedApplicantDirectly();return true;});signatureButtons[3].setTooltipText("Hold to fill this applicant’s saved details");
         applicantStatusBar.addView(monitorStatus,new LinearLayout.LayoutParams(0,-2,1));header.addView(applicantStatusBar);header.addView(status);
         utilities.setVisibility(View.GONE);
-        view = new GeckoView(this);
+        view = new ApplicantGeckoView(this);
         FrameLayout pages=new FrameLayout(this);websitePages=pages;
         pages.addView(view,new FrameLayout.LayoutParams(-1,-1));
-        monitorView=new GeckoView(this);monitorView.setVisibility(View.GONE);
+        monitorView=new ApplicantGeckoView(this);monitorView.setVisibility(View.GONE);
         pages.addView(monitorView,new FrameLayout.LayoutParams(-1,-1));
         root.addView(pages,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout controls=new LinearLayout(this);signatureControls=controls;controls.setOrientation(LinearLayout.VERTICAL);controls.setBackgroundColor(0xFF0D2B33);controls.setPadding(0,dp(3),0,dp(3));
@@ -520,11 +522,22 @@ public class MainActivity extends Activity {
       else if(engine!=null&&engine.current!=null&&engine.canGoBack)engine.navigate("Go Back",()->engine.current.goBack());
       else super.onBackPressed();
     }
-    @Override protected void onResume(){super.onResume();nextSetupRefresh=0;visible=true;if(engine!=null){engine.service.activity=this;for(BrowserEngine profile:engine.service.profiles)if(profile!=null)profile.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;if(!engine.service.visible)for(BrowserEngine e:engine.service.profiles)if(e!=null&&e.run.armed)e.run.tick();engine.service.visible=true;engine.service.record("Activity resumed; "+engine.service.clockDiagnostics());engine.foreground=true;engine.ensureUsable();engine.foregroundState();}}
-    @Override protected void onPause(){visible=false;if(engine!=null){engine.service.telegramLock.lockAll();engine.service.lastActivityPauseElapsed=SystemClock.elapsedRealtime();engine.service.visible=false;engine.service.record("Activity paused; retaining GeckoView sessions for armed background monitoring; screen="+getSystemService(android.os.PowerManager.class).isInteractive()+"; active="+engine.service.activeCount());engine.foreground=false;engine.activeStates.clear();engine.foregroundState();}super.onPause();}
+    @Override protected void onResume(){super.onResume();nextSetupRefresh=0;visible=true;if(view instanceof ApplicantGeckoView)((ApplicantGeckoView)view).setUiVisible(true);if(monitorView instanceof ApplicantGeckoView)((ApplicantGeckoView)monitorView).setUiVisible(true);if(engine!=null){engine.service.activity=this;for(BrowserEngine profile:engine.service.profiles)if(profile!=null)profile.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;if(!engine.service.visible)for(BrowserEngine e:engine.service.profiles)if(e!=null&&e.run.armed)e.run.tick();engine.service.visible=true;engine.service.record("Activity resumed; "+engine.service.clockDiagnostics());engine.foreground=true;engine.ensureUsable();engine.foregroundState();}}
+    @Override protected void onPause(){visible=false;if(view instanceof ApplicantGeckoView)((ApplicantGeckoView)view).setUiVisible(false);if(monitorView instanceof ApplicantGeckoView)((ApplicantGeckoView)monitorView).setUiVisible(false);if(isFinishing())releaseFinishingViews();if(engine!=null){engine.service.telegramLock.lockAll();engine.service.lastActivityPauseElapsed=SystemClock.elapsedRealtime();engine.service.visible=false;engine.service.record("Activity paused; retaining GeckoView sessions for armed background monitoring; screen="+getSystemService(android.os.PowerManager.class).isInteractive()+"; active="+engine.service.activeCount());engine.foreground=false;engine.activeStates.clear();engine.foregroundState();}super.onPause();}
     @Override protected void onStop(){
       super.onStop();
       if(engine!=null){BrowserEngine e=engine;e.service.handler.post(()->{e.activeStates.clear();e.activate();});}
+    }
+    private void releaseFinishingViews(){
+      finishingViews=true;
+      if(view!=null)BrowserEngine.releaseView(view);
+      if(monitorView!=null)BrowserEngine.releaseView(monitorView);
+      if(engine!=null){engine.cancelFill();engine.activeStates.clear();engine.activate();}
+    }
+    @Override public void finish(){
+      // onDestroy is too late: ViewRoot can clear a stale virtual focus during
+      // the traversal between finish() and onDestroy(), blocking the UI thread.
+      releaseFinishingViews();super.finish();
     }
     @Override protected void onDestroy(){
       if(settingsMenuDialog!=null)settingsMenuDialog.dismiss();if(logsDialog!=null)logsDialog.dismiss();
