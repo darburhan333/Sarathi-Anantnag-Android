@@ -571,11 +571,12 @@ public class GeckoIntegrationTest {
   // Use an actual offline SMS document. A pending real homepage PAGE_READY is
   // valid unprotected evidence and must not race a synthetic protected page.
   String smsUrl="http://127.0.0.1:"+smsServer.getLocalPort()+"/slots/dlsltprev.do";
+  String smsLocation="127.0.0.1/slots/dlsltprev.do"; // BrowserEngine stores host + path without scheme/port.
   main(()->protectedApplicant.current.loadUri(smsUrl));
   java.util.concurrent.atomic.AtomicBoolean smsDocumentReady=new java.util.concurrent.atomic.AtomicBoolean();
   long smsDeadline=System.currentTimeMillis()+30000;
   while(!smsDocumentReady.get()&&System.currentTimeMillis()<smsDeadline){
-   main(()->smsDocumentReady.set(protectedApplicant.protectedPage&&smsUrl.equals(protectedApplicant.protectedUrl)));
+   main(()->smsDocumentReady.set(protectedApplicant.protectedPage&&smsLocation.equals(protectedApplicant.protectedUrl)));
    if(!smsDocumentReady.get())Thread.sleep(50);
   }
   assertTrue("The real SMS fixture must be loaded and natively protected before notification STOP",smsDocumentReady.get());
