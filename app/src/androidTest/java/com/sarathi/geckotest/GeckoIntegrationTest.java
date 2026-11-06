@@ -566,15 +566,13 @@ public class GeckoIntegrationTest {
   assertTrue("Quarantined STOP fixture must grant battery-optimization exemption before START",power.isIgnoringBatteryOptimizations(target.getPackageName()));
   MonitorService service=fixtureService;BrowserEngine protectedApplicant=readyApplicant(5),normalApplicant=readyApplicant(6);
   ServerSocket smsServer=new ServerSocket(0);
-  Thread responder=new Thread(()->{while(!smsServer.isClosed())try(Socket socket=smsServer.accept()){
-   socket.setSoTimeout(1000);
-   BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream()));
-   String line=reader.readLine();System.out.println("SMS_STOP_FIXTURE_REQUEST "+line);
-   while((line=reader.readLine())!=null&&!line.isEmpty()){}
-   byte[] body="<html><body><h1>SMS Verification</h1><label>SMS verification Code <input id='smsCode' type='text' autocomplete='one-time-code'></label></body></html>".getBytes("UTF-8");
-   OutputStream out=socket.getOutputStream();
-   out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes("UTF-8"));out.write(body);out.flush();System.out.println("SMS_STOP_FIXTURE_RESPONSE bytes="+body.length);
-  }catch(IOException failure){if(!smsServer.isClosed())System.out.println("SMS_STOP_FIXTURE_IO "+failure);}},"SmsStopFixture");responder.setDaemon(true);responder.start();
+  java.util.concurrent.atomic.AtomicInteger smsResponses=new java.util.concurrent.atomic.AtomicInteger();
+  java.util.concurrent.ExecutorService smsClients=java.util.concurrent.Executors.newFixedThreadPool(4,task->{Thread t=new Thread(task,"SmsStopClient");t.setDaemon(true);return t;});
+  // Gecko may open an idle speculative connection before its real HTTP request.
+  // Serve clients independently so that idle connection cannot block the SMS page.
+  Thread responder=new Thread(()->{while(!smsServer.isClosed())try{
+   Socket socket=smsServer.accept();smsClients.execute(()->serveSmsStopFixture(socket,smsResponses));
+  }catch(IOException failure){if(!smsServer.isClosed())System.out.println("SMS_STOP_FIXTURE_ACCEPT "+failure);}},"SmsStopFixture");responder.setDaemon(true);responder.start();
   try{
   // Wait for the extension's initial STATE snapshot before installing the SMS
   // fixture. Otherwise a late startup STOPPED snapshot can overwrite the test
@@ -601,6 +599,7 @@ public class GeckoIntegrationTest {
    main(()->smsDocumentReady.set(protectedApplicant.protectedPage&&smsLocation.equals(protectedApplicant.protectedUrl)));
    if(!smsDocumentReady.get())Thread.sleep(50);
   }
+  assertTrue("The SMS test server must successfully serve the actual document; responses="+smsResponses.get(),smsResponses.get()>0);
   assertTrue("The real SMS fixture must be loaded and natively protected before notification STOP",smsDocumentReady.get());
   main(()->{
    service.activity=activity.getActivity();service.visible=true;
@@ -625,7 +624,22 @@ public class GeckoIntegrationTest {
    assertTrue("Protected page session must stay active",Boolean.TRUE.equals(protectedApplicant.activeStates.get(protectedApplicant.current)));
    assertTrue("Protected page must retain PRIORITY_HIGH",protectedApplicant.isPriorityHighForTest(protectedApplicant.current));
   });
-  }finally{smsServer.close();}
+  }finally{smsServer.close();smsClients.shutdownNow();}
+ }
+ private static void serveSmsStopFixture(Socket accepted,java.util.concurrent.atomic.AtomicInteger responses){
+  try(Socket socket=accepted){
+   socket.setSoTimeout(5000);
+   BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream(),java.nio.charset.StandardCharsets.UTF_8));
+   String request=reader.readLine();if(request==null)return;
+   System.out.println("SMS_STOP_FIXTURE_REQUEST "+request);
+   String line;while((line=reader.readLine())!=null&&!line.isEmpty()){}
+   boolean sms=request.startsWith("GET /slots/dlsltprev.do ");
+   byte[] body=(sms?"<html><body><h1>SMS Verification</h1><label>SMS verification Code <input id='smsCode' type='text' autocomplete='one-time-code'></label></body></html>":"Not found").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+   OutputStream out=socket.getOutputStream();
+   out.write(("HTTP/1.1 "+(sms?"200 OK":"404 Not Found")+"\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Length: "+body.length+"\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+   out.write(body);out.flush();if(sms)responses.incrementAndGet();
+   System.out.println("SMS_STOP_FIXTURE_RESPONSE bytes="+body.length+" sms="+sms);
+  }catch(IOException failure){System.out.println("SMS_STOP_FIXTURE_IO "+failure);}
  }
  @Test public void stopProtectionRetentionIsFiveMinutesForSmsAndCalendar()throws Exception{
   BrowserEngine sms=readyApplicant(7),calendar=readyApplicant(8);

@@ -27,3 +27,11 @@ Run #236 failed its real Alerts assertion for Applicant 4: the native Alerts hea
 - Local contract harness executed the actual extracted native routing methods with reentrant rendering and verified fresh Alerts, rapid changes, session retention, both toggle directions and delayed extension readiness.
 - The signed release smoke retains all nine-applicant Alerts field assertions, route isolation and exact control-order checks. No waits, assertions or release gates were relaxed.
 - Canonical rerun pending at this commit. The saved-details clipboard remains a concept preview; it is not implemented in this build.
+
+## Notification Stop fixture server correction
+- Run #237 passed compile, production APK, release UI preflight and lifecycle preflight. Notification Stop failed before STOP dispatch because its real local SMS page did not become protected.
+- Artifact 13485743222 logs show a socket read timeout followed immediately by a broken pipe for GET /slots/dlsltprev.do; no SMS response was successfully served.
+- The sequential server could let an idle speculative connection block the actual HTTP request. Fixture clients now use a bounded four-worker daemon pool and a 5-second per-client read timeout. Only the intended SMS path serves the SMS document; other paths return 404.
+- Added a successful HTTP-response assertion before the existing protected-document and Stop assertions. The 30-second protected-document deadline and all STOP/foreground/KeepAlive/audio/session/priority assertions remain unchanged.
+- Local Java harness executed the actual server helper, held an idle connection open, verified the SMS request completed within a 2-second socket bound, and verified unrelated paths returned 404.
+- This change affects Android instrumentation only; production monitoring, routing and booking behavior are unchanged. Canonical rerun required before release.
