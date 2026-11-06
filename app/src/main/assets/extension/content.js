@@ -107,15 +107,15 @@
     return !localStop && ownsTab && cachedRunning && (generation === null || generation === loopGeneration);
   }
 
-  async function waitWhileRunning(ms, generation=null) {
+  async function waitWhileRunning(ms, generation=null, showCountdown=false) {
     const end = Date.now() + ms;
     // The monitor has a single next-retry clock, not a storage write on every tick.
-    if(ms>=WAIT_MS) try { await chrome.storage.local.set({nextRetryAt:end}); }catch(_){}
+    if(ms>=WAIT_MS||showCountdown) try { await chrome.storage.local.set({nextRetryAt:end}); }catch(_){}
     while (Date.now() < end) {
       if (!(await isRunning(generation))) return false;
       await sleep(Math.min(8000, end-Date.now()));
     }
-    if(ms>=WAIT_MS && (generation===null||generation===loopGeneration))try{await chrome.storage.local.set({nextRetryAt:0});}catch(_){}
+    if((ms>=WAIT_MS||showCountdown) && (generation===null||generation===loopGeneration))try{await chrome.storage.local.set({nextRetryAt:0});}catch(_){}
     return await isRunning(generation);
   }
 
@@ -197,9 +197,9 @@
       await waitWhileRunning(1000);
       return true;
     }
-    // The main COV loop owns the single 8-second retry countdown.
-    // Do not wait here too: that caused two consecutive countdowns (~10s).
-    setStatus('Popup dismissed — preparing next 8-second retry');
+    // The main COV loop owns the single 7-second retry countdown.
+    // Do not wait here too: that caused two consecutive countdowns.
+    setStatus('Popup dismissed — preparing next 7-second retry');
     return true;
   }
 
@@ -656,7 +656,7 @@
         }
 
         await sleep(300);
-        if (!(await waitWhileRunning(Math.max(0,deadline-Date.now()),generation))) break;
+        if (!(await waitWhileRunning(Math.max(0,deadline-Date.now()),generation,true))) break;
         if (!current.selected.length || current.selected.some(el => !el.isConnected || !el.checked)) {
           setStatus('Vehicle class verification failed — not submitting; retrying check');
           const retries=await chrome.storage.local.get({verificationRetries:0});await chrome.storage.local.set({verificationRetries:retries.verificationRetries+1});
