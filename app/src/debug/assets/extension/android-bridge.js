@@ -26,8 +26,9 @@
   if(m.type==='FILL_DETAILS'){
    let ok=false;
    try{
-    const tabs=await chrome.tabs.query({url:'https://sarathi.parivahan.gov.in/slots/dlslotbook.do*'}),eligible=[];
-    for(const tab of tabs){try{const r=await tabRequest(tab.id,{type:'SARATHI_FILL_CHECK',token:m.id});if(r?.ok)eligible.push(tab.id);}catch(_){}}
+    const tabs=await chrome.tabs.query({url:'https://sarathi.parivahan.gov.in/slots/dlslotbook.do*'});
+    const checked=await Promise.all(tabs.map(async tab=>{try{return (await tabRequest(tab.id,{type:'SARATHI_FILL_CHECK',token:m.id}))?.ok?tab.id:null;}catch(_){return null;}}));
+    const eligible=checked.filter(id=>id!==null);
     if(eligible.length===1){const r=await tabRequest(eligible[0],{type:'SARATHI_FILL_DETAILS',token:m.id,applicationNumber:m.applicationNumber,dob:m.dob});ok=r?.ok===true;}
    }finally{port?.postMessage({type:'FILL_RESULT',id:m.id,ok});}
    return;
@@ -70,7 +71,7 @@
   let pingBusy=false;
   port.onMessage.addListener(m=>{
    // Page readiness and a pending START must never hold up STOP/SILENCE.
-   if(m.type==='START_READY'||m.type==='PAGE_QUERY'){command(m).catch(e=>port?.postMessage({type:'ERROR',message:String(e.message||e)}));return;}
+   if(m.type==='START_READY'||m.type==='PAGE_QUERY'||m.type==='FILL_DETAILS'){command(m).catch(e=>port?.postMessage({type:'ERROR',message:String(e.message||e)}));return;}
    if(m.type==='RECOVER_CHECK'){
     // Out of the control queue: a stale tab message must not block recovery or STOP.
     (async()=>{
