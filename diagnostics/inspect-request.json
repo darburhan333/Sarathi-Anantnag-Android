@@ -1,7 +1,7 @@
 {
-  "run_id": 42156445377,
+  "run_id": 42160422231,
   "mode": "engine_probe",
-  "source_sha": "a830521e9828461de703455f7a7fb680bfc67710",
-  "nonce": 3,
-  "reason": "Compare original 29 lifecycle tests with both views attached versus only displayed surface; accessibility remains enabled"
+  "source_sha": "9ca8a76a10dd450a6873a7df86600ad22d20499a",
+  "nonce": 4,
+  "reason": "Validate actual displayed SMS document and notification STOP before next canonical release"
 }

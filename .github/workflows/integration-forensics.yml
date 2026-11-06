@@ -76,7 +76,7 @@ jobs:
           script: |
             adb install -r "$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
             adb shell pm grant com.sarathi.anantnag.gecko.v33 android.permission.POST_NOTIFICATIONS
-            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.TelegramSettingsLockTest connectedDebugAndroidTest --stacktrace
+            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.GeckoIntegrationTest#notificationStopWorksWithoutVisibleActivity connectedDebugAndroidTest --stacktrace
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -100,7 +100,7 @@ jobs:
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json,re,urllib.request,xml.etree.ElementTree as ET
-          plan=[{'label':'baseline','version':'158.0.20261021001945'},{'label':'single-surface','version':'158.0.20261021001945'}]
+          plan=[{'label':'baseline','version':'158.0.20261021001945'}]
           print('plan='+json.dumps({'include':plan},separators=(',',':')))
           PY
   engine-probe:
@@ -143,7 +143,7 @@ jobs:
            text=path.read_text()
            if text.count(old)!=1:raise SystemExit('Expected single render ownership block')
            path.write_text(text.replace(old,new))
-          pathlib.Path('probe-scenario.txt').write_text('Original 29 lifecycle scenarios; variant '+os.environ['PROBE_VARIANT']+chr(10))
+          pathlib.Path('probe-scenario.txt').write_text('Real SMS notification Stop fixture; variant '+os.environ['PROBE_VARIANT']+chr(10))
           print('Testing GeckoView '+version)
           PY
       - name: Build SMS teardown reproducer
