@@ -1,7 +1,7 @@
 {
   "run_id": 42160422231,
   "mode": "engine_probe",
-  "source_sha": "9ca8a76a10dd450a6873a7df86600ad22d20499a",
-  "nonce": 4,
-  "reason": "Validate actual displayed SMS document and notification STOP before next canonical release"
+  "source_sha": "8c6b8358e59b1e548f38f4fc1ebb4ed679eca3f5",
+  "nonce": 5,
+  "reason": "Verify displayed SMS fixture with debug-only localhost readiness support"
 }
