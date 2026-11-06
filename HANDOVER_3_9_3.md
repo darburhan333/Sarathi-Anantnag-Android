@@ -19,3 +19,18 @@ VersionCode 393; versionName 3.9.3-midnight-teal; production extension 3.4.15/de
 
 ## Validation
 Local verification suites include a new real-helper VM test for fill ownership, strict URL/form, leap/date validation, read-only/disabled/conflicting fields, no CAPTCHA or submit, and one-use tokens. Native emulator tests cover actual Keystore isolation/deletion and cold dashboard Start All without view switching; exact layout, leading icons and selected-row highlight assertions updated. Signed minified release smoke checks all nine applicant bridges/Alerts, seven-button row order and native details screens. All existing release gates and timeouts retained. Canonical build and emulator results pending at this commit. Physical Infinix X6870 Android 16 and actual Sarathi form acceptance are not claimed as tested.
+
+## Final verified release — 6 November 2026
+- Tested runtime source: baf857983c20836a6749d6045b1c9dc37c9552a4.
+- Canonical Run #241: https://github.com/darburhan333/Sarathi-Anantnag-Android/actions/runs/42206572885
+- All seven jobs passed: compile, apk, release-ui-preflight, gecko-lifecycle-preflight, gecko-notification-stop, gecko-integration-main, verified-release.
+- Full Android integration: 63 tests completed, zero failures/skips; Gradle success in 40m 19s. Final signed minified release smoke passed for all nine applicant bridges. Focused lifecycle suite includes both new cases; notification Stop remains a required separate gate.
+- Passed artifact 13500387972: MParivahan-JK-3.9.3-midnight-teal-ARM64-TESTS-PASSED.
+- Download: https://github.com/darburhan333/Sarathi-Anantnag-Android/actions/runs/42206572885/artifacts/13500387972
+- Outer artifact ZIP SHA-256: 0bb2f2d6a89c8d24014c6361340a0357698a78f0cfa41f38fcdf0f554cfd6e49.
+- Installable inner APK: app-release.apk; 91,740,770 bytes; SHA-256 3bb9e067fa11359ab573a721db1a74dadf924f53c8007696040f0a1f892737a3.
+- APK package/version, ARM64 architecture, release signature, certificate, embedded source marker, all nine production extension IDs/versions, exact production bridge/fill-helper bytes, 7-second COV target and ZIP integrity were checked before workspace disconnection. verified-release copies that same immutable compiled artifact without rebuilding it.
+- Certificate SHA-256: c7404cb6be4325298d64a82d00f27ffa4fefaf182b0a569b4ed2d91fc072b145 (unchanged).
+- Final release screenshots were inspected: icon controls fit, active selection is highlighted, and internal timing fields stay in Logs. Native and offline fill tests passed. Actual Sarathi field acceptance and Infinix X6870 Android 16 physical background operation remain for user verification.
+- Direct ChatGPT APK attachment could not be prepared after the execution workspace disconnected. The verified GitHub ZIP remains available; extract app-release.apk. The previously verified workspace copy was download/run241/app-release.apk, but availability after disconnection is not assumed.
+- This documentation-only follow-up does not change the tested runtime.
