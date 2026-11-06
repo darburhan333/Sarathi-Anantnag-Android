@@ -148,6 +148,12 @@ jobs:
           if count!=1:raise SystemExit('Expected exactly one Gecko dependency')
           path.write_text(value)
           pathlib.Path('engine-version.txt').write_text(version+'\n')
+          test_source="package com.sarathi.geckotest;\nimport androidx.test.ext.junit.runners.AndroidJUnit4;\nimport androidx.test.platform.app.InstrumentationRegistry;\nimport org.junit.BeforeClass;\nimport org.junit.Test;\nimport org.junit.runner.RunWith;\nimport org.junit.runner.JUnitCore;\nimport org.junit.runner.Request;\nimport org.junit.runner.Result;\nimport static org.junit.Assert.*;\n@RunWith(AndroidJUnit4.class)\npublic class SmsAccessibilityStressTest {\n @BeforeClass public static void connectAccessibility()throws Exception{\n  android.app.UiAutomation automation=InstrumentationRegistry.getInstrumentation().getUiAutomation();\n  assertNotNull(\"UiAutomation service must connect\",automation.getServiceInfo());\n  android.view.accessibility.AccessibilityManager manager=InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(android.view.accessibility.AccessibilityManager.class);\n  long deadline=android.os.SystemClock.elapsedRealtime()+5000;\n  while(!manager.isEnabled()&&android.os.SystemClock.elapsedRealtime()<deadline)Thread.sleep(50);\n  assertTrue(\"The reproducer must run with Android accessibility enabled\",manager.isEnabled());\n }\n private void checkScenario(){\n  Result result=new JUnitCore().run(Request.method(GeckoIntegrationTest.class,\"stopDuringSmsStageKeepsProtectedPageActiveAndForeground\"));\n  assertEquals(\"Exactly one original scenario must run\",1,result.getRunCount());\n  assertEquals(\"No original scenario may be ignored\",0,result.getIgnoreCount());\n  assertTrue(result.getFailures().toString(),result.wasSuccessful());\n }\n"
+          for cycle in range(1,13):test_source+=' @Test public void cycle%02d(){ checkScenario(); }'%cycle+chr(10)
+          test_source+='}'+chr(10)
+          folder=pathlib.Path('app/src/androidTest/java/com/sarathi/geckotest')
+          (folder/'SmsAccessibilityStressTest.java').write_text(test_source)
+          pathlib.Path('probe-scenario.txt').write_text('12 cycles with verified Android accessibility connection'+chr(10))
           print('Testing GeckoView '+version)
           PY
       - name: Build SMS teardown reproducer
@@ -170,7 +176,7 @@ jobs:
             adb install -r "$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
             adb shell pm grant com.sarathi.anantnag.gecko.v33 android.permission.POST_NOTIFICATIONS
             adb shell dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33
-            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.GeckoIntegrationTest#stopDuringSmsStageKeepsProtectedPageActiveAndForeground connectedDebugAndroidTest --stacktrace
+            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.SmsAccessibilityStressTest connectedDebugAndroidTest --stacktrace
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -178,6 +184,7 @@ jobs:
           name: Gecko-engine-probe-${{ matrix.label }}
           path: |
             engine-version.txt
+            probe-scenario.txt
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
           if-no-files-found: warn

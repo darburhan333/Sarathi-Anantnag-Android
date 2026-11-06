@@ -2,5 +2,6 @@
   "run_id": 42148703608,
   "mode": "engine_probe",
   "source_sha": "13af5a718b3f752fc801a76df3d8e9fe4cf6b068",
-  "reason": "Compare the confirmed SMS teardown accessibility deadlock against official stable engines"
+  "nonce": 2,
+  "reason": "Compare twelve SMS teardown cycles with Android accessibility explicitly connected"
 }
