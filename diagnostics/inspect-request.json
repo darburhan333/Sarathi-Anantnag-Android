@@ -2,6 +2,6 @@
   "run_id": 42160422231,
   "mode": "engine_probe",
   "source_sha": "8c6b8358e59b1e548f38f4fc1ebb4ed679eca3f5",
-  "nonce": 6,
-  "reason": "Capture native thread stacks automatically if actual SMS Stop lifecycle stalls"
+  "nonce": 7,
+  "reason": "Run exactly notificationStopWorksWithoutVisibleActivity with debug-only actual SMS readiness"
 }
