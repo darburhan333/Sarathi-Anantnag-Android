@@ -31,7 +31,7 @@ public final class MonitorService extends Service {
   IntentFilter screenFilter=new IntentFilter();screenFilter.addAction(Intent.ACTION_SCREEN_OFF);screenFilter.addAction(Intent.ACTION_SCREEN_ON);
   if(Build.VERSION.SDK_INT>=33)registerReceiver(screenReceiver,screenFilter,Context.RECEIVER_EXPORTED);else registerReceiver(screenReceiver,screenFilter);screenReceiverRegistered=true;
   for(int n=1;n<=PROFILE_COUNT;n++)getSystemService(NotificationManager.class).cancel(1100+n);
-  engine=profile(1);record("Service created; process="+processId);
+  engine=profile(Math.max(1,Math.min(PROFILE_COUNT,getSharedPreferences("monitor",0).getInt("lockedApplicant",1))));record("Service created; process="+processId);
    android.content.SharedPreferences lifecycle=getSharedPreferences("diagnostics",0);
    record("SERVICE_START instance="+processId+" pid="+android.os.Process.myPid()+" previousInstance="+lifecycle.getString("lastServiceInstance","none")+" previousDestroyObserved="+lifecycle.getBoolean("lastServiceDestroyed",false));
    lifecycle.edit().putString("lastServiceInstance",processId).putBoolean("lastServiceDestroyed",false).apply();
@@ -47,7 +47,7 @@ public final class MonitorService extends Service {
  int activeCount(){int n=0;for(BrowserEngine e:profiles)if(e!=null&&e.run.armed)n++;return n;}
  int protectedCount(){int n=0;for(BrowserEngine e:profiles)if(e!=null&&e.protectedPage)n++;return n;}
  int sessionCount(){int n=0;for(BrowserEngine e:profiles)if(e!=null)n+=e.sessions.size();return n;}
- void trimIdle(){long now=SystemClock.elapsedRealtime();android.app.ActivityManager.MemoryInfo memory=new android.app.ActivityManager.MemoryInfo();getSystemService(android.app.ActivityManager.class).getMemoryInfo(memory);boolean pressure=memory.lowMemory||memory.availMem<=memory.threshold;for(BrowserEngine e:profiles)if(e!=null)e.unloadIdle(now,pressure);}
+ void trimIdle(){boolean eligible=false;for(BrowserEngine e:profiles)if(e!=null&&!e.foreground&&!e.run.armed&&!e.protectedPage&&!e.pageLostProtected&&e.current!=null){eligible=true;break;}if(!eligible)return;long now=SystemClock.elapsedRealtime();android.app.ActivityManager.MemoryInfo memory=new android.app.ActivityManager.MemoryInfo();getSystemService(android.app.ActivityManager.class).getMemoryInfo(memory);boolean pressure=memory.lowMemory||memory.availMem<=memory.threshold;for(BrowserEngine e:profiles)if(e!=null)e.unloadIdle(now,pressure);}
  void confirmProtected(String action,java.util.List<BrowserEngine> targets,Runnable accepted){StringBuilder names=new StringBuilder();for(BrowserEngine e:targets)if(e!=null&&e.protectedPage){if(names.length()>0)names.append(", ");names.append("Applicant ").append(e.profile).append(" (").append(e.protectedStage).append(")");}if(names.length()==0){accepted.run();return;}if(activity==null||!visible){record(action+" requires confirmation for "+names);for(BrowserEngine e:targets)if(e!=null&&e.protectedPage)e.alerts.critical("CONFIRM_REQUIRED","Open app to confirm "+action);return;}new android.app.AlertDialog.Builder(activity).setTitle(action+" protected applicants?").setMessage(names+" — manual booking pages will remain protected. Home will discard the selected page.").setPositiveButton("Confirm",(d,w)->accepted.run()).setNegativeButton("Cancel",null).show();}
  private boolean alerting(){for(BrowserEngine e:profiles)if(e!=null&&e.alerts.isRepeating())return true;return false;}
  void beginForeground(){
@@ -112,7 +112,7 @@ public final class MonitorService extends Service {
   refreshForeground(true);
  }
  String startBatch="";
- void cancelStartBatch(){startBatch="";}
+ void cancelStartBatch(){startBatch="";for(BrowserEngine e:profiles)if(e!=null&&e.preparingStartControls)e.finishStartControls();}
  void startAllReady(){
   if(!visible||activity==null){record("Start All ignored: app is not visible");return;}
   // One tap creates one batch. Pages still initializing get a short retry window.
@@ -128,13 +128,13 @@ public final class MonitorService extends Service {
   for(BrowserEngine e:profiles){
    if(e==null||e.run.armed||requested.contains(e.profile))continue;
    if(e.current==null||!e.current.isOpen())continue;
-   if(!e.monitorReady){waiting=true;continue;}
+   if(!e.monitorReady){e.prepareStartControls();waiting=true;continue;}
    requested.add(e.profile);e.command("START_READY",batch);
   }
   if(waiting&&attempt<20){
    handler.postDelayed(()->startAllAttempt(batch,attempt+1,requested),500);
   }else if(waiting){
-   record("Start All initialization timeout after "+(attempt*500)+"ms; inspect applicants that were not ready");
+   record("Start All initialization timeout after "+(attempt*500)+"ms; inspect applicants that were not ready");for(BrowserEngine e:profiles)if(e!=null&&e.preparingStartControls)e.finishStartControls();
   }
  }
  void stopAll(){cancelStartBatch();for(BrowserEngine e:profiles)if(e!=null)e.run.stopByUser();}

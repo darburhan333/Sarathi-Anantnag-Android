@@ -100,7 +100,7 @@ assert any(n.get('text')=='Home' for n in root.iter('node')),'Home must be direc
 logo=next(n for n in root.iter('node') if n.get('content-desc')=='MPARIVAHAN app logo')
 assert logo.get('clickable')=='false' and logo.get('long-clickable')=='false','Only hamburger may open Settings'
 settings_menu();menu=snapshot()
-for label in ['Phone numbers','Alerts','Logs','Background setup']:
+for label in ['Phone numbers','Applicant Details','Alerts','Logs','Background setup']:
  assert any(n.get('text')==label for n in menu.iter('node')),'Hamburger settings missing: '+label
 adb('shell','screencap','-p','/data/local/tmp/release-settings.png');adb('pull','/data/local/tmp/release-settings.png','release-settings.png')
 tap_text('Close')
@@ -129,7 +129,7 @@ adb('shell','screencap','-p','/data/local/tmp/release-logs.png');adb('pull','/da
 tap_text('Close');root=wait_ready(1)
 assert any(n.get('text')=='Call A1' for n in root.iter('node')),'Log filtering must not switch the active applicant'
 root=snapshot()
-labels=['Stop All','Start All','Home','Website','Silence All','Call A1']
+labels=['Stop All','Start All','Home','Fill Details','Website','Silence All','Call A1']
 adb('shell','screencap','-p','/data/local/tmp/release-preview.png')
 adb('pull','/data/local/tmp/release-preview.png','release-preview.png')
 def native_control(root,label):
@@ -141,12 +141,12 @@ for label in labels:
 control_nodes=[native_control(root,label) for label in labels]
 rects=[list(map(int,re.findall(r'\d+',n.get('bounds')))) for n in control_nodes]
 print('Native Signature control bounds: '+repr(dict(zip(labels,rects))),flush=True)
-assert len({r[1] for r in rects[:3]})==1 and len({r[1] for r in rects[3:]})==1,'Controls must occupy exactly two aligned rows: '+repr(dict(zip(labels,rects)))
-assert rects[0][1]<rects[3][1],'Control rows must keep the approved sequence'
+assert len({r[1] for r in rects[:4]})==1 and len({r[1] for r in rects[4:]})==1,'Controls must occupy exactly two aligned rows: '+repr(dict(zip(labels,rects)))
+assert rects[0][1]<rects[4][1],'Control rows must keep the approved sequence'
 monitor_heading=next(n for n in root.iter('node') if n.get('text')=='LIVE MONITOR')
 heading_bounds=list(map(int,re.findall(r'\d+',monitor_heading.get('bounds'))))
 assert max(r[3] for r in rects)<=heading_bounds[1],'Both control rows must be ABOVE the live monitor'
-assert rects[0][0]<rects[1][0]<rects[2][0] and rects[3][0]<rects[4][0]<rects[5][0],'Control column order changed'
+assert rects[0][0]<rects[1][0]<rects[2][0]<rects[3][0] and rects[4][0]<rects[5][0]<rects[6][0],'Control column order changed'
 picker=next(n for n in root.iter('node') if n.get('content-desc')=='Choose applicant')
 tap_node(picker);tap_text('Applicant 2');root=wait_ready(2)
 assert any(n.get('text')=='Call A2' for n in root.iter('node')),'Quick call must follow selected applicant'
@@ -160,6 +160,19 @@ tap_node(picker);tap_text('Applicant 1');root=wait_ready(1)
 adb('shell','screencap','-p','/data/local/tmp/release-preview.png')
 adb('pull','/data/local/tmp/release-preview.png','release-preview.png')
 adb('pull','/sdcard/release-ui.xml','release-ui.xml')
+settings_menu();tap_text('Applicant Details');wait_text('Applicant Details')
+seen_details=set()
+for attempt in range(3):
+ details=snapshot();seen_details.update(n.get('content-desc','') for n in details.iter('node'))
+ if all('Edit details for Applicant '+str(number) in seen_details for number in range(1,10)):break
+ scroll=next(n for n in details.iter('node') if n.get('class')=='android.widget.ScrollView')
+ x1,y1,x2,y2=map(int,re.findall(r'\d+',scroll.get('bounds')))
+ adb('shell','input','swipe',str((x1+x2)//2),str(y2-25),str((x1+x2)//2),str(y1+25),'350')
+for number in range(1,10):
+ assert 'Edit details for Applicant '+str(number) in seen_details,'Applicant Details must list all nine applicants'
+tap_text('Close');tap_text('Fill Details');wait_text('Saved details · Applicant 1')
+assert any(n.get('text')=='Fill applicant details' for n in snapshot().iter('node')),'Selected details panel must expose the one-tap fill action'
+tap_text('Close')
 print('PASS: minified release starts and all nine applicant bridges connect')
 
 

@@ -49,8 +49,11 @@ public class MainActivity extends Activity {
     private TextView status,monitorStatus,closedPageNotice;
     private Button monitorButton,batteryButton,callButton;
     private android.widget.Spinner applicantPicker;
+    private android.widget.ArrayAdapter<String> applicantAdapter;
+    private long nextSetupRefresh;
+    private final java.util.concurrent.ExecutorService detailsWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
     private TextView activeSummary;
-    private final Button[] signatureButtons=new Button[6];
+    private final Button[] signatureButtons=new Button[7];
     private android.widget.ScrollView headerScroll;
     private final LinearLayout[] applicantRows=new LinearLayout[2];
     private int lockedApplicant=1;
@@ -91,6 +94,8 @@ public class MainActivity extends Activity {
     public boolean extensionReadyForTest(){return engine!=null&&engine.ready;}
     public String monitorStateForTest(){return monitorStatus.getText().toString();}
     public String signatureControlLabelForTest(int index){return signatureButtons[index].getText().toString();}
+    public boolean signatureHasIconForTest(int index){return signatureButtons[index].getCompoundDrawablesRelative()[0]!=null;}
+    public boolean applicantMenuHighlightForTest(int number){TextView row=(TextView)applicantAdapter.getDropDownView(number-1,null,applicantPicker);return row.getCurrentTextColor()==0xFF63E6CA&&row.getCompoundDrawablesRelative()[2]!=null;}
     public void clickSignatureControlForTest(int index){signatureButtons[index].performClick();}
     public MonitorService serviceForTest(){return engine==null?null:engine.service;}
     private void command(String type){if(engine!=null)engine.command(type);}
@@ -119,7 +124,7 @@ public class MainActivity extends Activity {
       int websiteAccessibility=engine.showingMonitor?View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO;
       if(view.getImportantForAccessibility()!=websiteAccessibility)view.setImportantForAccessibility(websiteAccessibility);
       setTextIfChanged(monitorButton,engine.showingMonitor?"Website":"Monitor");setDescriptionIfChanged(monitorButton,engine.showingMonitor?"Switch to website":"Switch to monitor");
-      if(applicantPicker!=null&&applicantPicker.getSelectedItemPosition()!=engine.profile-1)applicantPicker.setSelection(engine.profile-1);
+      if(applicantPicker!=null&&applicantPicker.getSelectedItemPosition()!=engine.profile-1){applicantPicker.setSelection(engine.profile-1);if(applicantAdapter!=null)applicantAdapter.notifyDataSetChanged();}
       if(activeSummary!=null)setTextIfChanged(activeSummary,engine.service.activeCount()+" of 9 monitoring");
       if(closedPageNotice!=null){closedPageNotice.setVisibility(engine.hasClosedPageNotice()?View.VISIBLE:View.GONE);setTextIfChanged(closedPageNotice,"Applicant "+engine.profile+" · Idle website was closed. Reopen Website and check login before Start. Tap to dismiss.");}
        if(callButton!=null){setTextIfChanged(callButton,"Call A"+engine.profile);setDescriptionIfChanged(callButton,"Call Applicant "+engine.profile);}
@@ -130,20 +135,32 @@ public class MainActivity extends Activity {
       for(int i=0;i<MonitorService.PROFILE_COUNT;i++)if(applicantButtons[i]!=null){BrowserEngine e=engine.service.profiles[i];boolean running=e!=null&&e.run.armed;String label="Applicant "+(i+1)+"\n"+(running?"● RUNNING":"○ STOPPED");if(!applicantButtons[i].getText().toString().equals(label))applicantButtons[i].setText(label);float alpha=lockedApplicant==i+1?1f:0.72f;if(applicantButtons[i].getAlpha()!=alpha)applicantButtons[i].setAlpha(alpha);int tint=lockedApplicant==i+1?0xFF0F766E:0xFF254167;ColorStateList oldTint=applicantButtons[i].getBackgroundTintList();if(oldTint==null||oldTint.getDefaultColor()!=tint)applicantButtons[i].setBackgroundTintList(ColorStateList.valueOf(tint));}
       for(int i=0;i<settingsApplicantButtons.length;i++)if(settingsApplicantButtons[i]!=null){BrowserEngine profile=engine.service.profiles[i];setTextIfChanged(settingsApplicantButtons[i],"Applicant "+(i+1)+(profile!=null&&profile.run.armed?" ● RUNNING":" ○ STOPPED")+(i+1==lockedApplicant?" · LOCKED":""));}
       applyApplicantVisibility(getSharedPreferences("monitor",0).getBoolean("showApplicants",false));
-      if(!status.getText().toString().equals(engine.status))status.setText(engine.status);status.setVisibility(engine.showingMonitor?View.GONE:View.VISIBLE);
+      if(!status.getText().toString().equals(engine.websiteLoadingLabel()))status.setText(engine.websiteLoadingLabel());status.setVisibility(engine.showingMonitor?View.GONE:View.VISIBLE);
+      if(SystemClock.elapsedRealtime()>=nextSetupRefresh){nextSetupRefresh=SystemClock.elapsedRealtime()+5000;
       android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
       boolean exempt=power.isIgnoringBatteryOptimizations(getPackageName());
       if(batteryButton!=null)setTextIfChanged(batteryButton,(exempt&&android.provider.Settings.canDrawOverlays(this)&&!power.isPowerSaveMode()&&getSystemService(android.app.NotificationManager.class).areNotificationsEnabled())?"Background\nsetup ✓":"Background\nsetup !");
+      }
       String text=engine.ready?"Applicant "+engine.profile+" · "+(engine.monitoring?"RUNNING":"STOPPED")+engine.service.routineWarning():"Connecting Applicant "+engine.profile+"…";if(!monitorStatus.getText().toString().equals(text))monitorStatus.setText(text);
       boolean keepScreen=visible&&engine.monitoring;boolean screenFlag=(getWindow().getAttributes().flags&WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)!=0;
       if(keepScreen!=screenFlag){if(keepScreen)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
     }
-    void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){if(activePanel.equals("monitor")){engine.showingMonitor=false;engine.ensureUsable();}render();engine.activate();return;}MonitorService service=engine.service;service.telegramLock.lockAll();BrowserEngine.releaseView(view);BrowserEngine.releaseView(monitorView);engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);engine.showingMonitor=false;engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;if(!activePanel.equals("monitor"))engine.showMonitorPanel(activePanel);engine.attach(this);engine.foregroundState();}
+    void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){if(activePanel.equals("monitor")){engine.showingMonitor=false;engine.ensureUsable();}render();engine.activate();return;}long switchAt=SystemClock.elapsedRealtime();MonitorService service=engine.service;service.telegramLock.lockAll();BrowserEngine.releaseView(view);BrowserEngine.releaseView(monitorView);engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();boolean retained=service.profiles[number-1]!=null&&service.profiles[number-1].current!=null&&service.profiles[number-1].current.isOpen();engine=service.profile(number);engine.showingMonitor=false;engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;if(!activePanel.equals("monitor"))engine.showMonitorPanel(activePanel);engine.attach(this);engine.foregroundState();engine.log("Applicant website attached in "+(SystemClock.elapsedRealtime()-switchAt)+" ms; retained="+retained);if(applicantAdapter!=null)applicantAdapter.notifyDataSetChanged();}
     private boolean directCalls(){return getSharedPreferences("calling",0).getBoolean("direct",false);}
     static Intent applicantCallIntent(String phone,boolean direct,boolean permitted){return new Intent(direct&&permitted?Intent.ACTION_CALL:Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null));}
     private void openDialer(String phone){startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));}
     private TextView text(String value,int size,int color){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);return t;}
     private android.widget.ArrayAdapter<String> choices(String[] values){return new android.widget.ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,values){private View style(View v){TextView t=(TextView)v;t.setTextColor(0xFFEDF9F8);t.setTextSize(13);t.setBackgroundColor(0xFF0D2B33);t.setPadding(dp(10),dp(9),dp(10),dp(9));return t;}@Override public View getView(int position,View converted,android.view.ViewGroup parent){return style(super.getView(position,converted,parent));}@Override public View getDropDownView(int position,View converted,android.view.ViewGroup parent){return style(super.getDropDownView(position,converted,parent));}};}
+    private android.widget.ArrayAdapter<String> applicantChoices(String[] values){
+      return new android.widget.ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,values){
+        private View style(View v,int position,boolean dropdown){TextView t=(TextView)v;boolean selected=position+1==lockedApplicant;
+          t.setTextColor(selected?0xFF63E6CA:0xFFEDF9F8);t.setBackgroundColor(selected?0xFF174A46:0xFF0D2B33);t.setTypeface(Typeface.create(selected?"sans-serif-medium":"sans-serif",Typeface.NORMAL));t.setTextSize(13);t.setPadding(dp(10),dp(10),dp(10),dp(10));
+          t.setContentDescription("Applicant "+(position+1)+(selected?" · selected":""));
+          t.setCompoundDrawablePadding(dp(7));t.setCompoundDrawablesRelativeWithIntrinsicBounds(0,0,selected&&dropdown?R.drawable.ic_check:0,0);t.setCompoundDrawableTintList(ColorStateList.valueOf(0xFF63E6CA));return t;}
+        @Override public View getView(int position,View converted,android.view.ViewGroup parent){return style(super.getView(position,converted,parent),position,false);}
+        @Override public View getDropDownView(int position,View converted,android.view.ViewGroup parent){return style(super.getDropDownView(position,converted,parent),position,true);}
+      };
+    }
     private void themePanel(View view){if(view instanceof TextView)((TextView)view).setTextColor(0xFFEDF9F8);if(view instanceof android.view.ViewGroup){android.view.ViewGroup group=(android.view.ViewGroup)view;for(int i=0;i<group.getChildCount();i++)themePanel(group.getChildAt(i));}}
     private LinearLayout darkPanel(){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setBackgroundColor(0xFF071D24);p.setPadding(dp(18),dp(16),dp(18),dp(16));return p;}
     private AlertDialog darkDialog(LinearLayout panel,boolean full){AlertDialog dialog=new AlertDialog.Builder(this,android.R.style.Theme_Material_Dialog_Alert).setView(panel).create();dialog.show();if(dialog.getWindow()!=null){dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xFF071D24));dialog.getWindow().setLayout(-1,full?-1:-2);}return dialog;}
@@ -157,6 +174,7 @@ public class MainActivity extends Activity {
     private void showQuickMenu(View anchor){
       LinearLayout panel=darkPanel();TextView title=text("Settings",21,0xFFEDF9F8);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);panel.addView(title);panel.addView(text("App preferences · selected applicant A"+lockedApplicant,12,0xFFA6C3CA));
       menuEntry(panel,"Phone numbers","Applicant contacts and direct calling",this::managePhones);
+      menuEntry(panel,"Applicant Details","Saved application numbers and dates of birth",this::manageApplicantDetails);
       menuEntry(panel,"Alerts","Telegram token, recipients, sound and vibration",this::manageApplicantAlerts);
       menuEntry(panel,"Logs","Activity and diagnostics only",this::showLogs);
       menuEntry(panel,"Background setup","Battery and service permissions",this::batterySettings);
@@ -295,6 +313,69 @@ public class MainActivity extends Activity {
          catch(Exception ex){Toast.makeText(this,"Could not open overlay settings. Open Settings > Apps > Special app access > Display over other apps.",Toast.LENGTH_LONG).show();}
        }).setNegativeButton("Close",null).show();
     }
+    private void detailsToast(String value){Toast.makeText(this,value,Toast.LENGTH_LONG).show();}
+    private void detailsTask(Runnable task){if(!detailsWorker.isShutdown())detailsWorker.execute(task);}
+    private void manageApplicantDetails(){
+      LinearLayout panel=darkPanel();panel.addView(text("Applicant Details",21,0xFFEDF9F8));panel.addView(text("Application number and DOB · stored encrypted on this phone",12,0xFFA6C3CA));
+      android.widget.ScrollView scroll=new android.widget.ScrollView(this);LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(360)));
+      AlertDialog list=darkDialog(panel,false);
+      for(int n=1;n<=9;n++){final int applicant=n;LinearLayout row=new LinearLayout(this);Button entry=signatureButton(row,"Applicant "+n+(n==lockedApplicant?" · selected":""),n==lockedApplicant?0xFF174A46:0xFF0D2B33,0xFFEDF9F8,()->{list.dismiss();editApplicantDetails(applicant,true);});entry.setContentDescription("Edit details for Applicant "+n);rows.addView(row);}
+      LinearLayout actions=new LinearLayout(this);button(actions,"Close",0xFF10343D,list::dismiss);panel.addView(actions);
+    }
+    private void editApplicantDetails(int applicant,boolean returnToList){
+      detailsTask(()->{
+        ApplicantDetails.Record record;
+        try{record=ApplicantDetails.read(getApplicationContext(),applicant);}catch(Exception ex){runOnUiThread(()->detailsToast("Could not read saved details. Try again."));return;}
+        final ApplicantDetails.Record saved=record;
+        runOnUiThread(()->{
+          if(isFinishing()||isDestroyed())return;
+          LinearLayout panel=darkPanel();panel.addView(text("Applicant "+applicant+" · Saved details",19,0xFF63E6CA));
+          panel.addView(text("Application number",13,0xFFA6C3CA));android.widget.EditText number=new android.widget.EditText(this);number.setSingleLine(true);number.setTextColor(0xFFEDF9F8);number.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);number.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(25)});number.setText(saved.applicationNumber);panel.addView(number);
+          panel.addView(text("Date of birth · DD-MM-YYYY",13,0xFFA6C3CA));android.widget.EditText birth=new android.widget.EditText(this);birth.setSingleLine(true);birth.setTextColor(0xFFEDF9F8);birth.setInputType(android.text.InputType.TYPE_CLASS_DATETIME|android.text.InputType.TYPE_DATETIME_VARIATION_DATE);birth.setText(saved.dob);birth.setHint("DD-MM-YYYY");birth.setHintTextColor(0xFFA6C3CA);panel.addView(birth);
+          TextView feedback=text("CAPTCHA and Submit stay manual.",12,0xFFA6C3CA);panel.addView(feedback);
+          AlertDialog dialog=darkDialog(panel,false);dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+          LinearLayout actions=new LinearLayout(this);
+          Button save=button(actions,"Save",0xFF087E72,()->{});
+          save.setOnClickListener(v->{
+            final String app,dob;try{app=ApplicantDetails.normalizeNumber(number.getText().toString());dob=ApplicantDetails.normalizeDob(birth.getText().toString());}catch(IllegalArgumentException ex){feedback.setText(ex.getMessage());return;}
+            save.setEnabled(false);detailsTask(()->{boolean ok;try{ApplicantDetails.save(getApplicationContext(),applicant,app,dob);ok=true;}catch(Exception ex){ok=false;}final boolean result=ok;
+              runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(result){dialog.dismiss();detailsToast("Applicant "+applicant+" details saved");if(returnToList)manageApplicantDetails();else showSavedApplicantDetails(applicant);}else{feedback.setText("Could not save details. Try again.");save.setEnabled(true);}});
+            });
+          });
+          button(actions,"Delete",0xFF35212C,()->new AlertDialog.Builder(this).setTitle("Delete Applicant "+applicant+" details?").setPositiveButton("Delete",(d,w)->detailsTask(()->{boolean ok;try{ApplicantDetails.remove(getApplicationContext(),applicant);ok=true;}catch(Exception ex){ok=false;}final boolean result=ok;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(result){dialog.dismiss();if(returnToList)manageApplicantDetails();else showSavedApplicantDetails(applicant);}else feedback.setText("Could not delete details. Try again.");});})).setNegativeButton("Cancel",null).show());
+          button(actions,"Close",0xFF10343D,()->{dialog.dismiss();if(returnToList)manageApplicantDetails();});panel.addView(actions);
+        });
+      });
+    }
+    private void copyApplicantValue(String label,String value){
+      ClipData clip=ClipData.newPlainText(label,value);
+      if(android.os.Build.VERSION.SDK_INT>=33){android.os.PersistableBundle extras=new android.os.PersistableBundle();extras.putBoolean("android.content.extra.IS_SENSITIVE",true);clip.getDescription().setExtras(extras);}
+      ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(clip);Toast.makeText(this,label+" copied",Toast.LENGTH_SHORT).show();
+    }
+    private void showSavedApplicantDetails(int applicant){
+      detailsTask(()->{
+        final ApplicantDetails.Record record;try{record=ApplicantDetails.read(getApplicationContext(),applicant);}catch(Exception ex){runOnUiThread(()->detailsToast("Could not read saved details. Try again."));return;}
+        runOnUiThread(()->{
+          if(isFinishing()||isDestroyed()||engine==null||engine.profile!=applicant)return;
+          LinearLayout panel=darkPanel();panel.addView(text("Saved details · Applicant "+applicant,20,0xFF63E6CA));panel.addView(text("Stored encrypted on this phone",12,0xFFA6C3CA));
+          if(record.saved()){
+            for(String[] field:new String[][]{{"Application number",record.applicationNumber},{"Date of birth",record.dob}}){panel.addView(text(field[0],12,0xFFA6C3CA));LinearLayout row=new LinearLayout(this);TextView value=text(field[1],17,0xFFEDF9F8);value.setGravity(Gravity.CENTER_VERTICAL);row.addView(value,new LinearLayout.LayoutParams(0,dp(48),3));button(row,"Copy",0xFF10343D,()->copyApplicantValue(field[0],field[1]));panel.addView(row);}
+          }else panel.addView(text("No details saved for this applicant yet.",14,0xFFEDF9F8));
+          TextView feedback=text("Fills application number and DOB only. CAPTCHA and Submit stay manual.",12,0xFFA6C3CA);feedback.setPadding(0,dp(12),0,dp(8));panel.addView(feedback);
+          AlertDialog dialog=darkDialog(panel,false);dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+          LinearLayout fillRow=new LinearLayout(this);Button fill=button(fillRow,"Fill applicant details",0xFF087E72,()->{});fill.setEnabled(record.saved());panel.addView(fillRow);
+          fill.setOnClickListener(v->{
+            if(engine==null||engine.profile!=applicant||!engine.canFillApplicant()){feedback.setText("Open this applicant's Website details page and stop monitoring before filling.");return;}
+            fill.setEnabled(false);BrowserEngine selected=engine;
+            selected.fillApplicant(record).accept(raw->{
+              boolean ok=false;try{ok=new JSONObject(String.valueOf(raw)).optBoolean("ok");}catch(Exception ignored){}final boolean accepted=ok;
+              runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(accepted){dialog.dismiss();detailsToast("Details filled. Review them and enter CAPTCHA manually.");}else{feedback.setText("Could not fill. Open the applicant details page, clear conflicting values, or use Copy.");fill.setEnabled(true);}});
+            },error->runOnUiThread(()->{if(isFinishing()||isDestroyed())return;feedback.setText("Could not fill this page. Use Copy or try again.");fill.setEnabled(true);}));
+          });
+          LinearLayout actions=new LinearLayout(this);button(actions,"Edit details",0xFF10343D,()->{dialog.dismiss();editApplicantDetails(applicant,false);});button(actions,"Close",0xFF10343D,dialog::dismiss);panel.addView(actions);
+        });
+      });
+    }
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     private Button button(LinearLayout row, String label, int color, Runnable action) {
         Button b = new Button(this);
@@ -315,7 +396,7 @@ public class MainActivity extends Activity {
         return b;
     }
     private Button signatureButton(LinearLayout row,String label,int fill,int ink,Runnable action){
-      Button result=button(row,label,fill,action);result.setTextColor(ink);result.setTextSize(12);result.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));result.setMinHeight(dp(48));result.setMinimumHeight(dp(48));result.setPadding(dp(4),dp(8),dp(4),dp(8));result.getLayoutParams().height=Math.max(dp(42),(int)Math.ceil(getResources().getDisplayMetrics().scaledDensity*26)+dp(10));result.setMinHeight(dp(40));result.setMinimumHeight(dp(40));return result;
+      Button result=button(row,label,fill,action);result.setTextColor(ink);result.setTextSize(12.5f);result.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));result.setMinHeight(dp(48));result.setMinimumHeight(dp(48));result.setPadding(dp(4),dp(8),dp(4),dp(8));result.getLayoutParams().height=Math.max(dp(48),(int)Math.ceil(getResources().getDisplayMetrics().scaledDensity*28)+dp(10));result.setMinHeight(dp(48));result.setMinimumHeight(dp(48));int icon=label.equals("Stop All")?R.drawable.ic_stop:label.equals("Start All")?R.drawable.ic_start:label.equals("Home")?R.drawable.ic_home:label.equals("Fill Details")?R.drawable.ic_details:label.equals("Monitor")?R.drawable.ic_monitor:label.equals("Silence All")?R.drawable.ic_silence:label.equals("Call")?R.drawable.ic_call:0;if(icon!=0){android.graphics.drawable.Drawable drawable=getDrawable(icon).mutate();drawable.setTint(ink);drawable.setBounds(0,0,dp(16),dp(16));result.setCompoundDrawablesRelative(drawable,null,null,null);result.setCompoundDrawablePadding(dp(4));}return result;
     }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);getSharedPreferences("monitor",0).edit().putBoolean("showApplicants",false).apply();notificationApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,getIntent().getIntExtra("applicant",1)));
@@ -339,7 +420,7 @@ public class MainActivity extends Activity {
         LinearLayout selection=new LinearLayout(this);selection.setGravity(Gravity.CENTER_VERTICAL);selection.setPadding(dp(5),dp(2),dp(5),dp(4));GradientDrawable selectorShape=new GradientDrawable();selectorShape.setColor(0xFF0A252D);selectorShape.setCornerRadius(dp(10));selectorShape.setStroke(dp(1),0xFF63E6CA);selection.setBackground(selectorShape);
         applicantPicker=new android.widget.Spinner(this);String[] applicantNames=new String[MonitorService.PROFILE_COUNT];for(int n=0;n<applicantNames.length;n++)applicantNames[n]="Applicant "+(n+1);
 
-        applicantPicker.setAdapter(choices(applicantNames));applicantPicker.setBackgroundTintList(ColorStateList.valueOf(0xFFA6C3CA));applicantPicker.setContentDescription("Choose applicant");selection.addView(applicantPicker,new LinearLayout.LayoutParams(0,dp(40),1));
+        applicantAdapter=applicantChoices(applicantNames);applicantPicker.setAdapter(applicantAdapter);applicantPicker.setBackgroundTintList(ColorStateList.valueOf(0xFFA6C3CA));applicantPicker.setContentDescription("Choose applicant");selection.addView(applicantPicker,new LinearLayout.LayoutParams(0,dp(40),1));
         applicantPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> parent){}public void onItemSelected(android.widget.AdapterView<?> parent,View item,int position,long id){if(engine!=null&&engine.profile!=position+1)selectApplicant(position+1);}});
         activeSummary=new TextView(this);activeSummary.setText("0 of 9 monitoring");activeSummary.setTextSize(11);activeSummary.setTextColor(0xFFA6C3CA);activeSummary.setPadding(dp(10),0,dp(5),0);selection.addView(activeSummary);header.addView(selection);
         for(int group=0;group<2;group++){LinearLayout applicants=new LinearLayout(this);applicantRows[group]=applicants;for(int k=0;k<4;k++){final int n=group*4+k+1;applicantButtons[n-1]=button(applicants,"Applicant "+n,Color.rgb(37,65,103),()->selectApplicant(n));applicantButtons[n-1].setOnLongClickListener(v->{applicantPhone(n);return true;});}header.addView(applicants);}
@@ -371,9 +452,10 @@ public class MainActivity extends Activity {
         signatureButtons[0]=signatureButton(firstRow,"Stop All",0xFF35212C,0xFFFFACB8,()->{if(engine!=null)engine.service.stopAll();});
         signatureButtons[1]=signatureButton(firstRow,"Start All",0xFF087E72,0xFFEDF9F8,()->{if(engine!=null)engine.service.startAllReady();});
         signatureButtons[2]=signatureButton(firstRow,"Home",0xFF10343D,0xFFEDF9F8,()->{if(engine!=null)engine.home();});
-        monitorButton=signatureButton(secondRow,"Monitor",0xFF10343D,0xFF63E6CA,this::toggleMonitor);signatureButtons[3]=monitorButton;
-        signatureButtons[4]=signatureButton(secondRow,"Silence All",0xFF10343D,0xFFEDF9F8,()->{if(engine!=null)engine.service.silenceAll();});
-        callButton=signatureButton(secondRow,"Call",0xFF10443F,0xFF63E6CA,()->{if(engine!=null)applicantPhone(engine.profile);});signatureButtons[5]=callButton;
+        signatureButtons[3]=signatureButton(firstRow,"Fill Details",0xFF10443F,0xFF63E6CA,()->{if(engine!=null)showSavedApplicantDetails(engine.profile);});
+        monitorButton=signatureButton(secondRow,"Monitor",0xFF10343D,0xFF63E6CA,this::toggleMonitor);signatureButtons[4]=monitorButton;
+        signatureButtons[5]=signatureButton(secondRow,"Silence All",0xFF10343D,0xFFEDF9F8,()->{if(engine!=null)engine.service.silenceAll();});
+        callButton=signatureButton(secondRow,"Call",0xFF10443F,0xFF63E6CA,()->{if(engine!=null)applicantPhone(engine.profile);});signatureButtons[6]=callButton;
         header.addView(controls,2,new LinearLayout.LayoutParams(-1,-2));
         closedPageNotice=text("",11,0xFFFFD18C);closedPageNotice.setPadding(dp(10),dp(7),dp(10),dp(7));closedPageNotice.setBackgroundColor(0xFF26342C);closedPageNotice.setVisibility(View.GONE);closedPageNotice.setContentDescription("Closed applicant website notice");closedPageNotice.setOnClickListener(v->{if(engine!=null)engine.dismissClosedPageNotice();});header.addView(closedPageNotice);
         settingsContext=new LinearLayout(this);settingsContext.setOrientation(LinearLayout.VERTICAL);settingsContext.setVisibility(View.GONE);
@@ -398,7 +480,7 @@ public class MainActivity extends Activity {
       else if(engine!=null&&engine.current!=null&&engine.canGoBack)engine.navigate("Go Back",()->engine.current.goBack());
       else super.onBackPressed();
     }
-    @Override protected void onResume(){super.onResume();visible=true;if(engine!=null){engine.service.activity=this;for(BrowserEngine profile:engine.service.profiles)if(profile!=null)profile.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;if(!engine.service.visible)for(BrowserEngine e:engine.service.profiles)if(e!=null&&e.run.armed)e.run.tick();engine.service.visible=true;engine.service.record("Activity resumed; "+engine.service.clockDiagnostics());engine.foreground=true;engine.ensureUsable();engine.foregroundState();}}
+    @Override protected void onResume(){super.onResume();nextSetupRefresh=0;visible=true;if(engine!=null){engine.service.activity=this;for(BrowserEngine profile:engine.service.profiles)if(profile!=null)profile.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;if(!engine.service.visible)for(BrowserEngine e:engine.service.profiles)if(e!=null&&e.run.armed)e.run.tick();engine.service.visible=true;engine.service.record("Activity resumed; "+engine.service.clockDiagnostics());engine.foreground=true;engine.ensureUsable();engine.foregroundState();}}
     @Override protected void onPause(){visible=false;if(engine!=null){engine.service.telegramLock.lockAll();engine.service.lastActivityPauseElapsed=SystemClock.elapsedRealtime();engine.service.visible=false;engine.service.record("Activity paused; retaining GeckoView sessions for armed background monitoring; screen="+getSystemService(android.os.PowerManager.class).isInteractive()+"; active="+engine.service.activeCount());engine.foreground=false;engine.activeStates.clear();engine.foregroundState();}super.onPause();}
     @Override protected void onStop(){
       super.onStop();
@@ -408,6 +490,7 @@ public class MainActivity extends Activity {
       if(settingsMenuDialog!=null)settingsMenuDialog.dismiss();if(logsDialog!=null)logsDialog.dismiss();
       BrowserEngine.releaseView(view);BrowserEngine.releaseView(monitorView);
       if(engine!=null){engine.activeStates.clear();engine.detach(this);if(engine.service.activity==this)engine.service.activity=null;engine.activate();}
+      detailsWorker.shutdown();
       if(bound)unbindService(connection);
       super.onDestroy();
     }

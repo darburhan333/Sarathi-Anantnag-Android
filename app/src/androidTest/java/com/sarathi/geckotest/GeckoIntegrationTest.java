@@ -799,24 +799,55 @@ public class GeckoIntegrationTest {
    assertTrue("Website must stay open while viewing Alerts",website[0].isOpen());
   });
  }
+ @Test public void startAllPreparesColdDashboardWithoutSwitchingWebsite()throws Exception{
+  MainActivity a=activity.getActivity();BrowserEngine e=readyApplicant(9);
+  final org.mozilla.geckoview.GeckoSession[] website=new org.mozilla.geckoview.GeckoSession[1];
+  main(()->{
+   a.selectApplicant(9);fixtureService.activity=a;fixtureService.visible=true;
+   if(e.monitorSession!=null)e.pageLost(e.monitorSession,"Test cold dashboard reset");
+   website[0]=e.current;assertFalse(e.showingMonitor);
+   fixtureService.startAllReady();assertNotNull("Start All must create unopened dashboard controls",e.monitorSession);
+   assertSame("Start All must preserve the website",website[0],e.current);assertFalse("Start All must not switch views",e.showingMonitor);
+  });
+  java.util.concurrent.atomic.AtomicBoolean controlsReady=new java.util.concurrent.atomic.AtomicBoolean();long end=System.currentTimeMillis()+30000;
+  while(!controlsReady.get()&&System.currentTimeMillis()<end){main(()->controlsReady.set(e.monitorReady));if(!controlsReady.get())Thread.sleep(100);}
+  assertTrue("Cold dashboard must initialize without opening its view",controlsReady.get());
+  main(()->{fixtureService.cancelStartBatch();assertSame(website[0],e.current);assertFalse(e.showingMonitor);assertFalse("Non-COV page must not be armed",e.run.armed);});
+ }
+ @Test public void applicantDetailsAreEncryptedAndIsolated()throws Exception{
+  android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  try{
+   for(int n=1;n<=9;n++)ApplicantDetails.save(context,n,"00012345678"+n,"15-08-1998");
+   String stored=context.getSharedPreferences("applicant-details",0).getString("applicant1","");
+   assertFalse("Application number must not be plaintext",stored.contains("000123456781"));assertFalse("DOB must not be plaintext",stored.contains("15-08-1998"));
+   for(int n=1;n<=9;n++){assertEquals("00012345678"+n,ApplicantDetails.read(context,n).applicationNumber);assertEquals("15-08-1998",ApplicantDetails.read(context,n).dob);}
+   ApplicantDetails.remove(context,4);assertFalse(ApplicantDetails.read(context,4).saved());assertTrue(ApplicantDetails.read(context,5).saved());
+   try{ApplicantDetails.normalizeDob("31-02-2000");fail("Invalid calendar date must be rejected");}catch(IllegalArgumentException expected){}
+   try{ApplicantDetails.normalizeNumber("123;456");fail("Non-digit application number must be rejected");}catch(IllegalArgumentException expected){}
+  }finally{for(int n=1;n<=9;n++)ApplicantDetails.remove(context,n);}
+ }
  @Test public void signatureControlsKeepGlobalAndSelectedActionsSeparate()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;
   BrowserEngine first=readyApplicant(1),second=readyApplicant(2);
   main(()->{
    service.activity=a;service.visible=true;first.run.arm();second.run.arm();a.selectApplicant(2);
    assertEquals("Start All must be the second control","Start All",a.signatureControlLabelForTest(1));
-   assertEquals("Silence All must be the middle control in row two","Silence All",a.signatureControlLabelForTest(4));
+   assertEquals("Silence All must be the middle control in row two","Silence All",a.signatureControlLabelForTest(5));
    assertEquals("Stop All must start the upper row","Stop All",a.signatureControlLabelForTest(0));
-   assertEquals("Home must finish the upper row","Home",a.signatureControlLabelForTest(2));
+   assertEquals("Home must be the third control","Home",a.signatureControlLabelForTest(2));
    assertFalse("Opening an applicant must default to its website",second.showingMonitor);
-   assertEquals("Quick call must follow the selected applicant","Call A2",a.signatureControlLabelForTest(5));
-   a.clickSignatureControlForTest(4);
+   assertEquals("Quick call must follow the selected applicant","Call A2",a.signatureControlLabelForTest(6));
+   assertEquals("Details must finish the first row","Fill Details",a.signatureControlLabelForTest(3));
+   for(int i=0;i<7;i++)assertTrue("Each primary action needs its leading icon",a.signatureHasIconForTest(i));
+   assertTrue("Applicant menu must highlight the selected applicant",a.applicantMenuHighlightForTest(2));
+   assertFalse("Other applicants must not have the selected highlight",a.applicantMenuHighlightForTest(1));
+   a.clickSignatureControlForTest(5);
    assertTrue("Silence All must not stop applicant 1",first.run.armed);
    assertTrue("Silence All must not stop applicant 2",second.run.armed);
    a.clickSignatureControlForTest(0);
    assertFalse("Stop All must stop applicant 1 regardless of selection",first.run.armed);
    assertFalse("Stop All must stop applicant 2",second.run.armed);
-   boolean previous=second.showingMonitor;a.clickSignatureControlForTest(3);
+   boolean previous=second.showingMonitor;a.clickSignatureControlForTest(4);
    assertEquals("Monitor control must only toggle the selected view",!previous,second.showingMonitor);
    assertFalse("Changing views must not start monitoring",second.run.armed);
    org.mozilla.geckoview.GeckoSession retained=second.current;

@@ -25,7 +25,7 @@ final class MonitorRun {
  }
  void arm(){
   if(!engine.service.visible||engine.service.activity==null)throw new IllegalStateException("Open app before START");
-  if(armed)return;engine.service.beginForeground();
+  if(armed)return;engine.cancelFill();engine.service.beginForeground();
   armed=true;sawRunning=false;recovering=false;generation++;lastReason="Running";
   armedAt=lastBeat=lastProgress=lastTick=SystemClock.elapsedRealtime();longestGap=0;longestScreenOffGap=0;recoveryAttempt=0;verifiedAt=0;lastHeartbeatValue=lastProgressValue=0;
   engine.alerts.clearNotification();engine.alerts.newRun();engine.alerts.testOnce();engine.service.record("Applicant "+engine.profile+" START run="+generation);

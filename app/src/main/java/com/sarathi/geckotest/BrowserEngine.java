@@ -68,6 +68,9 @@ final class BrowserEngine {
     String pendingId;
     volatile String smokeResult="",smokePhase="";
     volatile boolean monitorReady;
+    boolean preparingStartControls;
+    private String fillToken="";private GeckoSession fillSession;private GeckoResult<Object> fillReply;private boolean fillCommitted;
+    private String committedPageUrl="";private boolean firstSarathiReadyRecorded;private int loadProgress;
     JSONObject lastState=new JSONObject();
     BrowserEngine(MonitorService owner,int number){
       service=owner;profile=number;run=new MonitorRun(this);alerts=new PhoneAlerts(owner,number);
@@ -83,15 +86,16 @@ final class BrowserEngine {
     void runOnUiThread(Runnable r){service.handler.post(r);}
     void render(){if(activity!=null)activity.render();}
     void attach(MainActivity a){activity=a;ensureUsable();render();}
-    void detach(MainActivity a){if(activity==a)activity=null;}
+    void detach(MainActivity a){if(activity==a){cancelFill();activity=null;}}
     void foregroundState(){
+      if(!foreground)cancelFill();
       if(foreground)lastVisibleAt=SystemClock.elapsedRealtime();
       if(nativePort!=null){JSONObject o=json("FOREGROUND");try{o.put("active",foreground);}catch(Exception ignored){}nativePort.postMessage(o);}
       render();activate();
     }
     void activate(){
       for(GeckoSession s:sessions)if(s.isOpen()){
-        boolean active=((run.armed||protectedPage)&&s==current)||(foreground&&(s==current||(s==monitorSession&&showingMonitor)));
+        boolean active=((run.armed||protectedPage)&&s==current)||(foreground&&s==current)||(s==monitorSession&&(foreground&&showingMonitor||preparingStartControls&&service.visible));
         boolean changed=!java.util.Objects.equals(activeStates.get(s),active);
         // GeckoView may deactivate a detached/hidden session independently of our cache.
         // Reassert active browser sessions while monitoring, including an older selected tab.
@@ -240,7 +244,7 @@ final class BrowserEngine {
       });
     }
     void finishNavigation(String id){if(!destroyed&&id.equals(pendingId)&&afterStop!=null){Runnable r=afterStop;afterStop=null;pendingId=null;r.run();}}
-    void home(){navigate("Go Home",()->{ensureUsable();showingMonitor=false;if(current!=null)current.loadUri(HOME);render();activate();});}
+    void home(){navigate("Go Home",()->{GeckoSession previous=current;ensureUsable();showingMonitor=false;if(current!=null&&current==previous)current.loadUri(HOME);render();activate();});}
     void ensureUsable(){
       if(destroyed||pageLostProtected)return;
       if(current==null||!current.isOpen()){
@@ -309,8 +313,10 @@ final class BrowserEngine {
       else if(ready&&monitorUrl!=null)monitorSession.loadUri(monitorUrl+"#"+monitorPanel);
       render();activate();
     }
+    void prepareStartControls(){preparingStartControls=true;prepareMonitor();activate();}
+    void finishStartControls(){preparingStartControls=false;activate();}
     void prepareMonitor(){
-      if(!ready||monitorUrl==null||monitorSession!=null||destroyed||!showingMonitor)return;
+      if(!ready||monitorUrl==null||monitorSession!=null||destroyed||(!showingMonitor&&!preparingStartControls))return;
       monitorSession=newSession();monitorSession.open(runtime);
       // Load the requested panel once. Rendering must never enqueue a competing URI.
       monitorSession.loadUri(monitorUrl+"#"+monitorPanel);render();activate();
@@ -351,7 +357,8 @@ final class BrowserEngine {
           break;
         case "ACK":
           finishNavigation(o.optString("id"));break;
-        case "START_RESULT":if(o.optString("batch").equals(service.startBatch)){log("Start All: "+o.optString("reason"));service.record("Applicant "+profile+" Start All: "+o.optString("reason"));}break;
+        case "FILL_RESULT":finishFill(o.optString("id"),o.optBoolean("ok"));break;
+        case "START_RESULT":finishStartControls();if(o.optString("batch").equals(service.startBatch)){log("Start All: "+o.optString("reason"));service.record("Applicant "+profile+" Start All: "+o.optString("reason"));}break;
         case "PAGE_READY":if(o.optString("id").equals(pageQuery)&&o.optString("url").equals(pageUrl)){pageReady=true;updateProtection(o);if(o.optBoolean("covReady")&&loggedInPage&&(loginRequiredObserved||(!sessionExpired&&loginAtWallClockMs==0L))){markLoginAt();loginRequiredObserved=false;}String reason=pageReadyReason(o.optString("reason"),o.optBoolean("calendarLock")||o.optBoolean("protectPage")&&o.optString("reason").toLowerCase(Locale.US).contains("calendar"),o.optString("reason").toLowerCase(Locale.US).contains("session expired"),o.optBoolean("covReady"));lastPageReason=reason;log("PAGE_READY: "+reason);}break;
         case "RECOVERED":run.recovered(o.optString("id"),o.optBoolean("safe"),o.optBoolean("terminal"),o.optString("reason","No verification details"));break;
         case "ERROR":log(o.optString("message"));break;
@@ -437,6 +444,24 @@ final class BrowserEngine {
       }),e->runOnUiThread(()->{ready=false;log("Monitor installation failed: "+e.getClass().getSimpleName());if(!destroyed&&installAttempts<3)service.handler.postDelayed(()->{if(!destroyed)installExtension();},2000L*installAttempts);}));
     }
 
+    boolean canFillApplicant(){return !destroyed&&ready&&nativePort!=null&&foreground&&service.visible&&service.engine==this&&!showingMonitor&&!run.armed&&!protectedPage&&!pageLostProtected&&current!=null&&current.isOpen();}
+    GeckoResult<Object> fillApplicant(ApplicantDetails.Record details){
+      GeckoResult<Object> result=new GeckoResult<>();
+      if(!canFillApplicant()||fillReply!=null||!details.saved()){result.complete("{\"ok\":false}");return result;}
+      fillToken=java.util.UUID.randomUUID().toString();fillSession=current;fillReply=result;fillCommitted=false;
+      final String id=fillToken;JSONObject request=json("FILL_DETAILS");
+      try{request.put("id",id);request.put("applicationNumber",details.applicationNumber);request.put("dob",details.dob);nativePort.postMessage(request);}
+      catch(Exception ex){finishFill(id,false);return result;}
+      service.handler.postDelayed(()->finishFill(id,false),10000);return result;
+    }
+    void cancelFill(){if(fillReply!=null)finishFill(fillToken,false);}
+    private void finishFill(String id,boolean ok){
+      if(fillReply==null||!fillToken.equals(id))return;
+      boolean accepted=ok&&fillCommitted&&fillSession==current&&canFillApplicant();
+      GeckoResult<Object> reply=fillReply;fillReply=null;fillSession=null;fillToken="";fillCommitted=false;
+      reply.complete(accepted?"{\"ok\":true}":"{\"ok\":false}");
+    }
+    String websiteLoadingLabel(){return pageLoading?"Loading Sarathi · "+loadProgress+"%":status;}
     private String safeLocation(String url) {
         if (url == null) return "";
         Uri u = Uri.parse(url);
@@ -463,6 +488,12 @@ final class BrowserEngine {
       session.getWebExtensionController().setMessageDelegate(extension,new WebExtension.MessageDelegate(){
         @Override public GeckoResult<Object> onMessage(String app,Object message,WebExtension.MessageSender sender){
           boolean allowed=sender.session==session&&sessions.contains(session)&&message instanceof JSONObject&&"PROFILE".equals(((JSONObject)message).optString("type"));
+          if(message instanceof JSONObject){JSONObject request=(JSONObject)message;String type=request.optString("type");
+            if(type.equals("FILL_CHECK")||type.equals("FILL_COMMIT")){
+              allowed=sender.session==session&&session==fillSession&&fillReply!=null&&!fillCommitted&&fillToken.equals(request.optString("token"))&&canFillApplicant();
+              if(allowed&&type.equals("FILL_COMMIT"))fillCommitted=true;
+            }
+          }
           return GeckoResult.fromValue((Object)(allowed?"{\"ok\":true}":"{\"ok\":false}"));
         }
       },"profile");
@@ -529,16 +560,20 @@ final class BrowserEngine {
                 if(!sessions.contains(session)||!session.isOpen()||session==monitorSession)return;
                 if(session!=current&&!run.armed)showSession(session);
                 if(session==current)expireRetainedProtectionForNavigation(url);
-                pageLoading=true;pageLoadStartedElapsed=SystemClock.elapsedRealtime();pageReady=false;pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
+                loadProgress=0;pageLoading=true;pageLoadStartedElapsed=SystemClock.elapsedRealtime();pageReady=false;pageUrl=url;pageQuery=java.util.UUID.randomUUID().toString();
                 log("Loading " + safeLocation(url));
                 final String loadingId=pageQuery;service.handler.postDelayed(()->{if(!destroyed&&pageLoading&&loadingId.equals(pageQuery))log("Connection slow · waiting for Sarathi");},15000);
             }
+            @Override public void onProgressChange(GeckoSession session,int progress){
+                if(session==current&&Math.abs(progress-loadProgress)>=10){loadProgress=progress;if(pageLoading)render();}
+            }
             @Override public void onPageStop(GeckoSession session, boolean success) {
                 if (session == current) {
-                    pageLoading=false;lastPageStopElapsed=SystemClock.elapsedRealtime();lastPageLoadSucceeded=success;
+                    pageLoading=false;loadProgress=100;lastPageStopElapsed=SystemClock.elapsedRealtime();lastPageLoadSucceeded=success;
                     log(success?"Ready":"Page could not load — check connection or use Home");
                     if(success)queryPageReadiness(session,pageQuery,pageUrl,0);
-                    if(!firstPageRecorded){firstPageRecorded=true;logs.add("First page completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);service.handler.post(BrowserEngine.this::prepareMonitor);}
+                    if(!firstPageRecorded){firstPageRecorded=true;logs.add("First browser document completed in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; success="+success);service.handler.post(BrowserEngine.this::prepareMonitor);}
+                    if(success&&!firstSarathiReadyRecorded&&committedPageUrl.equals(pageUrl)&&"sarathi.parivahan.gov.in".equals(Uri.parse(pageUrl).getHost())){firstSarathiReadyRecorded=true;log("First Sarathi document loaded in "+(SystemClock.elapsedRealtime()-startupAt)+" ms; request="+(SystemClock.elapsedRealtime()-pageLoadStartedElapsed)+" ms");}
                 }
             }
         });
@@ -551,6 +586,9 @@ final class BrowserEngine {
             }
         });
         s.setNavigationDelegate(new GeckoSession.NavigationDelegate() {
+            @Override public void onLocationChange(GeckoSession session,String uri,java.util.List<GeckoSession.PermissionDelegate.ContentPermission> permissions,Boolean hasUserGesture){
+                if(session==current)committedPageUrl=uri==null?"":uri;
+            }
             @Override public void onCanGoBack(GeckoSession session, boolean value) {
                 if (session == current) canGoBack = value;
             }
