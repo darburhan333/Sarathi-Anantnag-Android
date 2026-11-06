@@ -71,6 +71,7 @@ adb('shell','pm','grant',PACKAGE,'android.permission.POST_NOTIFICATIONS')
 adb('shell','am','force-stop',PACKAGE)
 adb('shell','am','start','-W','-n',PACKAGE+'/com.sarathi.geckotest.MainActivity')
 root=wait_ready(1)
+assert any(n.get('text')=='Monitor' for n in root.iter('node')),'Fresh launch must show the website by default'
 def tap_node(node):
  x1,y1,x2,y2=map(int,re.findall(r'\d+',node.get('bounds')))
  adb('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2));time.sleep(0.5)
@@ -106,6 +107,7 @@ tap_text('Close')
 for number in [2,3,4,5,6,7,8,9,1]:
  print('Release UI: checking Applicant '+str(number),flush=True)
  root=choose_applicant(number)
+ assert any(n.get('text')=='Monitor' for n in root.iter('node')),'Applicant must open its website by default'
  assert not any(n.get('text','').startswith('Alerts · Applicant ') for n in root.iter('node')),'Selecting an applicant must not open Settings'
  settings_menu();tap_text('Alerts');wait_text('Alerts · Applicant '+str(number))
  alerts=wait_text('Chat ID 2 · optional')
@@ -127,7 +129,7 @@ adb('shell','screencap','-p','/data/local/tmp/release-logs.png');adb('pull','/da
 tap_text('Close');root=wait_ready(1)
 assert any(n.get('text')=='Call A1' for n in root.iter('node')),'Log filtering must not switch the active applicant'
 root=snapshot()
-labels=['Website','Start All','Silence All','Stop All','Home','Call A1']
+labels=['Stop All','Start All','Home','Website','Silence All','Call A1']
 adb('shell','screencap','-p','/data/local/tmp/release-preview.png')
 adb('pull','/data/local/tmp/release-preview.png','release-preview.png')
 def native_control(root,label):
@@ -148,10 +150,11 @@ assert rects[0][0]<rects[1][0]<rects[2][0] and rects[3][0]<rects[4][0]<rects[5][
 picker=next(n for n in root.iter('node') if n.get('content-desc')=='Choose applicant')
 tap_node(picker);tap_text('Applicant 2');root=wait_ready(2)
 assert any(n.get('text')=='Call A2' for n in root.iter('node')),'Quick call must follow selected applicant'
-tap_text('Website');root=snapshot()
-assert any(n.get('text')=='Monitor' for n in root.iter('node')),'Monitor button must toggle views'
+assert any(n.get('text')=='Monitor' for n in root.iter('node')),'Selected applicant must start on website'
 tap_text('Monitor');root=snapshot()
-assert any(n.get('text')=='Website' for n in root.iter('node')),'Website button must toggle back'
+assert any(n.get('text')=='Website' for n in root.iter('node')),'Monitor button must toggle views'
+tap_text('Website');root=snapshot()
+assert any(n.get('text')=='Monitor' for n in root.iter('node')),'Website button must toggle back'
 picker=next(n for n in root.iter('node') if n.get('content-desc')=='Choose applicant')
 tap_node(picker);tap_text('Applicant 1');root=wait_ready(1)
 adb('shell','screencap','-p','/data/local/tmp/release-preview.png')

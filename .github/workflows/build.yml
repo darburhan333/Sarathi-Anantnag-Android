@@ -1,4 +1,4 @@
-name: Build and test MParivahan 3.9.1-midnight-teal
+name: Build and test MParivahan 3.9.2-midnight-teal
 on:
   push:
     branches:
@@ -110,7 +110,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           overwrite: true
-          name: MParivahan-JK-3.9.1-midnight-teal-ARM64-UNVERIFIED
+          name: MParivahan-JK-3.9.2-midnight-teal-ARM64-UNVERIFIED
           path: |
             app/build/outputs/apk/release/*.apk
             apk-certificate.txt
@@ -337,11 +337,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: MParivahan-JK-3.9.1-midnight-teal-ARM64-UNVERIFIED
+          name: MParivahan-JK-3.9.2-midnight-teal-ARM64-UNVERIFIED
           path: verified
       - uses: actions/upload-artifact@v4
         with:
           overwrite: true
-          name: MParivahan-JK-3.9.1-midnight-teal-ARM64-TESTS-PASSED
+          name: MParivahan-JK-3.9.2-midnight-teal-ARM64-TESTS-PASSED
           path: verified/
           if-no-files-found: error

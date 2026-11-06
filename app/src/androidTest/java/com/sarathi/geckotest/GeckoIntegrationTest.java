@@ -791,19 +791,24 @@ public class GeckoIntegrationTest {
   main(()->{
    service.activity=a;service.visible=true;first.run.arm();second.run.arm();a.selectApplicant(2);
    assertEquals("Start All must be the second control","Start All",a.signatureControlLabelForTest(1));
-   assertEquals("Silence All must be the third control","Silence All",a.signatureControlLabelForTest(2));
-   assertEquals("Stop All must start the second row","Stop All",a.signatureControlLabelForTest(3));
-   assertEquals("Home must be the fifth control","Home",a.signatureControlLabelForTest(4));
+   assertEquals("Silence All must be the middle control in row two","Silence All",a.signatureControlLabelForTest(4));
+   assertEquals("Stop All must start the upper row","Stop All",a.signatureControlLabelForTest(0));
+   assertEquals("Home must finish the upper row","Home",a.signatureControlLabelForTest(2));
+   assertFalse("Opening an applicant must default to its website",second.showingMonitor);
    assertEquals("Quick call must follow the selected applicant","Call A2",a.signatureControlLabelForTest(5));
-   a.clickSignatureControlForTest(2);
+   a.clickSignatureControlForTest(4);
    assertTrue("Silence All must not stop applicant 1",first.run.armed);
    assertTrue("Silence All must not stop applicant 2",second.run.armed);
-   a.clickSignatureControlForTest(3);
+   a.clickSignatureControlForTest(0);
    assertFalse("Stop All must stop applicant 1 regardless of selection",first.run.armed);
    assertFalse("Stop All must stop applicant 2",second.run.armed);
-   boolean previous=second.showingMonitor;a.clickSignatureControlForTest(0);
+   boolean previous=second.showingMonitor;a.clickSignatureControlForTest(3);
    assertEquals("Monitor control must only toggle the selected view",!previous,second.showingMonitor);
    assertFalse("Changing views must not start monitoring",second.run.armed);
+   org.mozilla.geckoview.GeckoSession retained=second.current;
+   a.selectApplicant(1);a.selectApplicant(2);
+   assertFalse("Reopening an applicant must default back to the website",second.showingMonitor);
+   assertSame("Opening an applicant must retain its website session",retained,second.current);
    a.selectApplicant(1);
   });
  }

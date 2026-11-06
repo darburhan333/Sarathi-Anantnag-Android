@@ -4,6 +4,8 @@ const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('ass
 const production=fs.readFileSync(path.join(__dirname,'..','content.js'),'utf8');
 assert.match(production,/if\s*\(lastCycleMs\s*>\s*0\s*&&\s*lastCycleMs\s*<\s*7000\)/,'PROCEED must enforce a 7-second minimum');
 assert.doesNotMatch(production,/if\s*\(lastCycleMs\s*>\s*0\s*&&\s*lastCycleMs\s*<\s*8000\)/,'old 8-second PROCEED gate must be removed');
+assert.match(production,/const TARGET_PERIOD = 7000;/,'COV deadline must target seven seconds');
+assert.match(production,/const WAIT_MS = 7000;/,'Retry countdown threshold must match the COV interval');
 async function check(mode){
  let now=new Date(2026,9,20,10,0,0).getTime(),clicks=0;
  class Clock extends Date {constructor(...args){super(...(args.length?args:[now]))}static now(){return now}}

@@ -33,7 +33,7 @@ async function authorizeAction(msg,sender){
  if(booking && (!d.calendarLock||!d.autoBookingEnabled))return {authorized:false,error:'Assisted booking disabled or calendar not locked'};
  if(!booking && d.calendarLock)return {authorized:false,error:'Calendar detected: monitoring click cancelled'};
  if(action==='BOOK_SLOT_CONFIRM')return {authorized:!!d.bookingClickIssued&&!!msg.reservationId&&msg.reservationId===d.bookingReservationId&&(!d.bookingReservationDocument||(sender.documentId || msg.documentNonce)===d.bookingReservationDocument)&&!d.bookingDispatchStarted&&d.calendarLock&&d.autoBookingEnabled,error:'Booking intent not authorized'};
- if(action==='PROCEED_CONFIRM'){if(Date.now()-d.lastProceedConfirmedAt<8000)return {authorized:false,error:'Eight-second minimum gap'};await chrome.storage.local.set({lastProceedConfirmedAt:Date.now()});return {authorized:true};}
+ if(action==='PROCEED_CONFIRM'){if(Date.now()-d.lastProceedConfirmedAt<7000)return {authorized:false,error:'Seven-second minimum gap'};await chrome.storage.local.set({lastProceedConfirmedAt:Date.now()});return {authorized:true};}
  if(action==='BOOK_SLOT'){
    if(d.bookingClickIssued)return {authorized:false,error:'BOOK SLOT has already been submitted or its outcome is uncertain'};
    const date=String(msg.date||'');
@@ -43,7 +43,7 @@ async function authorizeAction(msg,sender){
    return {authorized:true};
  }
  if(action==='PROCEED'){
-   if(Date.now()-d.lastProceedGateAt<8000)return {authorized:false,error:'Proceed already authorized recently'};
+   if(Date.now()-d.lastProceedGateAt<7000)return {authorized:false,error:'Proceed already authorized recently'};
    await chrome.storage.local.set({lastProceedGateAt:Date.now()});
    return {authorized:true};
  }

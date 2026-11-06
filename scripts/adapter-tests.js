@@ -48,6 +48,18 @@ const root=path.resolve(__dirname,'../app/src/main/assets/extension');
  const silenceReply=await new Promise(resolve=>listeners[0]({type:'AUDIO_CONTROL',action:'STOP'},{url:'moz-extension://test/monitor.html'},resolve));
  assert.equal(silenceReply.ok,true,'Explicit UI alarm acknowledgement must still succeed');
  assert.equal(native.filter(m=>m.type==='ACK_ALERT').length,acknowledgementCount+1,'An explicit user Silence action must still acknowledge native alarms');
+ // Exercise both real background authorization boundaries with an exact fake clock.
+ let gateNow=2000000;
+ ctx.Date=class extends Date{constructor(...args){super(...(args.length?args:[gateNow]));}static now(){return gateNow;}};
+ data.androidServiceReady=true;data.running=true;data.calendarLock=false;
+ for(const [action,field] of [['PROCEED','lastProceedGateAt'],['PROCEED_CONFIRM','lastProceedConfirmedAt']]){
+  data[field]=gateNow-6999;
+  assert(!(await call({action})).authorized,action+' must reject a retry before seven seconds');
+  gateNow++;
+  assert((await call({action})).authorized,action+' must authorize at the seven-second boundary');
+  assert.equal(data[field],gateNow,action+' must record the reservation clock');
+  assert(!(await call({action})).authorized,action+' must reject a duplicate immediately');
+ }
  console.log('PASS: Firefox injection, native audio/notification, document-bound reservation, service authorization, stopped cleanup, remote alerts survive native CRITICAL failure');
 })().catch(e=>{console.error(e);process.exitCode=1});
 

@@ -6,8 +6,8 @@
   window.__sarathiAnantnagV33ProLoaded = true;
 
   const documentNonce=globalThis.crypto?.randomUUID?.() || String(Date.now())+'-'+Math.random().toString(36).slice(2);
-  const WAIT_MS = 8000;
-  const TARGET_PERIOD = 10000;
+  const WAIT_MS = 7000;
+  const TARGET_PERIOD = 7000;
   let bookingPaused = false;
   let calendarLocked = false;
   let sessionLocked = false;

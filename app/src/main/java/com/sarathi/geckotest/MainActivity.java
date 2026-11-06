@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
         MonitorService service=((MonitorService.LocalBinder)binder).getService();
         lockedApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,getSharedPreferences("monitor",0).getInt("lockedApplicant",1)));
         if(getIntent().hasExtra("applicant"))lockedApplicant=notificationApplicant;
-        engine=service.profile(lockedApplicant);service.engine=engine;pendingMonitorPanel=activePanel;if(engine.monitorSession==null)engine.showingMonitor=true;
+        engine=service.profile(lockedApplicant);service.engine=engine;pendingMonitorPanel=activePanel;engine.showingMonitor=false;
         engine.service.activity=MainActivity.this;engine.service.visible=visible;engine.attach(MainActivity.this);engine.foreground=visible;engine.foregroundState();
       }
       public void onServiceDisconnected(android.content.ComponentName name){engine=null;status.setText("Service disconnected — reopen the app");status.setVisibility(View.VISIBLE);}
@@ -140,7 +140,7 @@ public class MainActivity extends Activity {
       boolean keepScreen=visible&&engine.monitoring;boolean screenFlag=(getWindow().getAttributes().flags&WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)!=0;
       if(keepScreen!=screenFlag){if(keepScreen)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
     }
-    void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){render();return;}MonitorService service=engine.service;service.telegramLock.lockAll();BrowserEngine.releaseView(view);BrowserEngine.releaseView(monitorView);engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);if(engine.monitorSession==null)engine.showingMonitor=true;engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;pendingMonitorPanel=activePanel;if(!activePanel.equals("monitor")){engine.showingMonitor=true;engine.prepareMonitor();}engine.attach(this);engine.foregroundState();}
+    void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){if(activePanel.equals("monitor")){engine.showingMonitor=false;engine.ensureUsable();}render();engine.activate();return;}MonitorService service=engine.service;service.telegramLock.lockAll();BrowserEngine.releaseView(view);BrowserEngine.releaseView(monitorView);engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);engine.showingMonitor=false;engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;pendingMonitorPanel=activePanel;if(!activePanel.equals("monitor")){engine.showingMonitor=true;engine.prepareMonitor();}engine.attach(this);engine.foregroundState();}
     private boolean directCalls(){return getSharedPreferences("calling",0).getBoolean("direct",false);}
     static Intent applicantCallIntent(String phone,boolean direct,boolean permitted){return new Intent(direct&&permitted?Intent.ACTION_CALL:Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null));}
     private void openDialer(String phone){startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));}
@@ -370,11 +370,11 @@ public class MainActivity extends Activity {
         root.addView(pages,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout controls=new LinearLayout(this);signatureControls=controls;controls.setOrientation(LinearLayout.VERTICAL);controls.setBackgroundColor(0xFF0D2B33);controls.setPadding(0,dp(3),0,dp(3));
         LinearLayout firstRow=new LinearLayout(this),secondRow=new LinearLayout(this);controls.addView(firstRow);controls.addView(secondRow);
-        monitorButton=signatureButton(firstRow,"Monitor",0xFF10343D,0xFF63E6CA,this::toggleMonitor);signatureButtons[0]=monitorButton;
+        signatureButtons[0]=signatureButton(firstRow,"Stop All",0xFF35212C,0xFFFFACB8,()->{if(engine!=null)engine.service.stopAll();});
         signatureButtons[1]=signatureButton(firstRow,"Start All",0xFF087E72,0xFFEDF9F8,()->{if(engine!=null)engine.service.startAllReady();});
-        signatureButtons[2]=signatureButton(firstRow,"Silence All",0xFF10343D,0xFFEDF9F8,()->{if(engine!=null)engine.service.silenceAll();});
-        signatureButtons[3]=signatureButton(secondRow,"Stop All",0xFF35212C,0xFFFFACB8,()->{if(engine!=null)engine.service.stopAll();});
-        signatureButtons[4]=signatureButton(secondRow,"Home",0xFF10343D,0xFFEDF9F8,()->{if(engine!=null)engine.home();});
+        signatureButtons[2]=signatureButton(firstRow,"Home",0xFF10343D,0xFFEDF9F8,()->{if(engine!=null)engine.home();});
+        monitorButton=signatureButton(secondRow,"Monitor",0xFF10343D,0xFF63E6CA,this::toggleMonitor);signatureButtons[3]=monitorButton;
+        signatureButtons[4]=signatureButton(secondRow,"Silence All",0xFF10343D,0xFFEDF9F8,()->{if(engine!=null)engine.service.silenceAll();});
         callButton=signatureButton(secondRow,"Call",0xFF10443F,0xFF63E6CA,()->{if(engine!=null)applicantPhone(engine.profile);});signatureButtons[5]=callButton;
         header.addView(controls,2,new LinearLayout.LayoutParams(-1,-2));
         closedPageNotice=text("",11,0xFFFFD18C);closedPageNotice.setPadding(dp(10),dp(7),dp(10),dp(7));closedPageNotice.setBackgroundColor(0xFF26342C);closedPageNotice.setVisibility(View.GONE);closedPageNotice.setContentDescription("Closed applicant website notice");closedPageNotice.setOnClickListener(v->{if(engine!=null)engine.dismissClosedPageNotice();});header.addView(closedPageNotice);
