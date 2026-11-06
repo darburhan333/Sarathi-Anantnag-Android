@@ -24,9 +24,9 @@ jobs:
           import json,re
           value=json.load(open('diagnostics/inspect-request.json'))
           mode=value.get('mode','inspect')
-          if mode not in ('inspect','password_preflight'):raise SystemExit('Unsupported evidence mode')
+          if mode not in ('inspect','password_preflight','engine_probe'):raise SystemExit('Unsupported evidence mode')
           source=value.get('source_sha','')
-          if mode=='password_preflight' and not re.fullmatch('[a-f0-9]{40}',source):raise SystemExit('Invalid source SHA')
+          if mode in ('password_preflight','engine_probe') and not re.fullmatch('[a-f0-9]{40}',source):raise SystemExit('Invalid source SHA')
           print('run_id='+str(int(value['run_id'])))
           print('mode='+mode)
           print('source_sha='+source)
@@ -83,6 +83,101 @@ jobs:
           overwrite: true
           name: Telegram-lock-focused-results
           path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          if-no-files-found: warn
+
+  resolve-engine-probes:
+    needs: inspect
+    if: needs.inspect.outputs.mode == 'engine_probe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      plan: ${{ steps.resolve.outputs.plan }}
+    steps:
+      - id: resolve
+        name: Resolve official stable GeckoView candidates
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json,re,urllib.request,xml.etree.ElementTree as ET
+          baseline='158.0.20261021001945'
+          url='https://maven.mozilla.org/maven2/org/mozilla/geckoview/geckoview/maven-metadata.xml'
+          with urllib.request.urlopen(url,timeout=30) as response:root=ET.fromstring(response.read())
+          versions=[n.text for n in root.findall('versioning/versions/version') if n.text and re.fullmatch(r'\d+\.\d+\.\d{14}',n.text)]
+          if not versions:raise SystemExit('No stable GeckoView versions resolved')
+          key=lambda value:tuple(map(int,value.split('.')))
+          latest=max(versions,key=key)
+          older=[v for v in versions if int(v.split('.')[0])<158]
+          plan=[{'label':'baseline','version':baseline}]
+          if latest!=baseline:plan.append({'label':'latest-stable','version':latest})
+          if older:
+           previous=max(older,key=key)
+           if previous not in [p['version'] for p in plan]:plan.append({'label':'previous-stable','version':previous})
+          print('plan='+json.dumps({'include':plan},separators=(',',':')))
+          print('Official stable candidates: '+str(plan),file=__import__('sys').stderr)
+          PY
+  engine-probe:
+    needs: [inspect, resolve-engine-probes]
+    if: needs.inspect.outputs.mode == 'engine_probe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve-engine-probes.outputs.plan) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.inspect.outputs.source_sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Select engine for isolated reproducer
+        env:
+          PROBE_GECKO_VERSION: ${{ matrix.version }}
+        run: |
+          python3 - <<'PY'
+          import os,re,pathlib
+          version=os.environ['PROBE_GECKO_VERSION']
+          if not re.fullmatch(r'\d+\.\d+\.\d{14}',version):raise SystemExit('Invalid engine version')
+          path=pathlib.Path('app/build.gradle')
+          value,count=re.subn(r"org\.mozilla\.geckoview:geckoview:[^']+",'org.mozilla.geckoview:geckoview:'+version,path.read_text())
+          if count!=1:raise SystemExit('Expected exactly one Gecko dependency')
+          path.write_text(value)
+          pathlib.Path('engine-version.txt').write_text(version+'\n')
+          print('Testing GeckoView '+version)
+          PY
+      - name: Build SMS teardown reproducer
+        run: |
+          gradle -PtestAbi=x86_64 assembleDebug assembleDebugAndroidTest
+          gradle --stop
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 4096
+          disable-animations: true
+          script: |
+            adb install -r "$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
+            adb shell pm grant com.sarathi.anantnag.gecko.v33 android.permission.POST_NOTIFICATIONS
+            adb shell dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33
+            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.GeckoIntegrationTest#stopDuringSmsStageKeepsProtectedPageActiveAndForeground connectedDebugAndroidTest --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          overwrite: true
+          name: Gecko-engine-probe-${{ matrix.label }}
+          path: |
+            engine-version.txt
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
           if-no-files-found: warn

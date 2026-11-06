@@ -1,7 +1,6 @@
 {
-  "run_id": 42109452912,
-  "mode": "password_preflight",
-  "source_sha": "4b42ebd5b8b03b20f23a955b1fdda50e6048260e",
-  "nonce": 2,
-  "reason": "Grant startup notification permission before the standalone native dialog test"
+  "run_id": 42148703608,
+  "mode": "engine_probe",
+  "source_sha": "13af5a718b3f752fc801a76df3d8e9fe4cf6b068",
+  "reason": "Compare the confirmed SMS teardown accessibility deadlock against official stable engines"
 }
