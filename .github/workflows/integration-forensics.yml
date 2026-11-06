@@ -12,7 +12,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     outputs:
       mode: ${{ steps.request.outputs.mode }}
       source_sha: ${{ steps.request.outputs.source_sha }}
@@ -100,21 +100,8 @@ jobs:
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json,re,urllib.request,xml.etree.ElementTree as ET
-          baseline='158.0.20261021001945'
-          url='https://maven.mozilla.org/maven2/org/mozilla/geckoview/geckoview/maven-metadata.xml'
-          with urllib.request.urlopen(url,timeout=30) as response:root=ET.fromstring(response.read())
-          versions=[n.text for n in root.findall('versioning/versions/version') if n.text and re.fullmatch(r'\d+\.\d+\.\d{14}',n.text)]
-          if not versions:raise SystemExit('No stable GeckoView versions resolved')
-          key=lambda value:tuple(map(int,value.split('.')))
-          latest=max(versions,key=key)
-          older=[v for v in versions if int(v.split('.')[0])<158]
-          plan=[{'label':'baseline','version':baseline}]
-          if latest!=baseline:plan.append({'label':'latest-stable','version':latest})
-          if older:
-           previous=max(older,key=key)
-           if previous not in [p['version'] for p in plan]:plan.append({'label':'previous-stable','version':previous})
+          plan=[{'label':'baseline','version':'158.0.20261021001945'},{'label':'single-surface','version':'158.0.20261021001945'}]
           print('plan='+json.dumps({'include':plan},separators=(',',':')))
-          print('Official stable candidates: '+str(plan),file=__import__('sys').stderr)
           PY
   engine-probe:
     needs: [inspect, resolve-engine-probes]
@@ -138,6 +125,7 @@ jobs:
       - name: Select engine for isolated reproducer
         env:
           PROBE_GECKO_VERSION: ${{ matrix.version }}
+          PROBE_VARIANT: ${{ matrix.label }}
         run: |
           python3 - <<'PY'
           import os,re,pathlib
@@ -148,12 +136,14 @@ jobs:
           if count!=1:raise SystemExit('Expected exactly one Gecko dependency')
           path.write_text(value)
           pathlib.Path('engine-version.txt').write_text(version+'\n')
-          test_source="package com.sarathi.geckotest;\nimport androidx.test.ext.junit.runners.AndroidJUnit4;\nimport androidx.test.platform.app.InstrumentationRegistry;\nimport org.junit.BeforeClass;\nimport org.junit.Test;\nimport org.junit.runner.RunWith;\nimport org.junit.runner.JUnitCore;\nimport org.junit.runner.Request;\nimport org.junit.runner.Result;\nimport static org.junit.Assert.*;\n@RunWith(AndroidJUnit4.class)\npublic class SmsAccessibilityStressTest {\n @BeforeClass public static void connectAccessibility()throws Exception{\n  android.app.UiAutomation automation=InstrumentationRegistry.getInstrumentation().getUiAutomation();\n  assertNotNull(\"UiAutomation service must connect\",automation.getServiceInfo());\n  android.view.accessibility.AccessibilityManager manager=InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(android.view.accessibility.AccessibilityManager.class);\n  long deadline=android.os.SystemClock.elapsedRealtime()+5000;\n  while(!manager.isEnabled()&&android.os.SystemClock.elapsedRealtime()<deadline)Thread.sleep(50);\n  assertTrue(\"The reproducer must run with Android accessibility enabled\",manager.isEnabled());\n }\n private void checkScenario(){\n  Result result=new JUnitCore().run(Request.method(GeckoIntegrationTest.class,\"stopDuringSmsStageKeepsProtectedPageActiveAndForeground\"));\n  assertEquals(\"Exactly one original scenario must run\",1,result.getRunCount());\n  assertEquals(\"No original scenario may be ignored\",0,result.getIgnoreCount());\n  assertTrue(result.getFailures().toString(),result.wasSuccessful());\n }\n"
-          for cycle in range(1,13):test_source+=' @Test public void cycle%02d(){ checkScenario(); }'%cycle+chr(10)
-          test_source+='}'+chr(10)
-          folder=pathlib.Path('app/src/androidTest/java/com/sarathi/geckotest')
-          (folder/'SmsAccessibilityStressTest.java').write_text(test_source)
-          pathlib.Path('probe-scenario.txt').write_text('12 cycles with verified Android accessibility connection'+chr(10))
+          if os.environ['PROBE_VARIANT']=='single-surface':
+           path=pathlib.Path('app/src/main/java/com/sarathi/geckotest/MainActivity.java')
+           old="      if(engine.current!=null&&engine.current.isOpen()&&view.getSession()!=engine.current){BrowserEngine.releaseView(view);view.setSession(engine.current);engine.activeStates.remove(engine.current);}\n      if(engine.monitorSession!=null&&engine.monitorSession.isOpen()&&monitorView.getSession()!=engine.monitorSession){BrowserEngine.releaseView(monitorView);monitorView.setSession(engine.monitorSession);engine.activeStates.remove(engine.monitorSession);}\n      monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);"
+           new="      // Attach only the displayed surface. Detached sessions remain owned by\n      // BrowserEngine and retain the existing monitoring/protection activity policy.\n      GeckoView shown=engine.showingMonitor?monitorView:view;\n      GeckoView hidden=engine.showingMonitor?view:monitorView;\n      org.mozilla.geckoview.GeckoSession displayed=engine.showingMonitor?engine.monitorSession:engine.current;\n      boolean ownershipChanged=false;\n      if(hidden.getSession()!=null){\n        org.mozilla.geckoview.GeckoSession detached=hidden.getSession();\n        BrowserEngine.releaseView(hidden);engine.activeStates.remove(detached);ownershipChanged=true;\n      }\n      if(displayed!=null&&displayed.isOpen()&&shown.getSession()!=displayed){\n        BrowserEngine.releaseView(shown);shown.setSession(displayed);engine.activeStates.remove(displayed);ownershipChanged=true;\n      }\n      view.setVisibility(engine.showingMonitor?View.GONE:View.VISIBLE);\n      monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);\n      if(ownershipChanged)engine.activate();"
+           text=path.read_text()
+           if text.count(old)!=1:raise SystemExit('Expected single render ownership block')
+           path.write_text(text.replace(old,new))
+          pathlib.Path('probe-scenario.txt').write_text('Original 29 lifecycle scenarios; variant '+os.environ['PROBE_VARIANT']+chr(10))
           print('Testing GeckoView '+version)
           PY
       - name: Build SMS teardown reproducer
@@ -176,7 +166,7 @@ jobs:
             adb install -r "$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
             adb shell pm grant com.sarathi.anantnag.gecko.v33 android.permission.POST_NOTIFICATIONS
             adb shell dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33
-            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.SmsAccessibilityStressTest connectedDebugAndroidTest --stacktrace
+            gradle -PtestAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.sarathi.geckotest.GeckoIntegrationTest#backgroundStallRecoversWithoutClosingPages,com.sarathi.geckotest.GeckoIntegrationTest#backgroundRecoveryRetriesAndIsolatesFailure,com.sarathi.geckotest.GeckoIntegrationTest#encryptedSettingsRoundTrip,com.sarathi.geckotest.GeckoIntegrationTest#applicantPhonesAreSeparateAndEncrypted,com.sarathi.geckotest.GeckoIntegrationTest#stopCancelsEveryConcurrentWaitOnce,com.sarathi.geckotest.GeckoIntegrationTest#backgroundCriticalNativeFailureIsCaughtBeforeRemoteDelivery,com.sarathi.geckotest.GeckoIntegrationTest#normalMonitoringStartThenStopDoesNotRequireProtectionConfirmation,com.sarathi.geckotest.GeckoIntegrationTest#stopDuringCalendarReviewDisarmsAndKeepsProtectedPageActive,com.sarathi.geckotest.GeckoIntegrationTest#stopDuringSmsStageKeepsProtectedPageActiveAndForeground,com.sarathi.geckotest.GeckoIntegrationTest#stopProtectionRetentionIsFiveMinutesForSmsAndCalendar,com.sarathi.geckotest.GeckoIntegrationTest#pageReplacementDetachesAccessibilityBeforeClosingOldSession,com.sarathi.geckotest.GeckoIntegrationTest#simultaneousSessionExpiryEvidenceIsPerApplicantAndRedacted,com.sarathi.geckotest.GeckoIntegrationTest#applicantSettingsLockAndVisibilityDoNotStopOtherApplicants,com.sarathi.geckotest.GeckoIntegrationTest#fullScreenSettingsPreserveWebsiteSession,com.sarathi.geckotest.GeckoIntegrationTest#signatureControlsKeepGlobalAndSelectedActionsSeparate,com.sarathi.geckotest.GeckoIntegrationTest#compactLayoutKeepsActionsAboveMonitorAndLogsSeparate,com.sarathi.geckotest.GeckoIntegrationTest#quickCallRequiresBothDirectPreferenceAndPhonePermission,com.sarathi.geckotest.GeckoIntegrationTest#delayedNativeSilenceCannotCancelANewerCriticalAlert,com.sarathi.geckotest.GeckoIntegrationTest#backAndHomeConfirmOnlyWhenPageProtected,com.sarathi.geckotest.GeckoIntegrationTest#lostNormalPageRecoversButLostProtectedPageDoesNotReplace,com.sarathi.geckotest.GeckoIntegrationTest#idleUnloadRetainsLoggedInPagesUnlessRealMemoryPressure,com.sarathi.geckotest.GeckoIntegrationTest#idleUnloadTimeoutDefaultsToSixtyMinutesAndCanBeConfigured,com.sarathi.geckotest.GeckoIntegrationTest#sessionExpiredStateDisarmsRun,com.sarathi.geckotest.GeckoIntegrationTest#sessionExpiredIsTerminalAndAppearsInNotificationAndCopyLog,com.sarathi.geckotest.GeckoIntegrationTest#pageReadyReasonsUseOnlyActionableSarathiStates,com.sarathi.geckotest.GeckoIntegrationTest#idlePageLossRecoversWithoutAlarmAndHomeWorksWithoutBridge,com.sarathi.geckotest.GeckoIntegrationTest#recoveryRequiresMatchingRunAndCannotResumeAfterStop,com.sarathi.geckotest.GeckoIntegrationTest#telegramCredentialsAreIsolated,com.sarathi.geckotest.GeckoIntegrationTest#silenceAllPreservesRuns connectedDebugAndroidTest --stacktrace
       - uses: actions/upload-artifact@v4
         if: always()
         with:

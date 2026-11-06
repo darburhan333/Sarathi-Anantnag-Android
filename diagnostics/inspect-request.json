@@ -1,7 +1,7 @@
 {
-  "run_id": 42148703608,
+  "run_id": 42156445377,
   "mode": "engine_probe",
-  "source_sha": "13af5a718b3f752fc801a76df3d8e9fe4cf6b068",
-  "nonce": 2,
-  "reason": "Compare twelve SMS teardown cycles with Android accessibility explicitly connected"
+  "source_sha": "a830521e9828461de703455f7a7fb680bfc67710",
+  "nonce": 3,
+  "reason": "Compare original 29 lifecycle tests with both views attached versus only displayed surface; accessibility remains enabled"
 }
