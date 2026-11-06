@@ -26,3 +26,5 @@ Manual SMS/OTP/CAPTCHA and final confirmation. No automatic login, navigation re
 - Foreground-service idle-stop grace has its own guarded 30-second task instead of relying only on the monitoring clock.
 - Instrumentation prepares POST_NOTIFICATIONS before app launch, connects accessibility explicitly and keeps accessibility enabled. A controlled comparison passed all 29 original lifecycle cases on GeckoView 158 in both arms; a separate SMS reproducer passed 12 cycles each on 158 and 159. These are focused results, not a full release pass. Production GeckoView stays 158.0.20261021001945.
 - Full release verification remains required; physical Infinix testing remains pending.
+
+- Preserve a latched protected page when a queued STOPPED snapshot arrives before native Stop begins its retention timer. The focused SMS test now explicitly covers this ordering. Notification Stop uses an actual offline SMS document so a still-loading real homepage cannot overwrite a synthetic fixture; all original safety assertions remain. Notification test reports/logcat are always uploaded, including failures.

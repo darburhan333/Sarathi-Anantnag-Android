@@ -527,6 +527,9 @@ public class GeckoIntegrationTest {
    service.activity=a;service.visible=true;e.run.arm();
    e.updateProtection(json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true));
    assertTrue("SMS stage must establish protection before STOP",e.protectedPage);
+   e.updateProtection(json("running",false,"bookingStage","STOPPED","protectPage",false,"calendarLock",false));
+   assertTrue("A queued STOPPED snapshot before native STOP must not discard the SMS page",e.protectedPage);
+   assertEquals("A queued STOPPED snapshot must preserve the SMS stage","AWAITING MANUAL SMS VERIFICATION",e.protectedStage);
    e.stopFromUi();
    assertFalse("STOP must disarm SMS applicant immediately",e.run.armed);
    assertTrue("STOP must preserve SMS page protection; protectedPage="+e.protectedPage+", protectedStage="+e.protectedStage+", protectedUrl="+e.protectedUrl+", lastState="+e.lastState.toString()+", armed="+e.run.armed+", "+stopSnapshot(e),e.protectedPage);
@@ -545,6 +548,16 @@ public class GeckoIntegrationTest {
   android.os.PowerManager power=target.getSystemService(android.os.PowerManager.class);
   assertTrue("Quarantined STOP fixture must grant battery-optimization exemption before START",power.isIgnoringBatteryOptimizations(target.getPackageName()));
   MonitorService service=fixtureService;BrowserEngine protectedApplicant=readyApplicant(5),normalApplicant=readyApplicant(6);
+  ServerSocket smsServer=new ServerSocket(0);
+  Thread responder=new Thread(()->{while(!smsServer.isClosed())try(Socket socket=smsServer.accept()){
+   socket.setSoTimeout(1000);
+   BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream()));
+   String line;while((line=reader.readLine())!=null&&!line.isEmpty()){}
+   byte[] body="<html><body><h1>SMS Verification</h1><label>SMS verification Code <input id='smsCode' type='text' autocomplete='one-time-code'></label></body></html>".getBytes("UTF-8");
+   OutputStream out=socket.getOutputStream();
+   out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n").getBytes("UTF-8"));out.write(body);out.flush();
+  }catch(IOException ignored){}},"SmsStopFixture");responder.setDaemon(true);responder.start();
+  try{
   // Wait for the extension's initial STATE snapshot before installing the SMS
   // fixture. Otherwise a late startup STOPPED snapshot can overwrite the test
   // fixture and make this test exercise a race in setup rather than notification STOP.
@@ -555,10 +568,21 @@ public class GeckoIntegrationTest {
    if(!initialStateReceived.get())Thread.sleep(50);
   }
   assertTrue("Protected applicant must publish its initial STATE before the SMS fixture",initialStateReceived.get());
+  // Use an actual offline SMS document. A pending real homepage PAGE_READY is
+  // valid unprotected evidence and must not race a synthetic protected page.
+  String smsUrl="http://127.0.0.1:"+smsServer.getLocalPort()+"/slots/dlsltprev.do";
+  main(()->protectedApplicant.current.loadUri(smsUrl));
+  java.util.concurrent.atomic.AtomicBoolean smsDocumentReady=new java.util.concurrent.atomic.AtomicBoolean();
+  long smsDeadline=System.currentTimeMillis()+30000;
+  while(!smsDocumentReady.get()&&System.currentTimeMillis()<smsDeadline){
+   main(()->smsDocumentReady.set(protectedApplicant.protectedPage&&smsUrl.equals(protectedApplicant.protectedUrl)));
+   if(!smsDocumentReady.get())Thread.sleep(50);
+  }
+  assertTrue("The real SMS fixture must be loaded and natively protected before notification STOP",smsDocumentReady.get());
   main(()->{
    service.activity=activity.getActivity();service.visible=true;
    protectedApplicant.run.arm();normalApplicant.run.arm();
-   org.json.JSONObject smsState=json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true);
+   org.json.JSONObject smsState=json("running",true,"bookingStage","AWAITING MANUAL SMS VERIFICATION","protectPage",true,"url",smsUrl);
    protectedApplicant.lastState=smsState;
    protectedApplicant.updateProtection(smsState);
    service.visible=false;service.activity=null;
@@ -578,6 +602,7 @@ public class GeckoIntegrationTest {
    assertTrue("Protected page session must stay active",Boolean.TRUE.equals(protectedApplicant.activeStates.get(protectedApplicant.current)));
    assertTrue("Protected page must retain PRIORITY_HIGH",protectedApplicant.isPriorityHighForTest(protectedApplicant.current));
   });
+  }finally{smsServer.close();}
  }
  @Test public void stopProtectionRetentionIsFiveMinutesForSmsAndCalendar()throws Exception{
   BrowserEngine sms=readyApplicant(7),calendar=readyApplicant(8);

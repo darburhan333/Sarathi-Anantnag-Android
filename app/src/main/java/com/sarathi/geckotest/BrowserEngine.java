@@ -113,9 +113,10 @@ final class BrowserEngine {
       }else if(hasProtectionInputs){
         // STOP disarms monitoring, but the extension may asynchronously publish a
         // stale STOPPED snapshot after native code has latched manual-page protection.
-        // Keep that page protected for the bounded grace period; actual navigation
-        // away is handled separately by expireRetainedProtectionForNavigation().
-        boolean retainedStopSnapshot=protectedPage&&protectedUntilElapsed>0L&&"STOPPED".equals(stage);
+        // A queued STOPPED snapshot can arrive before native STOP starts its grace
+        // timer, as well as afterwards. Neither snapshot proves the protected page
+        // disappeared. Explicit navigation, page loss and the STOP deadline own release.
+        boolean retainedStopSnapshot=protectedPage&&"STOPPED".equals(stage);
         if(!retainedStopSnapshot){clearProtectedPage();pageLostProtected=false;}
       }
       if(state.has("loggedIn")){loggedInPage=state.optBoolean("loggedIn",true);if(!loggedInPage){loginRequiredObserved=true;clearLoginAt();}}

@@ -312,6 +312,16 @@ jobs:
           print(f"{status}: {target}")
           PY
 
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          overwrite: true
+          name: Gecko-notification-stop-results
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          if-no-files-found: warn
+
   verified-release:
     needs: [apk, gecko-integration-main, gecko-notification-stop]
     runs-on: ubuntu-24.04
