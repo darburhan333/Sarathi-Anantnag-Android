@@ -12,10 +12,41 @@ import java.io.*;
 import static org.junit.Assert.*;
 @RunWith(AndroidJUnit4.class)
 public class GeckoIntegrationTest {
+ private static volatile String diagnosticStage="initializing";
+ private static volatile long stageAt=android.os.SystemClock.elapsedRealtime();
+ private static volatile long uiBeat=android.os.SystemClock.elapsedRealtime();
+ private static void stage(String value){diagnosticStage=value;stageAt=android.os.SystemClock.elapsedRealtime();android.util.Log.i("TEST_STAGE",value);}
+ static {
+  android.os.Handler ui=new android.os.Handler(android.os.Looper.getMainLooper());
+  ui.post(new Runnable(){public void run(){uiBeat=android.os.SystemClock.elapsedRealtime();ui.postDelayed(this,1000);}});
+  Thread watchdog=new Thread(()->{
+   long lastDump=0;
+   while(true){
+    try{Thread.sleep(5000);}catch(InterruptedException done){return;}
+    long now=android.os.SystemClock.elapsedRealtime();
+    boolean staleUi=now-uiBeat>10000;
+    boolean staleDiagnostics=diagnosticStage.startsWith("DIAGNOSTICS")&&now-stageAt>10000;
+    if((staleUi||staleDiagnostics)&&now-lastDump>15000){
+     lastDump=now;
+     android.util.Log.e("STALL_WATCHDOG","stage="+diagnosticStage+" stageAgeMs="+(now-stageAt)+" uiAgeMs="+(now-uiBeat));
+     for(java.util.Map.Entry<Thread,StackTraceElement[]> entry:Thread.getAllStackTraces().entrySet()){
+      Thread thread=entry.getKey();String name=thread.getName().toLowerCase(java.util.Locale.US);
+      if(thread!=android.os.Looper.getMainLooper().getThread()&&!name.contains("instr")&&!name.contains("gecko")&&!name.contains("monitor"))continue;
+      android.util.Log.e("STALL_WATCHDOG",thread+" state="+thread.getState());
+      for(StackTraceElement frame:entry.getValue())android.util.Log.e("STALL_WATCHDOG","  "+frame);
+     }
+    }
+   }
+  },"TestStallWatchdog");
+  watchdog.setDaemon(true);watchdog.start();
+ }
+
  // Lifecycle tests use separate applicant profiles where page-loss latches are part of the scenario.
  @Rule public GrantPermissionRule permissions=GrantPermissionRule.grant(android.Manifest.permission.POST_NOTIFICATIONS);
  @Rule public ActivityTestRule<MainActivity> activity=new ActivityTestRule<>(MainActivity.class);
  @Rule public TestWatcher diagnosticWatcher=new TestWatcher(){
+  @Override protected void starting(Description description){stage("TEST "+description.getMethodName());}
+  @Override protected void finished(Description description){stage("FINISHED "+description.getMethodName());}
   @Override protected void failed(Throwable failure,Description description){writeDiagnosticFile("TEST FAILURE "+description.getClassName()+"#"+description.getMethodName()+": "+failure);}
  };
  private final java.util.concurrent.atomic.AtomicInteger requests=new java.util.concurrent.atomic.AtomicInteger();
@@ -33,9 +64,10 @@ public class GeckoIntegrationTest {
  }
  @After public void resetFixturesAfter()throws Exception{
   try{writeDiagnosticFile("TEST TEARDOWN");}
-  finally{if(fixtureService!=null&&!fixtureService.isDestroyingForTest())resetApplicantFixtures("after");}
+  finally{stage("RESETTING after test");if(fixtureService!=null&&!fixtureService.isDestroyingForTest())resetApplicantFixtures("after");stage("TEARDOWN COMPLETE");}
  }
  private void writeDiagnosticFile(String label){
+  stage("DIAGNOSTICS report "+label);
   StringBuilder report=new StringBuilder("DIAG-START\nMPARIVAHAN MONITOR DIAGNOSTICS\n").append(label).append('\n');
   try{if(fixtureService!=null)report.append(fixtureService.diagnosticReport());else report.append("MonitorService unavailable\n");}
   catch(Exception e){report.append("diagnosticReport failed: ").append(e).append('\n');}
@@ -52,16 +84,10 @@ public class GeckoIntegrationTest {
    if(external==null)throw new java.io.IOException("External app files directory unavailable");
    try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(external,"monitor-copy-log.txt"))){out.write(diagnosticBytes);out.flush();}
   }catch(Exception e){System.err.println("DIAGNOSTIC_EXTERNAL_FILE_WRITE_FAILED "+e);}
-  try{
-   String encoded=android.util.Base64.encodeToString(diagnosticBytes,android.util.Base64.NO_WRAP);
-   for(int offset=0;offset<encoded.length();offset+=8000){
-    String chunk=encoded.substring(offset,Math.min(encoded.length(),offset+8000));
-    String redirect=offset==0?">":">>";
-    String command="sh -c \"printf '%s' '"+chunk+"' | base64 -d "+redirect+" /data/local/tmp/monitor-copy-log.txt\"";
-    try(android.os.ParcelFileDescriptor fd=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
-        InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){while(in.read()!=-1){}}
-   }
-  }catch(Exception e){System.err.println("DIAGNOSTIC_SHELL_FILE_WRITE_FAILED "+e);}
+  // CI already captures both app files and ordered DIAG logcat. Do not execute
+  // unbounded UIAutomation shell copies during every test teardown.
+  stage("DIAGNOSTICS COMPLETE");
+
  }
  private void resetApplicantFixtures(String phase)throws Exception{
   java.util.ArrayList<BrowserEngine> existing=new java.util.ArrayList<>();
