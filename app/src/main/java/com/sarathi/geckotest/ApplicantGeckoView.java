@@ -18,7 +18,7 @@ final class ApplicantGeckoView extends GeckoView {
   // ViewRoot can retain a virtual-node focus after the document or Activity changes.
   // Clear that Android focus without synchronously calling the old native provider.
   clearingPlatformFocus=true;
-  try{clearAccessibilityFocus();}finally{clearingPlatformFocus=false;}
+  try{performAccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS,null);}finally{clearingPlatformFocus=false;}
  }
  @Override public AccessibilityNodeProvider getAccessibilityNodeProvider(){
   GeckoSession session=getSession();
