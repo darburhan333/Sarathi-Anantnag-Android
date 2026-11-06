@@ -1,7 +1,7 @@
 {
   "run_id": 42160422231,
   "mode": "engine_probe",
-  "source_sha": "5daa3b5af663300f8917e2efb3d0846b2e634d6b",
-  "nonce": 8,
-  "reason": "Verify bounded owned-page readiness retries against actual SMS notification Stop"
+  "source_sha": "fba4785059afb615519a54a80ee704970613156d",
+  "nonce": 9,
+  "reason": "Trace actual SMS readiness and verify protected-state semantics without treating ordinary watching as manual booking"
 }
