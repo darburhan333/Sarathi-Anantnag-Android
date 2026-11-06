@@ -2,6 +2,13 @@
 set +e
 result=0
 if [ "${1:-all}" != "release-only" ]; then
+  # Prepare the same granted notification permission used by the lifecycle probe.
+  # Tests still run with UiAutomation/accessibility enabled and all assertions.
+  DEBUG_APK="$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
+  test -n "$DEBUG_APK" || { echo "Missing debug APK"; exit 1; }
+  adb install -r "$DEBUG_APK" || exit 1
+  adb shell pm grant com.sarathi.anantnag.gecko.v33 android.permission.POST_NOTIFICATIONS || exit 1
+  adb shell dumpsys deviceidle whitelist +com.sarathi.anantnag.gecko.v33 || exit 1
   read -r -a runner_args <<< "${SARATHI_TEST_RUNNER_ARGS:-}"
   gradle -PtestAbi=x86_64 "${runner_args[@]}" connectedDebugAndroidTest --stacktrace
   result=$?

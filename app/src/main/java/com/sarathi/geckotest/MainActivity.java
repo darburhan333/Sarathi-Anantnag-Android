@@ -100,9 +100,22 @@ public class MainActivity extends Activity {
     private static void setDescriptionIfChanged(View view,String value){if(!value.contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))view.setContentDescription(value);}
     void render(){
       if(engine==null||!visible)return;
-      if(engine.current!=null&&engine.current.isOpen()&&view.getSession()!=engine.current){BrowserEngine.releaseView(view);view.setSession(engine.current);engine.activeStates.remove(engine.current);}
-      if(engine.monitorSession!=null&&engine.monitorSession.isOpen()&&monitorView.getSession()!=engine.monitorSession){BrowserEngine.releaseView(monitorView);monitorView.setSession(engine.monitorSession);engine.activeStates.remove(engine.monitorSession);}
+      // Attach only the displayed surface. Detached sessions remain owned by
+      // BrowserEngine and retain the existing monitoring/protection activity policy.
+      GeckoView shown=engine.showingMonitor?monitorView:view;
+      GeckoView hidden=engine.showingMonitor?view:monitorView;
+      org.mozilla.geckoview.GeckoSession displayed=engine.showingMonitor?engine.monitorSession:engine.current;
+      boolean ownershipChanged=false;
+      if(hidden.getSession()!=null){
+        org.mozilla.geckoview.GeckoSession detached=hidden.getSession();
+        BrowserEngine.releaseView(hidden);engine.activeStates.remove(detached);ownershipChanged=true;
+      }
+      if(displayed!=null&&displayed.isOpen()&&shown.getSession()!=displayed){
+        BrowserEngine.releaseView(shown);shown.setSession(displayed);engine.activeStates.remove(displayed);ownershipChanged=true;
+      }
+      view.setVisibility(engine.showingMonitor?View.GONE:View.VISIBLE);
       monitorView.setVisibility(engine.showingMonitor?View.VISIBLE:View.GONE);
+      if(ownershipChanged)engine.activate();
       // Only the displayed layer participates in accessibility; both Gecko sessions retain their existing activity policy.
       int websiteAccessibility=engine.showingMonitor?View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO;
       if(view.getImportantForAccessibility()!=websiteAccessibility)view.setImportantForAccessibility(websiteAccessibility);

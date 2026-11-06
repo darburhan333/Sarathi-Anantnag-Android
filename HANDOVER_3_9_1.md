@@ -18,3 +18,11 @@ Physical Infinix Android 16 locked/minimized monitoring is a separate real-devic
 
 ## Preserved safety
 Manual SMS/OTP/CAPTCHA and final confirmation. No automatic login, navigation recovery or booking replay. Existing applicant ownership, protected-page retention and PROCEED cadence remain in place.
+
+## Lifecycle and release validation fixes
+- Release a GeckoView's accessibility owner and cached virtual focus before native session close. Route all page closure and Activity view releases through the same cleanup path.
+- Bind only the displayed website or monitor to an Android view; keep both Gecko sessions and existing background/protected-page activity policy. The hidden surface has no stale Android accessibility owner. The new regression checks both directions, session identity, node-provider availability and that view switching does not start monitoring.
+- Avoid unchanged native text/tint/window updates and unchanged embedded idle dashboard paints.
+- Foreground-service idle-stop grace has its own guarded 30-second task instead of relying only on the monitoring clock.
+- Instrumentation prepares POST_NOTIFICATIONS before app launch, connects accessibility explicitly and keeps accessibility enabled. A controlled comparison passed all 29 original lifecycle cases on GeckoView 158 in both arms; a separate SMS reproducer passed 12 cycles each on 158 and 159. These are focused results, not a full release pass. Production GeckoView stays 158.0.20261021001945.
+- Full release verification remains required; physical Infinix testing remains pending.

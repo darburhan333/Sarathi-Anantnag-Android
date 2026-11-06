@@ -699,6 +699,29 @@ public class GeckoIntegrationTest {
    service.stopAll();a.selectApplicant(originalLock);a.setApplicantsVisibleForTest(originalVisibility);
   });
  }
+ @Test public void switchingSurfacesRetainsSessionsAndDetachesHiddenAccessibility()throws Exception{
+  MainActivity a=activity.getActivity();readyApplicant(1);
+  main(()->{
+   a.selectApplicant(1);BrowserEngine e=fixtureService.engine;
+   org.mozilla.geckoview.GeckoSession website=e.current;
+   a.openMonitorForTest();
+   org.mozilla.geckoview.GeckoSession dashboard=e.monitorSession;
+   assertNotNull("Monitor must have its own retained session",dashboard);
+   assertTrue("Monitor must be the displayed surface",e.showingMonitor);
+   assertNull("Hidden website must release its Android accessibility view",website.getAccessibility().getView());
+   assertNotNull("Displayed monitor must retain accessibility",dashboard.getAccessibility().getView());
+   assertNotNull("Displayed monitor must expose its accessibility node provider",dashboard.getAccessibility().getView().getAccessibilityNodeProvider());
+   assertTrue("Hidden website session must remain open",website.isOpen());
+   e.toggleMonitor();
+   assertFalse("Toggle must display the website",e.showingMonitor);
+   assertSame("Switching must preserve the website session",website,e.current);
+   assertSame("Switching must preserve the monitor session",dashboard,e.monitorSession);
+   assertTrue("Hidden monitor session must remain open",dashboard.isOpen());
+   assertNull("Hidden monitor must release its Android accessibility view",dashboard.getAccessibility().getView());
+   assertNotNull("Displayed website must retain accessibility",website.getAccessibility().getView());
+   assertFalse("View switching must not arm monitoring",e.run.armed);
+  });
+ }
  @Test public void fullScreenSettingsPreserveWebsiteSession()throws Exception{
   MainActivity a=activity.getActivity();MonitorService service=fixtureService;
   final BrowserEngine[] selected=new BrowserEngine[1];
