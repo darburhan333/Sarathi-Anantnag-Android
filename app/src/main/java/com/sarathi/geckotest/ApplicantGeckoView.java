@@ -2,6 +2,7 @@ package com.sarathi.geckotest;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.os.Looper;
 import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeProvider;
@@ -11,9 +12,10 @@ import org.mozilla.geckoview.GeckoView;
 
 /** Reject cached accessibility requests after this surface changes ownership. */
 final class ApplicantGeckoView extends GeckoView {
- private boolean uiVisible=true;
- private long accessibilityEpoch;
- private AccessibilityNodeProvider rawProvider,guardedProvider;
+ private volatile boolean uiVisible=true;
+ private volatile long accessibilityEpoch;
+ private AccessibilityNodeProvider rawProvider;
+ private volatile AccessibilityNodeProvider guardedProvider;
  ApplicantGeckoView(Context context){super(context);}
  void setUiVisible(boolean value){
   if(uiVisible==value)return;
@@ -30,10 +32,14 @@ final class ApplicantGeckoView extends GeckoView {
   if(visibility!=View.INVISIBLE){setVisibility(View.INVISIBLE);setVisibility(visibility);}
  }
  private boolean ownsVisibleSession(GeckoSession session,long epoch){
-  return epoch==accessibilityEpoch&&uiVisible&&isShown()&&getWindowVisibility()==View.VISIBLE&&
+  return Looper.myLooper()==Looper.getMainLooper()&&epoch==accessibilityEpoch&&uiVisible&&isShown()&&getWindowVisibility()==View.VISIBLE&&
     session!=null&&session==getSession()&&session.isOpen()&&session.getAccessibility().getView()==this;
  }
  @Override public AccessibilityNodeProvider getAccessibilityNodeProvider(){
+  // Gecko populates root-node metadata on its Gecko thread while Android's UI
+  // thread waits for that result. Never call UiThread-only Gecko APIs or block
+  // waiting for the UI thread here. The UI-side lookup already built the guard.
+  if(Looper.myLooper()!=Looper.getMainLooper())return uiVisible?guardedProvider:null;
   final GeckoSession session=getSession();final long epoch=accessibilityEpoch;
   if(!ownsVisibleSession(session,epoch))return null;
   final AccessibilityNodeProvider delegate=super.getAccessibilityNodeProvider();

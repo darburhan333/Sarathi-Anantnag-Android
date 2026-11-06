@@ -801,6 +801,7 @@ public class GeckoIntegrationTest {
  }
  @Test public void hiddenBrowserSurfaceDoesNotExposeStaleAccessibilityProvider()throws Exception{
   BrowserEngine e=readyApplicant(1);
+  java.util.concurrent.atomic.AtomicReference<ApplicantGeckoView> visibleSurface=new java.util.concurrent.atomic.AtomicReference<>();
   main(()->{
    activity.getActivity().selectApplicant(1);e.showingMonitor=false;e.render();
    ApplicantGeckoView surface=(ApplicantGeckoView)e.current.getAccessibility().getView();
@@ -814,7 +815,11 @@ public class GeckoIntegrationTest {
    surface.setUiVisible(true);assertNotNull("Visible page must restore accessibility",surface.getAccessibilityNodeProvider());
    assertNull("Showing the surface again must not revive a stale provider",stale.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_ACCESSIBILITY));
    assertNotSame("Visible page must expose a fresh guarded provider",stale,surface.getAccessibilityNodeProvider());
+   visibleSurface.set(surface);
   });
+  java.util.concurrent.FutureTask<android.view.accessibility.AccessibilityNodeProvider> metadataLookup=new java.util.concurrent.FutureTask<>(()->visibleSurface.get().getAccessibilityNodeProvider());
+  new Thread(metadataLookup,"Gecko-metadata-regression").start();
+  assertNotNull("Gecko-thread metadata lookup must not enter a UiThread-only API",metadataLookup.get(3,java.util.concurrent.TimeUnit.SECONDS));
  }
  @Test public void finishDetachesBrowserBeforeTraversalAndCannotReattachIt()throws Exception{
   MainActivity a=activity.getActivity();BrowserEngine e=readyApplicant(1);
