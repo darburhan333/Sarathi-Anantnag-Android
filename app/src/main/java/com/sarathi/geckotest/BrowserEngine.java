@@ -279,14 +279,16 @@ final class BrowserEngine {
     boolean isPriorityHighForTest(GeckoSession session){return java.util.Objects.equals(priorityHints.get(session),GeckoSession.PRIORITY_HIGH);}
 
     static void releaseView(GeckoView view){
-      if(view instanceof ApplicantGeckoView)((ApplicantGeckoView)view).clearPlatformAccessibilityFocus();
+      if(view instanceof ApplicantGeckoView)((ApplicantGeckoView)view).invalidateAccessibilityProvider();
       GeckoSession session=view.getSession();
       if(session!=null)session.getAccessibility().setView(null);
       view.releaseSession();
-      // Clear Android's cached virtual focus while this host has no native provider.
-      // The GeckoSession is already detached and retains its existing activity policy.
-      int visibility=view.getVisibility();
-      if(visibility!=View.INVISIBLE){view.setVisibility(View.INVISIBLE);view.setVisibility(visibility);}
+      // Clear Android host focus only after the native provider has detached.
+      if(view instanceof ApplicantGeckoView)((ApplicantGeckoView)view).clearPlatformAccessibilityFocus();
+      else {
+        int visibility=view.getVisibility();
+        if(visibility!=View.INVISIBLE){view.setVisibility(View.INVISIBLE);view.setVisibility(visibility);}
+      }
     }
     private void closeSession(GeckoSession session){
       View owner=session.getAccessibility().getView();

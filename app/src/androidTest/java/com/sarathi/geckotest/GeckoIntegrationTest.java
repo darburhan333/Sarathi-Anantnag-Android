@@ -806,9 +806,14 @@ public class GeckoIntegrationTest {
    ApplicantGeckoView surface=(ApplicantGeckoView)e.current.getAccessibility().getView();
    assertNotNull(surface);assertNotNull("Visible current page must retain accessibility",surface.getAccessibilityNodeProvider());
    org.mozilla.geckoview.GeckoSession retained=e.current;
+   android.view.accessibility.AccessibilityNodeProvider stale=surface.getAccessibilityNodeProvider();
    surface.setUiVisible(false);assertNull("Hidden page must not expose a stale provider",surface.getAccessibilityNodeProvider());
+   assertNull("A cached provider must not query the hidden native document",stale.createAccessibilityNodeInfo(android.view.View.NO_ID));
+   assertFalse("A cached provider must not send focus actions to the hidden document",stale.performAction(android.view.View.NO_ID,android.view.accessibility.AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS,null));
    assertSame("Accessibility visibility must not close the website",retained,surface.getSession());assertTrue(retained.isOpen());
    surface.setUiVisible(true);assertNotNull("Visible page must restore accessibility",surface.getAccessibilityNodeProvider());
+   assertNull("Showing the surface again must not revive a stale provider",stale.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_ACCESSIBILITY));
+   assertNotSame("Visible page must expose a fresh guarded provider",stale,surface.getAccessibilityNodeProvider());
   });
  }
  @Test public void finishDetachesBrowserBeforeTraversalAndCannotReattachIt()throws Exception{
