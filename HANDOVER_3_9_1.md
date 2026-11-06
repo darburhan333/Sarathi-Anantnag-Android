@@ -36,4 +36,19 @@ Manual SMS/OTP/CAPTCHA and final confirmation. No automatic login, navigation re
 - The actual offline SMS notification Stop test passed with zero failures/skips in focused run 42168538270, candidate fba4785059afb615519a54a80ee704970613156d. APK asset proof confirmed the updated debug bridge for profiles 1, 5 and 9.
 - Debug-only PAGE_QUERY accepts the loopback fixture and logs fixture readiness. Production retains its Sarathi-only query and host permissions. Verification rejects bridge drift outside that small debug fixture block.
 - Extension versions: production 3.4.11; debug 3.4.12. IDs are unchanged.
-- Canonical checks are 31 focused lifecycle cases plus the complete integration set and required notification Stop. Existing 55-minute limits are unchanged. Missing/failed/skipped notification Stop XML fails the gate. Full release verification is still pending.
+- Canonical checks are 31 focused lifecycle cases plus the complete integration set and required notification Stop. Existing 55-minute limits are unchanged. Missing/failed/skipped notification Stop XML fails the gate. Full release verification passed in canonical run #234 (42169523385).
+
+
+## Final verified release — 6 November 2026
+- Source commit: d9d5ae28f1ab82061b26426cb5c45a1a375715a7.
+- Canonical run #234: https://github.com/darburhan333/Sarathi-Anantnag-Android/actions/runs/42169523385
+- All seven required jobs succeeded: compile, apk, release-ui-preflight, gecko-lifecycle-preflight, gecko-notification-stop, gecko-integration-main and verified-release.
+- Passed artifact: MParivahan-JK-3.9.1-midnight-teal-ARM64-TESTS-PASSED (artifact 13483286791).
+- Bare APK: 91,713,702 bytes; SHA-256 9a2623e5834ceb305493295755c059f5021b9f7eb709259f6bb2628c65ecf41a.
+- Package com.sarathi.anantnag.gecko.v33; versionCode 391; versionName 3.9.1-midnight-teal; ARM64.
+- Production certificate SHA-256 c7404cb6be4325298d64a82d00f27ffa4fefaf182b0a569b4ed2d91fc072b145 (unchanged).
+- Passed-artifact APK hash matches the locally verified production APK. ZIP integrity, Android v2 signature, package/version/source marker, nine production extension identities, bridge content, homepage and Midnight Teal assets were checked.
+- Homepage: https://sarathi.parivahan.gov.in/sarathiservice/stateSelection.do
+- Assisted booking remains available and stops for manual SMS verification; it is not enabled by default.
+- These are automated emulator/fixture checks. Physical Infinix X6870 Android 16 minimized/locked reliability remains to be verified on the user's device.
+- This final section supersedes earlier pending verification notes. The documentation-only follow-up does not change the tested runtime.
