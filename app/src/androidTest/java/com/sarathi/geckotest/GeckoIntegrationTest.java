@@ -41,6 +41,17 @@ public class GeckoIntegrationTest {
   watchdog.setDaemon(true);watchdog.start();
  }
 
+ @BeforeClass public static void awaitAccessibilityBeforeBrowserStartup()throws Exception{
+  // UiAutomation connects asynchronously. Finish that handshake before an
+  // Activity opens Gecko sessions, so the suite tests a stable enabled service.
+  android.app.UiAutomation automation=InstrumentationRegistry.getInstrumentation().getUiAutomation();
+  assertNotNull("UiAutomation service must connect",automation.getServiceInfo());
+  android.view.accessibility.AccessibilityManager manager=InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(android.view.accessibility.AccessibilityManager.class);
+  long deadline=android.os.SystemClock.elapsedRealtime()+5000;
+  while(!manager.isEnabled()&&android.os.SystemClock.elapsedRealtime()<deadline)Thread.sleep(50);
+  assertTrue("Lifecycle tests require Android accessibility enabled",manager.isEnabled());
+ }
+
  // Lifecycle tests use separate applicant profiles where page-loss latches are part of the scenario.
  @Rule public GrantPermissionRule permissions=GrantPermissionRule.grant(android.Manifest.permission.POST_NOTIFICATIONS);
  @Rule public ActivityTestRule<MainActivity> activity=new ActivityTestRule<>(MainActivity.class);
