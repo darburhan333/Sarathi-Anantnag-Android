@@ -301,15 +301,24 @@ final class BrowserEngine {
       // Recreate only a visible page. Never replay form submissions or resume a lost run.
       if(foreground)service.handler.post(()->{ensureUsable();render();activate();});
     }
-    void prepareMonitor(){if(!ready||monitorUrl==null||monitorSession!=null||destroyed||!showingMonitor)return;monitorSession=newSession();monitorSession.open(runtime);monitorSession.loadUri(monitorUrl);render();activate();}
+    private String monitorPanel="monitor";
+    void showMonitorPanel(String panel){
+      monitorPanel="alerts-settings".equals(panel)?"alerts-settings":"monitor";
+      showingMonitor=true;
+      if(monitorSession==null)prepareMonitor();
+      else if(ready&&monitorUrl!=null)monitorSession.loadUri(monitorUrl+"#"+monitorPanel);
+      render();activate();
+    }
+    void prepareMonitor(){
+      if(!ready||monitorUrl==null||monitorSession!=null||destroyed||!showingMonitor)return;
+      monitorSession=newSession();monitorSession.open(runtime);
+      // Load the requested panel once. Rendering must never enqueue a competing URI.
+      monitorSession.loadUri(monitorUrl+"#"+monitorPanel);render();activate();
+    }
     void toggleMonitor(){
       if(!ready||monitorUrl==null){log("Monitor is still starting");return;}
-      if(monitorSession==null){
-        monitorSession=newSession();monitorSession.open(runtime);
-        monitorSession.loadUri(monitorUrl);
-      }
-      showingMonitor=!showingMonitor;
-      render();activate();
+      if(!showingMonitor)showMonitorPanel("monitor");
+      else {showingMonitor=false;render();activate();}
       runtime.getWebExtensionController().setTabActive(showingMonitor?monitorSession:current,true);
     }
     private String pageQuery="",pageUrl="";private boolean pageReady,pageLoading;

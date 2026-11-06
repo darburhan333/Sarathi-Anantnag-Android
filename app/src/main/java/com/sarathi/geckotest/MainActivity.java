@@ -59,7 +59,6 @@ public class MainActivity extends Activity {
     private TextView settingsTitle;
     private View appLogo;
     private String activePanel="monitor";
-    private String pendingMonitorPanel;
     private FrameLayout websitePages;
     private final Button[] settingsApplicantButtons=new Button[MonitorService.PROFILE_COUNT];
     private final android.content.ServiceConnection connection=new android.content.ServiceConnection(){
@@ -67,7 +66,7 @@ public class MainActivity extends Activity {
         MonitorService service=((MonitorService.LocalBinder)binder).getService();
         lockedApplicant=Math.max(1,Math.min(MonitorService.PROFILE_COUNT,getSharedPreferences("monitor",0).getInt("lockedApplicant",1)));
         if(getIntent().hasExtra("applicant"))lockedApplicant=notificationApplicant;
-        engine=service.profile(lockedApplicant);service.engine=engine;pendingMonitorPanel=activePanel;engine.showingMonitor=false;
+        engine=service.profile(lockedApplicant);service.engine=engine;engine.showingMonitor=false;
         engine.service.activity=MainActivity.this;engine.service.visible=visible;engine.attach(MainActivity.this);engine.foreground=visible;engine.foregroundState();
       }
       public void onServiceDisconnected(android.content.ComponentName name){engine=null;status.setText("Service disconnected — reopen the app");status.setVisibility(View.VISIBLE);}
@@ -119,7 +118,6 @@ public class MainActivity extends Activity {
       // Only the displayed layer participates in accessibility; both Gecko sessions retain their existing activity policy.
       int websiteAccessibility=engine.showingMonitor?View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO;
       if(view.getImportantForAccessibility()!=websiteAccessibility)view.setImportantForAccessibility(websiteAccessibility);
-      if(pendingMonitorPanel!=null&&engine.monitorSession!=null){String panel=pendingMonitorPanel;pendingMonitorPanel=null;engine.monitorSession.loadUri(engine.monitorUrl+"#"+panel);}
       setTextIfChanged(monitorButton,engine.showingMonitor?"Website":"Monitor");setDescriptionIfChanged(monitorButton,engine.showingMonitor?"Switch to website":"Switch to monitor");
       if(applicantPicker!=null&&applicantPicker.getSelectedItemPosition()!=engine.profile-1)applicantPicker.setSelection(engine.profile-1);
       if(activeSummary!=null)setTextIfChanged(activeSummary,engine.service.activeCount()+" of 9 monitoring");
@@ -140,7 +138,7 @@ public class MainActivity extends Activity {
       boolean keepScreen=visible&&engine.monitoring;boolean screenFlag=(getWindow().getAttributes().flags&WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)!=0;
       if(keepScreen!=screenFlag){if(keepScreen)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
     }
-    void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){if(activePanel.equals("monitor")){engine.showingMonitor=false;engine.ensureUsable();}render();engine.activate();return;}MonitorService service=engine.service;service.telegramLock.lockAll();BrowserEngine.releaseView(view);BrowserEngine.releaseView(monitorView);engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);engine.showingMonitor=false;engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;pendingMonitorPanel=activePanel;if(!activePanel.equals("monitor")){engine.showingMonitor=true;engine.prepareMonitor();}engine.attach(this);engine.foregroundState();}
+    void selectApplicant(int number){if(engine==null||number<1||number>MonitorService.PROFILE_COUNT)return;lockedApplicant=number;getSharedPreferences("monitor",0).edit().putInt("lockedApplicant",number).apply();if(engine.profile==number){if(activePanel.equals("monitor")){engine.showingMonitor=false;engine.ensureUsable();}render();engine.activate();return;}MonitorService service=engine.service;service.telegramLock.lockAll();BrowserEngine.releaseView(view);BrowserEngine.releaseView(monitorView);engine.activeStates.clear();engine.foreground=false;engine.detach(this);engine.foregroundState();engine=service.profile(number);engine.showingMonitor=false;engine.run.resumeGraceUntil=SystemClock.elapsedRealtime()+30000;service.engine=engine;engine.foreground=visible;if(!activePanel.equals("monitor"))engine.showMonitorPanel(activePanel);engine.attach(this);engine.foregroundState();}
     private boolean directCalls(){return getSharedPreferences("calling",0).getBoolean("direct",false);}
     static Intent applicantCallIntent(String phone,boolean direct,boolean permitted){return new Intent(direct&&permitted?Intent.ACTION_CALL:Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null));}
     private void openDialer(String phone){startActivity(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",phone,null)));}
@@ -180,11 +178,11 @@ public class MainActivity extends Activity {
     }
     private void showApplicantSettings(){showApplicantSettings("alerts-settings");}
     private void showApplicantSettings(String panelName){
-      if(engine==null)return;activePanel="alerts-settings";pendingMonitorPanel="alerts-settings";engine.showingMonitor=true;engine.prepareMonitor();render();engine.activate();
+      if(engine==null)return;activePanel="alerts-settings";engine.showMonitorPanel(activePanel);
     }
     private void closeApplicantSettings(){
       if(engine!=null)engine.service.telegramLock.lockAll();
-      activePanel="monitor";pendingMonitorPanel="monitor";if(engine!=null){engine.showingMonitor=true;engine.prepareMonitor();render();engine.activate();}
+      activePanel="monitor";if(engine!=null)engine.showMonitorPanel(activePanel);
     }
     private void copyDiagnosticLog(){
       String report="App: MPARIVAHAN SLOT BOOKING -J&K "+BuildConfig.VERSION_NAME+" · SHA "+BuildConfig.GIT_SHA+"\nProtected page retention after STOP: "+BrowserEngine.STOP_PAGE_PROTECTION_MAX_MS+" ms (5 minutes)\nEngine: GeckoView 158.0.20261021001945\nAndroid API: "
