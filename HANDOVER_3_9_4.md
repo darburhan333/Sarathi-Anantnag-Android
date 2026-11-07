@@ -30,3 +30,16 @@ Release UI failed while querying Alerts accessibility. Exact x86_64 libxul build
 The next change invalidates cached accessibility providers on ownership/visibility changes and guards every provider operation, not just provider lookup. It removes the explicit host ACTION_CLEAR_ACCESSIBILITY_FOCUS and clears host focus only after session detachment. Visible current pages retain normal accessibility. Hidden session retention and booking rules are unchanged. Existing lifecycle test now exercises cached provider calls after hide and re-show. All original release UI assertions and gates remain required. Validation pending.
 
 Follow-up before validation: Native PopulateNodeInfo invokes root View metadata on the Gecko thread. The earlier provider lookup called GeckoSession.getAccessibility()/SessionAccessibility.getView(), which assert UI-thread ownership. Provider lookup now returns only its prebuilt volatile guarded provider on non-UI threads, never calls Gecko UiThread APIs and never blocks waiting for UI. Provider operations still require the UI thread and current epoch/ownership. Existing hidden-surface regression additionally requests metadata from a background thread with a bounded three-second Future, asserting a visible provider is returned without a thread violation.
+
+## Verified release: run 247
+- Runtime commit: 93683354e6ea9407e01d1d99fc8f78c3ef11b403.
+- CI: https://github.com/darburhan333/Sarathi-Anantnag-Android/actions/runs/42259453154
+- All seven jobs passed: compile, APK/lint/signing, release UI, lifecycle preflight, notification Stop, main integration, verified release.
+- Lifecycle preflight: 40/40; notification Stop: 1/1; full integration: 70/70 (0 skipped, 0 failed), 40m42s. Main integration then repeated the minified release UI checks successfully.
+- Release UI verified Alerts for all nine applicants, Logs isolation, 3x2 controls, status-bar Fill Details, and landscape space.
+- Immutable TESTS-PASSED artifact: 13527279526. APK bytes: 91758277.
+- APK SHA-256: 55b232b7c79c7b150b4f550eb2da7a1a6183ba141151df815dc2d565b7713479.
+- Certificate SHA-256: c7404cb6be4325298d64a82d00f27ffa4fefaf182b0a569b4ed2d91fc072b145 (existing release identity).
+- Verified APK equals the earlier validated signed candidate byte for byte. ARM64, package com.sarathi.anantnag.gecko.v33, versionCode394/name3.9.4-midnight-teal, source marker9368335; all nine production extension IDs/version3.4.17/scripts verified.
+- Physical Infinix X6870 / Android16 background behavior still needs real-device validation; emulator passes are not a physical-phone pass.
+- Android owns the displaying-over-other-apps system notice; the app cannot guarantee that it appears only once. Overlay lifecycle races were fixed without removing keep-alive protection.
